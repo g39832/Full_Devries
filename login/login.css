@@ -1,0 +1,56 @@
+#head{
+    text-align: center;
+    font-size: larger;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+     text-shadow: 1px 1px 4px rgba(0,0,0,0.5); /* subtle shadow for pop */
+}
+
+
+#logo_login{
+    display: block;           /* makes it behave like a block element */
+    margin: 20px auto;        /* centers it horizontally and adds top/bottom spacing */
+    width: 180px;             /* adjust size */
+    height: 120px;            /* keep it square */
+    object-fit: cover;        /* makes sure image scales nicely */
+    border-radius: 10px;      /* slightly rounded corners */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3); /* optional shadow for style */
+}
+
+
+
+#password_feild {
+    text-align: center;   /* center everything inside */
+    margin-top: 50px;     /* space from top */
+    font-size: xx-large;
+}
+
+
+#pwd {
+    width: 300px;         /* make it wider */
+    height: 50px;         /* make it taller */
+    font-size: 20px;      /* text size inside */
+    padding: 5px 10px;    /* inner spacing */
+    border-radius: 5px;   /* rounded corners */
+    border: 1px solid #ccc; /* optional border color */
+}
+
+/* Button */
+#password_feild button {
+    width: 120px;
+    height: 50px;
+    font-size: 18px;
+    font-family: 'Open Sans', sans-serif;
+    border: none;
+    border-radius: 8px;
+    background-color: #1e90ff; /* bright blue button */
+    color: white;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+/* Button hover effect */
+#password_feild button:hover {
+    background-color: #63a4ff; /* lighter blue on hover */
+}
+
