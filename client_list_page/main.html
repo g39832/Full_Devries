@@ -11,19 +11,34 @@
     <header id="Main_header">
         Client List
     </header>
-    <hr>
+    <div class="crm-dashboard">
+        <!--Left Panel : Client mangement-->
+        <aside class="sidebar">
+            <h2>Add New Client</h2>
+            <form id = "clientIntakeForm">
+                <div class="input-row">
+                    <input type = "text" id = "fName" placeholder="First Name" required>
+                    <input type = "text" id = "lName" placeholder="Last Name " required>
+                </div>
 
+                <input type="email" id="email" placeholder="Email Address" required>
+                <input type="tel" id -= "phone" placeholder="Phone Number" required>
+                <button type="submit" class="btn-primary">Add Client</button>
+            </form>
+            <div class="search-bar">
+                <input type="text" id="searchClients" placeholder="Search Client Records... ">  
+            </div>
 
-    <h2>Client management</h2>
+            <ul id="clientList" class = "client-list"></ul>
+        </aside>
 
-    <form>
-        <input type="text" id="username" placeholder="Enter Name" required>
-        <input type = "text" id = "userEmail" placeholder="Enter Email" required>
-        <button type="submit">Add Client </button>
-
-
-    </form>
-
+        <!--Right panal: Project Workstation-->
+        <main id="projectPanal" class="main-content">
+            <div  class="welcome-screen">
+                <p>Select a client on the left to manage project details</p>
+            </div>
+        </main>
+    </div>
 
 
     
