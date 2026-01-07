@@ -3,44 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Roofing CRM - Dashboard</title>
+    <!-- Modern 2026 Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
     <link rel="stylesheet" href="style.css">
 </head>
-<body style="background-color: rgba(22, 65, 92, 0.92);">
+<body class="dashboard-body">
 
     <header id="Main_header">
-        Client List
+        Client Directory
     </header>
+    
     <div class="crm-dashboard">
-        <!--Left Panel : Client mangement-->
+        <!-- Sidebar: Client management -->
         <aside class="sidebar">
-            <h2>Add New Client</h2>
-            <form id = "clientIntakeForm">
+            <h2>Add New Lead</h2>
+            <form id="clientIntakeForm">
                 <div class="input-row">
-                    <input type = "text" id = "fName" placeholder="First Name" required>
-                    <input type = "text" id = "lName" placeholder="Last Name " required>
+                    <input type="text" id="fName" placeholder="First Name" required>
+                    <input type="text" id="lName" placeholder="Last Name" required>
                 </div>
-
                 <input type="email" id="email" placeholder="Email Address" required>
-                <input type="tel" id -= "phone" placeholder="Phone Number" required>
+                <input type="tel" id="phone" placeholder="Phone Number" required>
                 <button type="submit" class="btn-primary">Add Client</button>
             </form>
+
             <div class="search-bar">
-                <input type="text" id="searchClients" placeholder="Search Client Records... ">  
+                <input type="text" id="searchClients" placeholder="Search by name, phone, or email...">  
             </div>
 
-            <ul id="clientList" class = "client-list"></ul>
+            <!-- List where clients will appear -->
+            <ul id="clientList" class="client-list"></ul>
         </aside>
 
-        <!--Right panal: Project Workstation-->
-        <main id="projectPanal" class="main-content">
-            <div  class="welcome-screen">
+        <!-- Right panel: Project Details -->
+        <main id="projectPanel" class="main-content">
+            <div id="projectDetailArea" class="welcome-screen">
                 <p>Select a client on the left to manage project details</p>
             </div>
         </main>
     </div>
 
+    <!-- The only script link allowed -->
     <script src="renderer.js"></script>
-    
 </body>
 </html>
