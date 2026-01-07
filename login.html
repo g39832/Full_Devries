@@ -3,30 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel = "stylesheet" href = "login.css">
-    
+    <!-- Link to your CSS -->
+    <link rel="stylesheet" href="login.css">
+    <title>Devries Brothers Login</title>
 </head>
 <body style="background-color: rgba(22, 65, 92, 0.92);">
 
-    <!--header for the login page only style is text aligment-->
     <header id="head">
-        <h1>Devries Brothers</h1>
+        <!-- We added the ID 'login-title' here so JS can change it to "Setup Password" on first run -->
+        <h1 id="login-title" style="text-align: center;">Devries Brothers</h1>
     </header>
 
     <h1 style="text-align: center; font-family: 'Nunito', sans-serif;">Client info page</h1>
 
-    <img src="devires_pic.png" alt="Devries logo" id = "logo_login">
+    <img src="devires_pic.png" alt="Devries logo" id="logo_login">
 
+    <!-- Wrap the inputs in a <form> with the ID 'loginForm' so JS can handle the "Submit" -->
+    <form id="loginForm">
+        <div id="password_feild">
+            <label for="password">Password</label>
+            <!-- Changed ID to 'password' to match auth-renderer.js -->
+            <input type="password" id="password" name="pwd" required>
 
-   <div id = "password_feild">
-    <!--password feild Mr Devrie will need to set one and mke it special -->
-        <label for = "pwd">Password</label>
-        <input type="password" id = "pwd" name="pwd">
+            <!-- Changed button to type="submit" and added ID 'login-btn' -->
+            <button type="submit" id="login-btn">
+                Submit
+            </button>
+        </div>
+    </form>
 
-        <button type=" button">
-        submit
-        </button>
-    </div>
-
+    <!-- CRITICAL: This links your logic to this page -->
+    <script src="auth-renderer.js"></script>
 </body>
 </html>
