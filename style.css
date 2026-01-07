@@ -1,46 +1,47 @@
-#Main_header{
+#Main_header {
     font-size: xx-large;
-    font: 600;
+    font-weight: 600; /* Fixed 'font: 600' to 'font-weight: 600' */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    padding: 20px;
+    color: white;
 }
 
-.crm-dashboard{
+.crm-dashboard {
     display: grid;
     grid-template-columns: 380px 1fr;
     height: 100vh;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f0f2f5;
+    overflow: hidden; /* Keeps the main app window from scrolling */
 }
 
-.sidebar{
+.sidebar {
     background-color: #ffffff;
     border-right: 1px solid #dddddd;
     padding: 25px;
     overflow-y: auto;
 }
 
-
-h2{
+h2 {
     margin-top: 0;
     color: #333;
-
 }
 
 /* Intake Form Layout */
-#clientIntakeForm{
+#clientIntakeForm {
     display: flex;
     flex-direction: column;
     gap: 12px;
     margin-bottom: 30px;
 }
 
-
-.input-row{
+.input-row {
     display: flex;
     gap: 10px;
 }
 
-.btn-primary{
+.btn-primary {
     background-color: #007bff;
     color: #ffffff;
     border: none;
@@ -50,20 +51,26 @@ h2{
     font-weight: bold;
 }
 
-.btn-primary:hover{
+.btn-primary:hover {
     background-color: #0056b3;
 }
 
-.search-bar input{
+.search-bar input {
     width: 100%;
     padding: 12px;
     margin-bottom: 20px;
     border: 1px solid #cccccc;
     border-radius: 4px;
-    box-sizing: border-box; /*insures padding does not break the box*/
+    box-sizing: border-box;
 }
 
-.client-item{
+/* Client List Styling */
+.client-list {
+    list-style: none;
+    padding: 0;
+}
+
+.client-item {
     padding: 15px;
     background-color: #ffffff;
     border: 1px solid #eeeeee;
@@ -73,59 +80,85 @@ h2{
     transition: all 0.2s ease;
 }
 
-.client-item :hover{
+/* FIXED: Removed the space before :hover */
+.client-item:hover {
     border-color: #007bff;
     background-color: #f0f7ff;
     transform: translateX(5px);
 }
 
-/* Right panel detail */
-.main-content{
+/* Right Panel Detail */
+.main-content {
     padding: 40px;
     overflow-y: auto;
 }
 
-.empty-state{
-    text-align: center;
-    color: #888;
-    margin-top: 100px;
-}
-
-.detail-card{
+.detail-card {
+    position: relative; /* REQUIRED for the X button to sit in the corner */
     background-color: #ffffff;
-    padding: 30px;
+    padding: 40px;
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
+/* NEW: The Close (X) Button */
+.close-x {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 32px;
+    font-weight: bold;
+    color: #ccc;
+    cursor: pointer;
+    line-height: 1;
+}
 
-/* Grid for roofing info */
-.roofing-grid{
+.close-x:hover {
+    color: #dc3545; /* Turns red when you want to close */
+}
+
+/* NEW: Status Dropdown Styling */
+select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #dddddd;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 16px;
+    margin-bottom: 15px;
+}
+
+.roofing-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
     margin-top: 25px;
 }
 
-label{
+label {
     display: block;
     font-weight: bold;
     margin-bottom: 8px;
     color: #555;
-
 }
 
-
-input, textarea{
+input, textarea {
     width: 100%;
     padding: 10px;
     border: 1px solid #dddddd;
     border-radius: 4px;
     box-sizing: border-box;
-
 }
 
-textarea{
+textarea {
     resize: vertical;
     min-height: 100px;
+}
+
+.welcome-screen {
+    text-align: center;
+    color: #888;
+    margin-top: 100px;
 }

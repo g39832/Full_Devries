@@ -2,15 +2,18 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const Database = require('better-sqlite3');
 const path = require('node:path');
 
+// FIX: Disable Hardware Acceleration to stop "Ghost Lag" on text boxes
+app.disableHardwareAcceleration();
+
 const dbPath = path.join(app.getPath('userData'), 'roofing_pro_2026.db');
 const db = new Database(dbPath);
 
-// Initialize Tables
 db.exec(`
     CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         fName TEXT, lName TEXT, email TEXT, phone TEXT,
-        address TEXT, pricing TEXT, notes TEXT
+        address TEXT, pricing TEXT, notes TEXT,
+        status TEXT DEFAULT 'Lead'
     );
     CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -20,25 +23,22 @@ db.exec(`
 
 function createWindow() {
     const win = new BrowserWindow({
-        width: 1200, height: 850,
+        width: 1300, height: 900,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
-            contextIsolation: true,
-            nodeIntegration: false
+            contextIsolation: true
         }
     });
 
     win.loadFile(path.join(__dirname, 'login.html'));
 
-    // --- Auth Listeners ---
     ipcMain.handle('check-first-run', () => {
         const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('admin_password');
         return !row; 
     });
 
     ipcMain.handle('set-initial-password', (e, password) => {
-        const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-        return stmt.run('admin_password', password);
+        db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('admin_password', password);
     });
 
     ipcMain.handle('verify-password', (e, password) => {
@@ -48,22 +48,20 @@ function createWindow() {
 
     ipcMain.on('login-success', () => { win.loadFile(path.join(__dirname, 'main.html')); });
 
-    // --- CRM Database Logic ---
     ipcMain.handle('save-client', (e, c) => {
-        const stmt = db.prepare('INSERT INTO clients (fName, lName, email, phone) VALUES (?, ?, ?, ?)');
-        return stmt.run(c.fName, c.lName, c.email, c.phone);
+        return db.prepare('INSERT INTO clients (fName, lName, email, phone) VALUES (?, ?, ?, ?)').run(c.fName, c.lName, c.email, c.phone);
     });
 
     ipcMain.handle('search-clients', (e, term) => {
-        const query = `%${term}%`;
-        return db.prepare('SELECT * FROM clients WHERE fName LIKE ? OR phone LIKE ? OR email LIKE ?').all(query, query, query);
+        const q = `%${term}%`;
+        return db.prepare('SELECT * FROM clients WHERE fName LIKE ? OR phone LIKE ? OR email LIKE ?').all(q, q, q);
     });
 
     ipcMain.handle('update-project', (e, d) => {
-        return db.prepare('UPDATE clients SET address = ?, pricing = ?, notes = ? WHERE id = ?').run(d.address, d.pricing, d.notes, d.id);
+        return db.prepare('UPDATE clients SET address = ?, pricing = ?, notes = ?, status = ? WHERE id = ?')
+                 .run(d.address, d.pricing, d.notes, d.status, d.id);
     });
 
-    // NEW: Delete Logic
     ipcMain.handle('delete-client', (e, id) => {
         return db.prepare('DELETE FROM clients WHERE id = ?').run(id);
     });
