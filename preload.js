@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     checkFirstRun: () => ipcRenderer.invoke('check-first-run'),
@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('api', {
     saveClient: (c) => ipcRenderer.invoke('save-client', c),
     searchClients: (t) => ipcRenderer.invoke('search-clients', t),
     updateProject: (d) => ipcRenderer.invoke('update-project', d),
-    deleteClient: (id) => ipcRenderer.invoke('delete-client', id)
+    deleteClient: (id) => ipcRenderer.invoke('delete-client', id),
+    uploadPdf: (data) => ipcRenderer.invoke('upload-pdf', data),
+    openFolder: (id) => ipcRenderer.send('open-client-folder', id),
+    
+    // NEW: The 2026 fix for the "undefined path" error
+    getFilePath: (file) => webUtils.getPathForFile(file)
 });
-

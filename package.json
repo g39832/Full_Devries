@@ -6,12 +6,13 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Roofing CRM 2026",
   "dependencies": {
     "better-sqlite3": "^12.5.0",
     "electron-squirrel-startup": "^1.0.1"
@@ -26,6 +27,7 @@
     "@electron-forge/plugin-fuses": "^7.10.2",
     "@electron/fuses": "^1.8.0",
     "@electron/rebuild": "^4.0.2",
-    "electron": "^39.2.7"
+    "electron": "^39.2.7",
+    "electron-rebuild": "^3.2.9"
   }
 }

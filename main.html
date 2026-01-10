@@ -3,19 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Roofing CRM - Dashboard</title>
-    <!-- Modern 2026 Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+    <title>Roofing CRM - Dashboard 2026</title>
+    
+    <!-- Updated 2026 Security Policy: Allows local file paths for PDFs and images -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="dashboard-body">
 
     <header id="Main_header">
-        Client Directory
+        Roofing Pro CRM 2026
     </header>
     
     <div class="crm-dashboard">
-        <!-- Sidebar: Client management -->
+        <!-- Sidebar: Lead & Client Management -->
         <aside class="sidebar">
             <h2>Add New Lead</h2>
             <form id="clientIntakeForm">
@@ -29,22 +31,22 @@
             </form>
 
             <div class="search-bar">
-                <input type="text" id="searchClients" placeholder="Search by name, phone, or email...">  
+                <input type="text" id="searchClients" placeholder="Search name, phone, or email...">  
             </div>
 
-            <!-- List where clients will appear -->
+            <!-- Scrollable List of Clients -->
             <ul id="clientList" class="client-list"></ul>
         </aside>
 
-        <!-- Right panel: Project Details -->
+        <!-- Right panel: Interactive Project Details & PDF Drop Zone -->
         <main id="projectPanel" class="main-content">
-            <div id="projectDetailArea" class="welcome-screen">
-                <p>Select a client on the left to manage project details</p>
+            <div class="welcome-screen">
+                <p>Select a client on the left to manage project details and documents</p>
             </div>
         </main>
     </div>
 
-    <!-- The only script link allowed -->
+    <!-- Main Logic Script -->
     <script src="renderer.js"></script>
 </body>
 </html>
