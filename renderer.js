@@ -4,7 +4,7 @@ let activeId = null;
 let searchTimeout;
 
 /**
- * 1. SMART SEARCH
+ * 1. smart search
  * Filters the sidebar as you type.
  */
 document.getElementById('searchClients').addEventListener('input', (e) => {
@@ -17,7 +17,7 @@ document.getElementById('searchClients').addEventListener('input', (e) => {
 });
 
 /**
- * 2. INTAKE FORM
+ * 2. intake form
  * Saves a new lead and refreshes the sidebar.
  */
 document.getElementById('clientIntakeForm').addEventListener('submit', async (e) => {
@@ -34,7 +34,7 @@ document.getElementById('clientIntakeForm').addEventListener('submit', async (e)
 });
 
 /**
- * 3. SIDEBAR RENDERING
+ * 3. sidebar rendering
  */
 async function refreshList() {
     const all = await window.api.searchClients('');
@@ -50,13 +50,13 @@ function renderSidebar(list) {
 }
 
 /**
- * 4. PROJECT PANEL EVENT DELEGATION
+ * 4. Project panel event regulating 
  * This handles button clicks inside the right panel even after the HTML is refreshed.
  */
 projectPanel.addEventListener('click', async (e) => {
     const target = e.target;
 
-    // SAVE CHANGES LOGIC
+    // save logic
     if (target.id === 'saveBtn') {
         const originalText = target.innerText;
         target.innerText = "Saving...";
@@ -96,12 +96,12 @@ projectPanel.addEventListener('click', async (e) => {
         }
     }
 
-    // OPEN FOLDER LOGIC
+    // Open folder logic
     if (target.id === 'viewDocsBtn') {
         window.api.openFolder(activeId);
     }
 
-    // DELETE CLIENT LOGIC
+    // delete client logic 
     if (target.id === 'delBtn') {
         if (confirm("Permanently delete this lead?")) {
             await window.api.deleteClient(activeId);
@@ -110,14 +110,14 @@ projectPanel.addEventListener('click', async (e) => {
         }
     }
 
-    // CLOSE PANEL LOGIC
+    // Close panel logic 
     if (target.id === 'closeBtn') {
         projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
     }
 });
 
 /**
- * 5. DRAG & DROP PDF LOGIC (2026 Path Fix)
+ * 5. Drag and drop zone pdf 
  */
 function setupDropZone() {
     const dz = document.getElementById('pdf-drop-zone');
@@ -153,7 +153,7 @@ function setupDropZone() {
 }
 
 /**
- * 6. OPEN CLIENT DETAIL (Main Injector)
+ * 6. open clint details 
  */
 async function openClient(id) {
     // Avoid re-rendering if already open
@@ -209,7 +209,7 @@ async function openClient(id) {
 }
 
 /**
- * 7. STARTUP & SIDEBAR CLICKS
+ * 7. startup and sidebar clicks 
  */
 clientList.addEventListener('click', (e) => {
     const item = e.target.closest('.client-item');
