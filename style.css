@@ -1,124 +1,266 @@
-#Main_header {
-    font-size: xx-large;
-    font-weight: 600;
-    font-family: 'Segoe UI', sans-serif;
-    text-align: center;
-    padding: 20px;
-    color: white;
+/* ================= BODY & GLOBAL STYLES ================= */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #eef2f7;
+  color: #333;
+  height: 100%;
 }
 
-.crm-dashboard {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    height: 100vh;
-    font-family: 'Segoe UI', sans-serif;
-    background-color: #f0f2f5;
-    overflow: hidden;
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
 }
 
-.sidebar {
-    background-color: #ffffff;
-    border-right: 1px solid #ddd;
-    padding: 25px;
-    overflow-y: auto;
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  transition: all 0.3s ease;
 }
 
-.main-content {
-    padding: 40px;
-    overflow-y: auto;
-}
-
-.detail-card {
-    position: relative;
-    background-color: #ffffff;
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-
-/* New Header Styles */
-.detail-header {
-    border-bottom: 2px solid #eee;
-    padding-bottom: 15px;
-    margin-bottom: 20px;
-}
-
-.contact-quick-links {
-    margin-top: 10px;
-    font-size: 1.1rem;
-}
-
-.contact-quick-links a {
-    color: #007bff;
-    text-decoration: none;
-    font-weight: bold;
-    margin-right: 15px;
-}
-
-.contact-quick-links a:hover { text-decoration: underline; }
-
-/* Grid Layout */
-.roofing-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-top: 25px;
-}
-
-label { font-weight: bold; margin-bottom: 8px; color: #555; display: block; }
 input, textarea, select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box;
+  padding: 10px 12px;
+  margin: 4px 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border 0.2s;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0,123,255,0.3);
+  outline: none;
+}
+
+/* ================= HEADER ================= */
+#Main_header {
+  background: linear-gradient(90deg, #2a3f54, #1b2a3b);
+  color: white;
+  font-size: 26px;
+  padding: 18px 20px;
+  text-align: center;
+  font-weight: 700;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+/* ================= DASHBOARD GRID ================= */
+.crm-dashboard {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: calc(100vh - 70px);
+  gap: 0;
+}
+
+/* ================= SIDEBAR ================= */
+.sidebar {
+  background-color: #ffffff;
+  border-right: 1px solid #ddd;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: 2px 0 6px rgba(0,0,0,0.05);
+}
+
+.sidebar h2 {
+  font-size: 20px;
+  margin-bottom: 15px;
+  text-align: center;
+  color: #444;
+}
+
+.input-row {
+  display: flex;
+  gap: 10px;
 }
 
 .btn-primary {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
+  background: linear-gradient(90deg, #4b9df3, #1a73e8);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin-top: 10px;
+  width: 100%;
+  font-weight: 600;
 }
 
-.close-x {
-    position: absolute;
-    top: 15px; right: 20px;
-    background: none; border: none;
-    font-size: 32px; color: #ccc; cursor: pointer;
+.btn-primary:hover {
+  background: linear-gradient(90deg, #1a73e8, #155ab6);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.2);
 }
 
-/* NEW: PDF Drop Zone Styles */
-.drop-zone {
-    border: 2px dashed #ccc;
-    border-radius: 10px;
-    padding: 30px;
-    text-align: center;
-    background: #fafafa;
-    color: #888;
-    transition: all 0.2s ease;
-    font-family: 'Segoe UI', sans-serif;
+/* ================= SEARCH BAR ================= */
+.search-bar {
+  margin: 20px 0;
 }
 
-.drop-zone-active {
-    border-color: #28a745;
-    background: #e8f5e9;
-    color: #28a745;
-    transform: scale(1.01);
+#searchClients {
+  width: 100%;
+  border-radius: 6px;
+  padding: 10px;
+  border: 1px solid #ccc;
+}
+
+/* ================= CLIENT LIST ================= */
+.client-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .client-item {
-    padding: 15px;
-    background: white;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: 0.2s;
+  padding: 12px 15px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
-.client-item:hover { transform: translateX(5px); border-color: #007bff; }
-.welcome-screen { text-align: center; color: #888; margin-top: 100px; }
+.client-item:hover {
+  background-color: #e3f2fd;
+  transform: translateX(3px);
+}
+
+/* ================= MAIN CONTENT ================= */
+.main-content {
+  padding: 25px;
+  overflow-y: auto;
+  background-color: #f0f2f7;
+}
+
+.welcome-screen {
+  text-align: center;
+  margin-top: 100px;
+  font-size: 18px;
+  color: #777;
+}
+
+/* ================= DETAIL CARD ================= */
+.detail-card {
+  background-color: #fff;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.detail-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.detail-header h2 {
+  font-size: 22px;
+  color: #222;
+}
+
+.contact-quick-links span {
+  font-size: 14px;
+  margin-right: 10px;
+}
+
+/* ================= GRID FOR CLIENT DETAILS ================= */
+.roofing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ================= DROP ZONE ================= */
+.drop-zone {
+  padding: 25px;
+  border: 2px dashed #007bff;
+  border-radius: 8px;
+  text-align: center;
+  color: #007bff;
+  font-weight: bold;
+  transition: background 0.3s, color 0.3s;
+}
+
+.drop-zone-active {
+  background-color: #007bff;
+  color: #fff;
+}
+
+/* ================= DETAIL BUTTONS ================= */
+#saveBtn {
+  background-color: #28a745;
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+#saveBtn:hover {
+  background-color: #218838;
+  transform: translateY(-2px);
+}
+
+#viewDocsBtn {
+  background-color: #6c757d;
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+#viewDocsBtn:hover {
+  background-color: #5a6268;
+  transform: translateY(-2px);
+}
+
+#delBtn {
+  background-color: #dc3545;
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+#delBtn:hover {
+  background-color: #c82333;
+  transform: translateY(-2px);
+}
+
+.close-x {
+  background: transparent;
+  color: #333;
+  font-size: 22px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 900px) {
+  .crm-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .roofing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    border-right: none;
+  }
+}

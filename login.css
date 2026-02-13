@@ -1,56 +1,200 @@
-#head{
-    text-align: center;
-    font-size: larger;
-    font-family: 'Nunito', sans-serif;
-    font-weight: 900;
-     text-shadow: 1px 1px 4px rgba(0,0,0,0.5); /* subtle shadow for pop */
+/* =========================
+   GLOBAL RESET
+========================= */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Nunito', sans-serif;
 }
 
-
-#logo_login{
-    display: block;           /* makes it behave like a block element */
-    margin: 20px auto;        /* centers it horizontally and adds top/bottom spacing */
-    width: 180px;             /* adjust size */
-    height: 120px;            /* keep it square */
-    object-fit: cover;        /* makes sure image scales nicely */
-    border-radius: 10px;      /* slightly rounded corners */
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3); /* optional shadow for style */
+/* =========================
+   BODY
+========================= */
+body {
+  background: linear-gradient(135deg, #16415c, #1e90ff);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  color: #fff;
+  overflow-x: hidden;
 }
 
-
-
-#password_feild {
-    text-align: center;   /* center everything inside */
-    margin-top: 50px;     /* space from top */
-    font-size: xx-large;
+/* =========================
+   HEADER
+========================= */
+#head {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 900;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.5);
+  margin-bottom: 20px;
 }
 
-
-#pwd {
-    width: 300px;         /* make it wider */
-    height: 50px;         /* make it taller */
-    font-size: 20px;      /* text size inside */
-    padding: 5px 10px;    /* inner spacing */
-    border-radius: 5px;   /* rounded corners */
-    border: 1px solid #ccc; /* optional border color */
+/* =========================
+   CONTAINER
+========================= */
+.container {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 40px 30px;
+  border-radius: 15px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  text-align: center;
+  width: 350px;
+  position: relative;
 }
 
-/* Button */
-#password_feild button {
+/* =========================
+   LOGO
+========================= */
+#logo_login {
+  width: 150px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 25px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+  transition: transform 0.3s ease;
+}
+
+#logo_login:hover {
+  transform: scale(1.05);
+}
+
+/* =========================
+   FORM HEADING
+========================= */
+h2 {
+  margin-bottom: 25px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* =========================
+   FORM INPUTS
+========================= */
+form div {
+  margin-bottom: 25px;
+  text-align: left;
+}
+
+form label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+form input {
+  width: 100%;
+  padding: 12px 15px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+form input:focus {
+  box-shadow: 0 0 10px rgba(30, 144, 255, 0.7);
+  transform: scale(1.02);
+}
+
+/* =========================
+   BUTTONS
+========================= */
+.buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+button {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#login-btn {
+  background-color: #1e90ff;
+  color: white;
+}
+#login-btn:hover {
+  background-color: #634aff;
+}
+
+#show-change-btn {
+  background-color: #ff6347;
+  color: white;
+}
+#show-change-btn:hover {
+  background-color: #ff8266;
+}
+
+#change-btn {
+  background-color: #2874a5;
+  color: white;
+}
+#change-btn:hover {
+  background-color: #5cd65c;
+}
+
+#cancel-change-btn {
+  background-color: #ff4c4c;
+  color: white;
+}
+
+/* =========================
+   HIDDEN FORM
+========================= */
+.hidden {
+  display: none;
+}
+
+/* =========================
+   ANIMATIONS
+========================= */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes slideOutLeft {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-100%); opacity: 0; }
+}
+
+.slide-in-right { animation: slideInRight 0.5s forwards; }
+.slide-in-left { animation: slideInLeft 0.5s forwards; }
+.slide-out-right { animation: slideOutRight 0.3s forwards; }
+.slide-out-left { animation: slideOutLeft 0.3s forwards; }
+
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width: 400px) {
+  .container {
+    width: 90%;
+    padding: 30px 20px;
+  }
+
+  #logo_login {
     width: 120px;
-    height: 50px;
-    font-size: 18px;
-    font-family: 'Open Sans', sans-serif;
-    border: none;
-    border-radius: 8px;
-    background-color: #1e90ff; /* bright blue button */
-    color: white;
-    cursor: pointer;
-    transition: 0.3s;
+    height: 80px;
+  }
 }
-
-/* Button hover effect */
-#password_feild button:hover {
-    background-color: #63a4ff; /* lighter blue on hover */
-}
-
