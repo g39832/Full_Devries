@@ -1,0 +1,233 @@
+/* =========================
+   GLOBAL RESET
+========================= */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Nunito', sans-serif;
+}
+
+/* =========================
+   BODY & DASHBOARD LAYOUT
+========================= */
+body.dashboard-body {
+  background: linear-gradient(135deg, #16415c, #1e90ff);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  color: #fff;
+}
+
+#Main_header {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 900;
+  padding: 15px 0;
+  background-color: rgba(0,0,0,0.2);
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.5);
+}
+
+/* Dashboard grid */
+.crm-dashboard {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+.sidebar {
+  width: 300px;
+  background: rgba(255,255,255,0.05);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  font-weight: 600;
+  margin-bottom: 15px;
+}
+
+.sidebar form {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+
+.input-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.input-row input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+}
+
+input[type="email"],
+input[type="tel"] {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+}
+
+button.btn-primary {
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: #1e90ff;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button.btn-primary:hover {
+  background-color: #634aff;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+}
+
+/* Scrollable client list */
+.client-list {
+  list-style: none;
+  margin-top: 15px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.client-item {
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.client-item:hover {
+  background: rgba(30, 144, 255, 0.3);
+}
+
+/* =========================
+   MAIN PANEL
+========================= */
+.main-content {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* Welcome screen */
+.welcome-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+/* Detail card */
+.detail-card {
+  background: rgba(0,0,0,0.2);
+  padding: 20px;
+  border-radius: 12px;
+  animation: slideInRight 0.5s forwards;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.detail-header h2 {
+  font-size: 1.5rem;
+}
+
+/* Roofing grid layout */
+.roofing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.roofing-grid input,
+.roofing-grid select,
+.roofing-grid textarea {
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+}
+
+/* Drop zone */
+.drop-zone {
+  border: 2px dashed rgba(255,255,255,0.3);
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.drop-zone-active {
+  background: rgba(30,144,255,0.3);
+  border-color: #1e90ff;
+}
+
+/* Buttons inside project panel */
+.detail-card button {
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width: 768px) {
+  .crm-dashboard {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    max-height: 300px;
+  }
+
+  .roofing-grid {
+    grid-template-columns: 1fr;
+  }
+}

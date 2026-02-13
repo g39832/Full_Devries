@@ -1,0 +1,16 @@
+{
+  "name": "full-devries-web",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "description": "Roofing CRM 2026 - Web Version",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
+    "express": "^4.22.1",
+    "express-fileupload": "^1.5.2"
+  }
+}

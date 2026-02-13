@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roofing CRM - Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dashboard-body">
+
+  <header id="Main_header">Roofing Pro CRM 2026</header>
+
+  <div class="crm-dashboard">
+    <!-- Sidebar: Lead & Client Management -->
+    <aside class="sidebar">
+      <h2>Add New Lead</h2>
+      <form id="clientIntakeForm">
+        <div class="input-row">
+          <input type="text" id="fName" placeholder="First Name" required>
+          <input type="text" id="lName" placeholder="Last Name" required>
+        </div>
+        <input type="email" id="email" placeholder="Email Address" required>
+        <input type="tel" id="phone" placeholder="Phone Number" required>
+        <button type="submit" class="btn-primary">Add Client</button>
+      </form>
+
+      <div class="search-bar">
+        <input type="text" id="searchClients" placeholder="Search name, phone, or email...">
+      </div>
+
+      <!-- Scrollable List of Clients -->
+      <ul id="clientList" class="client-list"></ul>
+    </aside>
+
+    <!-- Right panel: Interactive Project Details & PDF Drop Zone -->
+    <main id="projectPanel" class="main-content">
+      <div class="welcome-screen">
+        <p>Select a client on the left to manage project details and documents</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="main-renderer.js" defer></script>
+</body>
+</html>
