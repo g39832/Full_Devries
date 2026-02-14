@@ -5,6 +5,75 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Roofing CRM - Dashboard</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Inline style adjustments for this file */
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    #address {
+      flex: 1; /* Make it take full width on the right */
+    }
+
+    .close-x {
+      color: red; /* Change close button to red */
+      font-size: 1.5rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      transition: transform 0.2s ease, color 0.2s ease;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards 0.2s; /* Animate in */
+    }
+
+    .close-x:hover {
+      color: darkred;
+      transform: scale(1.2);
+    }
+
+    .sidebar h2 {
+      margin-bottom: 10px;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards 0.1s; /* Animate in */
+    }
+
+    .sidebar form input,
+    .sidebar form button {
+      padding: 8px;
+      font-size: 0.9rem;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards 0.15s; /* Animate in */
+    }
+
+    .sidebar .search-bar {
+      margin-top: 15px;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards 0.2s;
+    }
+
+    .client-list {
+      margin-top: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards 0.25s;
+    }
+
+    .main-content {
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards 0.3s;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+  </style>
 </head>
 <body class="dashboard-body">
 
@@ -18,6 +87,7 @@
         <div class="input-row">
           <input type="text" id="fName" placeholder="First Name" required>
           <input type="text" id="lName" placeholder="Last Name" required>
+          <input type="text" id="address" placeholder="Job Address">
         </div>
         <input type="email" id="email" placeholder="Email Address" required>
         <input type="tel" id="phone" placeholder="Phone Number" required>

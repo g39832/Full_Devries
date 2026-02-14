@@ -11,9 +11,14 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "express": "^4.22.1",
-    "express-fileupload": "^1.5.2"
+    "express-fileupload": "^1.5.2",
+    "express-session": "^1.19.0",
+    "sqlite3": "^5.0.2"
   },
   "engines": {
     "node": "22.x"
-  }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

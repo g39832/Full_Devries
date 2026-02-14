@@ -1,27 +1,31 @@
+// main-renderer.js
+
 // =========================
 // API WRAPPER
 // =========================
 window.api = {
-  // Search clients
   searchClients: async (term) => {
     const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
     if (!res.ok) throw new Error('Failed to fetch clients');
     return await res.json();
   },
 
-  // Save new client
   saveClient: async (client) => {
+    const name = `${client.fName || ''} ${client.lName || ''}`.trim();
+    const payload = { ...client, name };
     const res = await fetch('/api/save-client', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(client)
+      body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error('Failed to save client');
     return await res.json();
   },
 
-  // Update existing client/project
   updateProject: async (data) => {
+    if (data.fName || data.lName) {
+      data.name = `${data.fName || ''} ${data.lName || ''}`.trim();
+    }
     const res = await fetch('/api/update-project', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -31,7 +35,6 @@ window.api = {
     return await res.json();
   },
 
-  // Delete client
   deleteClient: async (id) => {
     const res = await fetch('/api/delete-client', {
       method: 'POST',
@@ -73,6 +76,7 @@ document.getElementById('clientIntakeForm').addEventListener('submit', async (e)
     lName: document.getElementById('lName').value,
     email: document.getElementById('email').value,
     phone: document.getElementById('phone').value,
+    address: document.getElementById('address').value
   };
 
   try {
@@ -96,33 +100,39 @@ async function refreshList() {
 
 function renderSidebar(list) {
   if (!clientList) return;
-  clientList.innerHTML = list.map(c => `
-    <li class="client-item" data-id="${c.id}">
-      <strong>${c.fName} ${c.lName}</strong><br>
-      <small>${c.phone}</small>
-    </li>
-  `).join('');
+  clientList.innerHTML = list.map(c => {
+    const [fName, lName] = (c.name || '').split(' ');
+    return `
+      <li class="client-item" data-id="${c.id}">
+        <strong>${fName || ''} ${lName || ''}</strong><br>
+        <small>${c.phone || ''}</small>
+      </li>
+    `;
+  }).join('');
 }
 
 // =========================
-// Open Client Details
+// Open Client Details with Animation
 // =========================
 async function openClient(id) {
   if (activeId === id && document.getElementById('saveBtn')) return;
   activeId = id;
 
   const allClients = await window.api.searchClients('');
-  const client = allClients.find(c => c.id === id);
+  const client = allClients.find(c => c.id == id);
   if (!client) return;
 
+  const [fName, lName] = (client.name || '').split(' ');
+
+  // Prepare panel with opacity 0 for fade-in animation
   projectPanel.innerHTML = `
-    <div class="detail-card">
+    <div class="detail-card animate-panel">
       <button id="closeBtn" class="close-x">&times;</button>
       <header class="detail-header">
-        <h2>${client.fName} ${client.lName}</h2>
+        <h2>${fName || ''} ${lName || ''}</h2>
         <div class="contact-quick-links">
-          <span>📞 <a href="tel:${client.phone}">${client.phone}</a></span>
-          <span style="margin-left:20px;">✉️ <a href="mailto:${client.email}">${client.email}</a></span>
+          <span>📞 <a href="tel:${client.phone}">${client.phone || ''}</a></span>
+          <span style="margin-left:20px;">✉️ <a href="mailto:${client.email}">${client.email || ''}</a></span>
         </div>
       </header>
 
@@ -136,12 +146,11 @@ async function openClient(id) {
           </select>
         </div>
 
+        <label>Job Address</label>
+        <input type="text" id="p-address" value="${client.address || ''}">
+
         <label>Phone Number</label><input type="tel" id="p-phone" value="${client.phone || ''}">
         <label>Email Address</label><input type="email" id="p-email" value="${client.email || ''}">
-        <label>Job Address</label><input type="text" id="p-addr" value="${client.address || ''}">
-        <label>Price ($)</label><input type="number" id="p-price" value="${client.pricing || ''}">
-        <label style="grid-column: span 2;">Internal Notes</label>
-        <textarea id="p-notes" style="grid-column: span 2;">${client.notes || ''}</textarea>
 
         <div id="pdf-drop-zone" class="drop-zone" style="grid-column: span 2;">
           📄 Drop Client PDFs Here (Contracts, Estimates, etc.)
@@ -157,6 +166,26 @@ async function openClient(id) {
   `;
 
   setupDropZone();
+
+  // Trigger fade-in animation
+  const panel = projectPanel.querySelector('.animate-panel');
+  requestAnimationFrame(() => {
+    panel.style.opacity = 1;
+    panel.style.transform = 'translateY(0)';
+  });
+}
+
+// =========================
+// Close Client Panel with Animation
+// =========================
+function closeClientPanel() {
+  const panel = projectPanel.querySelector('.animate-panel');
+  if (!panel) return;
+  panel.style.opacity = 0;
+  panel.style.transform = 'translateY(-20px)';
+  setTimeout(() => {
+    projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
+  }, 300); // match animation duration
 }
 
 // =========================
@@ -201,12 +230,12 @@ projectPanel.addEventListener('click', async (e) => {
 
     const data = {
       id: activeId,
-      address: document.getElementById('p-addr').value,
-      pricing: document.getElementById('p-price').value,
-      notes: document.getElementById('p-notes').value,
-      status: document.getElementById('p-status').value,
-      phone: document.getElementById('p-phone').value,
-      email: document.getElementById('p-email').value
+      fName: clientPanelFName(), 
+      lName: clientPanelLName(),
+      address: document.getElementById('p-address')?.value || '',
+      status: document.getElementById('p-status')?.value || '',
+      phone: document.getElementById('p-phone')?.value || '',
+      email: document.getElementById('p-email')?.value || ''
     };
 
     try {
@@ -229,14 +258,27 @@ projectPanel.addEventListener('click', async (e) => {
     if (confirm("Permanently delete this client?")) {
       await window.api.deleteClient(activeId);
       refreshList();
-      projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
+      closeClientPanel();
     }
   }
 
   if (target.id === 'closeBtn') {
-    projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
+    closeClientPanel();
   }
 });
+
+// =========================
+// Helpers to parse fName/lName in project panel
+// =========================
+function clientPanelFName() {
+  const h2 = projectPanel.querySelector('h2');
+  return h2 ? h2.innerText.split(' ')[0] : '';
+}
+
+function clientPanelLName() {
+  const h2 = projectPanel.querySelector('h2');
+  return h2 ? h2.innerText.split(' ').slice(1).join(' ') : '';
+}
 
 // =========================
 // Open Client from Sidebar
