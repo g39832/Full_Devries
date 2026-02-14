@@ -2,92 +2,72 @@
    GLOBAL RESET
 ========================= */
 * {
-  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Nunito', sans-serif;
+  box-sizing: border-box;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 /* =========================
    BODY
 ========================= */
 body {
-  background: linear-gradient(135deg, #16415c, #1e90ff);
+  height: 100vh;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  color: #fff;
-  overflow-x: hidden;
+  color: white;
 }
 
 /* =========================
-   CONTAINER
+   MAIN CONTAINER
 ========================= */
 .container {
-  background: rgba(255, 255, 255, 0.05);
-  padding: 40px 30px;
-  border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-  text-align: center;
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px);
+  padding: 40px 35px;
+  border-radius: 12px;
   width: 350px;
-  position: relative;
-  animation: slideInRight 0.5s forwards;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  transition: 0.3s ease;
 }
 
 /* =========================
    LOGO
 ========================= */
 #logo_login {
-  width: 150px;
-  height: 100px;
-  object-fit: cover;
-  border-radius: 12px;
-  margin-bottom: 25px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.4);
-  transition: transform 0.3s ease;
-}
-
-#logo_login:hover {
-  transform: scale(1.05);
+  width: 90px;
+  margin-bottom: 20px;
+  border-radius: 8px;
 }
 
 /* =========================
-   FORM HEADING
+   HEADINGS
 ========================= */
 h2 {
-  margin-bottom: 25px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+h3 {
+  margin-bottom: 15px;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 /* =========================
-   FORM INPUTS
+   INPUTS
 ========================= */
-form div {
-  margin-bottom: 25px;
-  text-align: left;
-}
-
-form label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-form input {
+input {
   width: 100%;
-  padding: 12px 15px;
-  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 6px;
   border: none;
   outline: none;
-  font-size: 16px;
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
-}
-
-form input:focus {
-  box-shadow: 0 0 10px rgba(30, 144, 255, 0.7);
-  transform: scale(1.02);
+  font-size: 14px;
 }
 
 /* =========================
@@ -101,54 +81,72 @@ form input:focus {
 
 button {
   flex: 1;
-  padding: 12px 0;
+  padding: 10px;
+  border-radius: 6px;
   border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  font-size: 14px;
+  transition: 0.2s ease;
 }
 
+/* Login Button */
 #login-btn {
-  background-color: #1e90ff;
+  background: #1e90ff;
   color: white;
 }
+
 #login-btn:hover {
-  background-color: #634aff;
+  background: #187bcd;
 }
 
-#show-change-btn {
-  background-color: #ff6347;
+/* Reset Toggle Button */
+#showReset {
+  background: #555;
   color: white;
 }
-#show-change-btn:hover {
-  background-color: #ff8266;
+
+#showReset:hover {
+  background: #444;
 }
 
 /* =========================
-   HIDDEN FORM
+   RESET PASSWORD SECTION
 ========================= */
-.hidden {
+#resetSection {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
   display: none;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+#resetSection input {
+  margin-bottom: 12px;
+}
+
+#resetSection button {
+  width: 100%;
+  background: #28a745;
+  color: white;
+}
+
+#resetSection button:hover {
+  background: #218838;
 }
 
 /* =========================
-   ANIMATIONS
+   ANIMATION
 ========================= */
-@keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes slideOutLeft {
-  from { transform: translateX(0); opacity: 1; }
-  to { transform: translateX(-100%); opacity: 0; }
-}
-
-@keyframes slideInRightFast {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* =========================
@@ -158,10 +156,5 @@ button {
   .container {
     width: 90%;
     padding: 30px 20px;
-  }
-
-  #logo_login {
-    width: 120px;
-    height: 80px;
   }
 }

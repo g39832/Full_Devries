@@ -1,62 +1,99 @@
-// login.js
 document.addEventListener("DOMContentLoaded", () => {
+
   const loginForm = document.getElementById("loginForm");
   const passwordInput = document.getElementById("password");
-  const loginBtn = document.getElementById("login-btn");
-  const resetBtn = document.getElementById("show-change-btn");
+  const showResetBtn = document.getElementById("showReset");
+  const resetSection = document.getElementById("resetSection");
+  const changePasswordBtn = document.getElementById("changePasswordBtn");
 
-  // ===== Animate logo on load =====
-  const logo = document.getElementById("logo_login");
-  logo.style.opacity = 0;
-  logo.style.transform = "translateY(-20px)";
-  setTimeout(() => {
-    logo.style.transition = "all 0.8s ease";
-    logo.style.opacity = 1;
-    logo.style.transform = "translateY(0)";
-  }, 100);
+  // Hide reset section initially
+  resetSection.style.display = "none";
 
-  // ===== Animate inputs and buttons sequentially =====
-  const inputs = loginForm.querySelectorAll("input, button");
-  inputs.forEach((el, idx) => {
-    el.style.opacity = 0;
-    el.style.transform = "translateX(100px)";
-    setTimeout(() => {
-      el.style.transition = `all 0.5s ease ${(idx + 1) * 0.1}s`;
-      el.style.opacity = 1;
-      el.style.transform = "translateX(0)";
-    }, 300);
-  });
-
-  // ===== Login submission =====
-  loginForm.addEventListener("submit", (e) => {
+  // =========================
+  // LOGIN
+  // =========================
+  loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+
     const password = passwordInput.value;
-    if (password === "123007") {
-      // Success animation
-      loginBtn.style.transform = "scale(0.95)";
-      setTimeout(() => {
-        loginBtn.style.transform = "scale(1)";
-        // Redirect to main page
-        window.location.href = "main.html";
-      }, 150);
-    } else {
-      // Shake animation on wrong password
-      loginForm.style.animation = "slideOutLeft 0.3s";
-      setTimeout(() => {
-        loginForm.style.animation = "slideInRight 0.3s";
-      }, 300);
-      passwordInput.value = "";
-      passwordInput.focus();
-      alert("Incorrect password. Try again.");
+
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ password })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        window.location.href = "/main";
+      } else {
+        alert(data.message || "Incorrect password.");
+        passwordInput.value = "";
+        passwordInput.focus();
+      }
+
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Server error. Please try again.");
     }
   });
 
-  // ===== Reset password button =====
-  resetBtn.addEventListener("click", () => {
-    passwordInput.value = "";
-    passwordInput.focus();
+  // =========================
+  // TOGGLE RESET SECTION
+  // =========================
+  showResetBtn.addEventListener("click", () => {
+    if (resetSection.style.display === "none") {
+      resetSection.style.display = "block";
+    } else {
+      resetSection.style.display = "none";
+    }
   });
 
-  // ===== Optional: Press Enter to focus login =====
-  passwordInput.focus();
+  // =========================
+  // CHANGE PASSWORD
+  // =========================
+  changePasswordBtn.addEventListener("click", async () => {
+
+    const currentPassword = document.getElementById("currentPassword").value;
+    const newPassword = document.getElementById("newPassword").value;
+
+    if (!newPassword || newPassword.length < 4) {
+      alert("New password must be at least 4 characters.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("Password changed successfully!");
+        resetSection.style.display = "none";
+        document.getElementById("currentPassword").value = "";
+        document.getElementById("newPassword").value = "";
+      } else {
+        alert(data.message || "Password change failed.");
+      }
+
+    } catch (error) {
+      console.error("Change password error:", error);
+      alert("Server error. Please try again.");
+    }
+
+  });
+
 });

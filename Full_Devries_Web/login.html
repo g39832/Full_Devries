@@ -3,32 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roofing CRM - Login</title>
+  <title>Login - Roofing CRM</title>
   <link rel="stylesheet" href="login.css">
 </head>
 <body>
-  <div class="container">
-    <!-- Logo -->
-    <img src="assets/devires_pic.png" alt="Logo" id="logo_login">
 
-    <!-- Form Heading -->
+  <div class="container">
+    
+    <img id="logo_login" src="assets/devries_pic.png" alt="Logo">
+    
     <h2>Login</h2>
 
-    <!-- Login Form -->
+    <!-- LOGIN FORM -->
     <form id="loginForm">
-      <div>
-        <input type="password" id="password" placeholder="Enter Password" required>
-      </div>
-
-      <!-- Buttons -->
+      <input type="password" id="password" placeholder="Enter Password" required>
+      
       <div class="buttons">
         <button type="submit" id="login-btn">Login</button>
-        <button type="button" id="show-change-btn">Reset</button>
+        <button type="button" id="showReset">Reset Password</button>
       </div>
     </form>
+
+    <!-- RESET PASSWORD SECTION -->
+    <div id="resetSection">
+      <h3>Change Password</h3>
+      
+      <input type="password" id="currentPassword" placeholder="Current Password" required>
+      <input type="password" id="newPassword" placeholder="New Password" required>
+      
+      <button id="changePasswordBtn">Change Password</button>
+    </div>
+
   </div>
 
-  <!-- Login JS -->
-  <script src="login.js" defer></script>
+  <script src="login.js"></script>
 </body>
 </html>

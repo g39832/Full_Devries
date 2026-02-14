@@ -1,9 +1,15 @@
-const express = require('express');
-const router = express.Router();
+const Database = require('better-sqlite3');
+const db = new Database('crm.db');
 
-// Example placeholder route
-router.get('/test', (req, res) => {
-  res.json({ message: 'DB placeholder working!' });
-});
+// ===== Existing Tables Stay Here =====
 
-module.exports = router;
+
+// ===== ADD SETTINGS TABLE (for password storage) =====
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )
+`).run();
+
+module.exports = db;
