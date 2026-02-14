@@ -13,7 +13,7 @@
 ========================= */
 body {
   height: 100vh;
-  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  background: linear-gradient(135deg, #0b1f3a, #132f4c, #1f4e79);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -24,12 +24,12 @@ body {
    MAIN CONTAINER
 ========================= */
 .container {
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
   padding: 40px 35px;
-  border-radius: 12px;
-  width: 350px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+  border-radius: 14px;
+  width: 360px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
   text-align: center;
   transition: 0.3s ease;
 }
@@ -38,9 +38,9 @@ body {
    LOGO
 ========================= */
 #logo_login {
-  width: 90px;
+  width: 95px;
   margin-bottom: 20px;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 /* =========================
@@ -71,14 +71,16 @@ input {
 }
 
 /* =========================
-   BUTTONS
+   BUTTON ROW
 ========================= */
 .buttons {
   display: flex;
-  justify-content: space-between;
   gap: 10px;
 }
 
+/* =========================
+   BUTTONS
+========================= */
 button {
   flex: 1;
   padding: 10px;
@@ -91,22 +93,22 @@ button {
 
 /* Login Button */
 #login-btn {
-  background: #1e90ff;
+  background: #2f80ed;
   color: white;
 }
 
 #login-btn:hover {
-  background: #187bcd;
+  background: #2569c7;
 }
 
 /* Reset Toggle Button */
 #showReset {
-  background: #555;
+  background: #4b5563;
   color: white;
 }
 
 #showReset:hover {
-  background: #444;
+  background: #374151;
 }
 
 /* =========================
@@ -114,9 +116,9 @@ button {
 ========================= */
 #resetSection {
   margin-top: 20px;
-  padding: 15px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  padding: 18px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
   display: none;
   animation: fadeIn 0.3s ease-in-out;
 }
@@ -127,12 +129,12 @@ button {
 
 #resetSection button {
   width: 100%;
-  background: #28a745;
+  background: #16a34a;
   color: white;
 }
 
 #resetSection button:hover {
-  background: #218838;
+  background: #15803d;
 }
 
 /* =========================
@@ -141,7 +143,7 @@ button {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(-5px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
