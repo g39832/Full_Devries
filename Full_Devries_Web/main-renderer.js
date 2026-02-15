@@ -112,7 +112,7 @@ function renderSidebar(list) {
 }
 
 // =========================
-// Open Client Details with Animation
+// Open Client Details (with clickable address + animation)
 // =========================
 async function openClient(id) {
   if (activeId === id && document.getElementById('saveBtn')) return;
@@ -123,11 +123,14 @@ async function openClient(id) {
   if (!client) return;
 
   const [fName, lName] = (client.name || '').split(' ');
+  const mapsLink = client.address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(client.address)}`
+    : '';
 
-  // Prepare panel with opacity 0 for fade-in animation
   projectPanel.innerHTML = `
     <div class="detail-card animate-panel">
       <button id="closeBtn" class="close-x">&times;</button>
+
       <header class="detail-header">
         <h2>${fName || ''} ${lName || ''}</h2>
         <div class="contact-quick-links">
@@ -137,6 +140,7 @@ async function openClient(id) {
       </header>
 
       <div class="roofing-grid">
+
         <div style="grid-column: span 2;">
           <label>Job Status</label>
           <select id="p-status">
@@ -147,10 +151,16 @@ async function openClient(id) {
         </div>
 
         <label>Job Address</label>
-        <input type="text" id="p-address" value="${client.address || ''}">
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <input type="text" id="p-address" value="${client.address || ''}">
+          ${client.address ? `<a href="${mapsLink}" target="_blank" style="color:#007bff; font-size:0.9rem;">📍 Open in Google Maps</a>` : ''}
+        </div>
 
-        <label>Phone Number</label><input type="tel" id="p-phone" value="${client.phone || ''}">
-        <label>Email Address</label><input type="email" id="p-email" value="${client.email || ''}">
+        <label>Phone Number</label>
+        <input type="tel" id="p-phone" value="${client.phone || ''}">
+
+        <label>Email Address</label>
+        <input type="email" id="p-email" value="${client.email || ''}">
 
         <div id="pdf-drop-zone" class="drop-zone" style="grid-column: span 2;">
           📄 Drop Client PDFs Here (Contracts, Estimates, etc.)
@@ -161,13 +171,13 @@ async function openClient(id) {
           <button id="viewDocsBtn" class="btn-primary" style="background:#6c757d; flex:1;">📂 Open Folder</button>
           <button id="delBtn" class="btn-primary" style="background:#dc3545; flex:1;">Delete</button>
         </div>
+
       </div>
     </div>
   `;
 
   setupDropZone();
 
-  // Trigger fade-in animation
   const panel = projectPanel.querySelector('.animate-panel');
   requestAnimationFrame(() => {
     panel.style.opacity = 1;
@@ -176,7 +186,7 @@ async function openClient(id) {
 }
 
 // =========================
-// Close Client Panel with Animation
+// Close Client Panel
 // =========================
 function closeClientPanel() {
   const panel = projectPanel.querySelector('.animate-panel');
@@ -185,11 +195,11 @@ function closeClientPanel() {
   panel.style.transform = 'translateY(-20px)';
   setTimeout(() => {
     projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
-  }, 300); // match animation duration
+  }, 300);
 }
 
 // =========================
-// Drag & Drop PDF Upload
+// Drag & Drop
 // =========================
 function setupDropZone() {
   const dz = document.getElementById('pdf-drop-zone');
@@ -201,36 +211,18 @@ function setupDropZone() {
 
   dz.addEventListener('dragover', () => dz.classList.add('drop-zone-active'));
   dz.addEventListener('dragleave', () => dz.classList.remove('drop-zone-active'));
-  dz.addEventListener('drop', async (e) => {
-    dz.classList.remove('drop-zone-active');
-    const files = Array.from(e.dataTransfer.files);
-    for (const f of files) {
-      const filePath = f.path;
-      if (filePath && f.name.toLowerCase().endsWith('.pdf')) {
-        const res = await window.api.uploadPdf({ filePath, clientId: activeId });
-        if (res.success) alert("✅ Uploaded: " + res.fileName);
-        else alert("❌ Error: " + res.error);
-      } else {
-        alert("Only PDF files are allowed.");
-      }
-    }
-  });
 }
 
 // =========================
-// Project Panel Button Clicks
+// Panel Buttons
 // =========================
 projectPanel.addEventListener('click', async (e) => {
   const target = e.target;
 
   if (target.id === 'saveBtn') {
-    const origText = target.innerText;
-    target.innerText = "Saving...";
-    target.disabled = true;
-
     const data = {
       id: activeId,
-      fName: clientPanelFName(), 
+      fName: clientPanelFName(),
       lName: clientPanelLName(),
       address: document.getElementById('p-address')?.value || '',
       status: document.getElementById('p-status')?.value || '',
@@ -238,18 +230,10 @@ projectPanel.addEventListener('click', async (e) => {
       email: document.getElementById('p-email')?.value || ''
     };
 
-    try {
-      await window.api.updateProject(data);
-      refreshList();
-      target.innerText = origText;
-      target.disabled = false;
-      alert("✅ Saved Successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("❌ Failed to save changes.");
-      target.innerText = origText;
-      target.disabled = false;
-    }
+    await window.api.updateProject(data);
+    refreshList();
+    alert("✅ Saved Successfully!");
+    openClient(activeId); // re-render to refresh maps link
   }
 
   if (target.id === 'viewDocsBtn') window.api.openFolder?.(activeId);
@@ -262,13 +246,11 @@ projectPanel.addEventListener('click', async (e) => {
     }
   }
 
-  if (target.id === 'closeBtn') {
-    closeClientPanel();
-  }
+  if (target.id === 'closeBtn') closeClientPanel();
 });
 
 // =========================
-// Helpers to parse fName/lName in project panel
+// Helpers
 // =========================
 function clientPanelFName() {
   const h2 = projectPanel.querySelector('h2');
@@ -280,9 +262,6 @@ function clientPanelLName() {
   return h2 ? h2.innerText.split(' ').slice(1).join(' ') : '';
 }
 
-// =========================
-// Open Client from Sidebar
-// =========================
 clientList.addEventListener('click', (e) => {
   const item = e.target.closest('.client-item');
   if (item) openClient(parseInt(item.getAttribute('data-id')));
