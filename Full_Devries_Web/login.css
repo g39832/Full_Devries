@@ -14,10 +14,26 @@
 body {
   height: 100vh;
   background: linear-gradient(135deg, #0b1f3a, #132f4c, #1f4e79);
+  background-size: 200% 200%;
   display: flex;
   justify-content: center;
   align-items: center;
   color: white;
+
+  animation: gradientMove 12s ease infinite, pageFade 0.6s ease-out;
+}
+
+/* Animated Gradient Movement */
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Page Fade In */
+@keyframes pageFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* =========================
@@ -32,6 +48,19 @@ body {
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
   text-align: center;
   transition: 0.3s ease;
+
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+  animation: cardEntrance 0.7s ease forwards;
+  animation-delay: 0.2s;
+}
+
+/* Card Entrance Animation */
+@keyframes cardEntrance {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* =========================
@@ -41,6 +70,15 @@ body {
   width: 95px;
   margin-bottom: 20px;
   border-radius: 10px;
+
+  animation: floatLogo 4s ease-in-out infinite;
+}
+
+/* Floating Logo Animation */
+@keyframes floatLogo {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0px); }
 }
 
 /* =========================
@@ -68,6 +106,12 @@ input {
   border: none;
   outline: none;
   font-size: 14px;
+  transition: all 0.25s ease;
+}
+
+input:focus {
+  transform: scale(1.02);
+  box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.4);
 }
 
 /* =========================
@@ -88,7 +132,12 @@ button {
   border: none;
   cursor: pointer;
   font-size: 14px;
-  transition: 0.2s ease;
+  transition: all 0.25s ease;
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
 /* Login Button */
@@ -121,6 +170,7 @@ button {
   background: rgba(255, 255, 255, 0.1);
   display: none;
   animation: fadeIn 0.3s ease-in-out;
+  transition: all 0.35s ease;
 }
 
 #resetSection input {
@@ -137,8 +187,14 @@ button {
   background: #15803d;
 }
 
+/* Smooth Show Class (optional if toggling via JS) */
+#resetSection.show {
+  display: block;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
 /* =========================
-   ANIMATION
+   FADE IN ANIMATION
 ========================= */
 @keyframes fadeIn {
   from {
