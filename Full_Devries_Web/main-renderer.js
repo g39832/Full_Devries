@@ -1,6 +1,27 @@
 // main-renderer.js
 
 // =========================
+// STATUS CONFIG
+// =========================
+const STATUS_ORDER = [
+  "Lead",
+  "Prospect",
+  "Customer",
+  "Completed",
+  "Invoice",
+  "Closed"
+];
+
+const STATUS_COLORS = {
+  Lead: "#007bff",
+  Prospect: "#6f42c1",
+  Customer: "#17a2b8",
+  Completed: "#28a745",
+  Invoice: "#fd7e14",
+  Closed: "#6c757d"
+};
+
+// =========================
 // API WRAPPER
 // =========================
 window.api = {
@@ -55,14 +76,36 @@ let activeId = null;
 let searchTimeout;
 
 // =========================
-// Smart Search
+// Smart Search (Now Supports Status Filtering)
 // =========================
 document.getElementById('searchClients').addEventListener('input', (e) => {
-  const term = e.target.value;
+  const term = e.target.value.trim().toLowerCase();
   clearTimeout(searchTimeout);
+
   searchTimeout = setTimeout(async () => {
-    const list = await window.api.searchClients(term);
-    renderSidebar(list);
+    try {
+      const allClients = await window.api.searchClients('');
+
+      // Check if search term matches a status exactly
+      const matchedStatus = STATUS_ORDER.find(
+        status => status.toLowerCase() === term
+      );
+
+      if (matchedStatus) {
+        const filtered = allClients.filter(
+          c => (c.status || "Lead").toLowerCase() === term
+        );
+        renderSidebar(filtered);
+        return;
+      }
+
+      // Otherwise use normal backend search
+      const list = await window.api.searchClients(term);
+      renderSidebar(list);
+
+    } catch (err) {
+      console.error("Search failed:", err);
+    }
   }, 300);
 });
 
@@ -76,12 +119,13 @@ document.getElementById('clientIntakeForm').addEventListener('submit', async (e)
     lName: document.getElementById('lName').value,
     email: document.getElementById('email').value,
     phone: document.getElementById('phone').value,
-    address: document.getElementById('address').value
+    address: document.getElementById('address').value,
+    status: "Lead"
   };
 
   try {
     await window.api.saveClient(client);
-    refreshList();
+    await refreshList();
     e.target.reset();
     alert('✅ Client added!');
   } catch (err) {
@@ -100,19 +144,47 @@ async function refreshList() {
 
 function renderSidebar(list) {
   if (!clientList) return;
-  clientList.innerHTML = list.map(c => {
+
+  list.sort((a, b) => {
+    const aIndex = STATUS_ORDER.indexOf(a.status || "Lead");
+    const bIndex = STATUS_ORDER.indexOf(b.status || "Lead");
+    return aIndex - bIndex;
+  });
+
+  const counts = {};
+  STATUS_ORDER.forEach(s => counts[s] = 0);
+  list.forEach(c => counts[c.status || "Lead"]++);
+
+  const countsHTML = `
+    <div style="padding:10px; border-bottom:1px solid #ddd;">
+      ${STATUS_ORDER.map(s => 
+        `<div style="font-size:12px; color:${STATUS_COLORS[s]}">
+          ${s}: ${counts[s]}
+        </div>`
+      ).join('')}
+    </div>
+  `;
+
+  const clientsHTML = list.map(c => {
     const [fName, lName] = (c.name || '').split(' ');
+    const color = STATUS_COLORS[c.status] || "#007bff";
+
     return `
-      <li class="client-item" data-id="${c.id}">
+      <li class="client-item" data-id="${c.id}" style="border-left:4px solid ${color}; padding-left:8px;">
         <strong>${fName || ''} ${lName || ''}</strong><br>
-        <small>${c.phone || ''}</small>
+        <small>${c.phone || ''}</small><br>
+        <span style="font-size:11px; color:${color}; font-weight:bold;">
+          ${c.status || "Lead"}
+        </span>
       </li>
     `;
   }).join('');
+
+  clientList.innerHTML = countsHTML + clientsHTML;
 }
 
 // =========================
-// Open Client Details (with clickable address + animation)
+// Open Client Details
 // =========================
 async function openClient(id) {
   if (activeId === id && document.getElementById('saveBtn')) return;
@@ -144,9 +216,9 @@ async function openClient(id) {
         <div style="grid-column: span 2;">
           <label>Job Status</label>
           <select id="p-status">
-            <option value="Lead" ${client.status === 'Lead' ? 'selected' : ''}>New Lead</option>
-            <option value="Active" ${client.status === 'Active' ? 'selected' : ''}>Active Job</option>
-            <option value="Completed" ${client.status === 'Completed' ? 'selected' : ''}>Completed</option>
+            ${STATUS_ORDER.map(s =>
+              `<option value="${s}" ${client.status === s ? 'selected' : ''}>${s}</option>`
+            ).join('')}
           </select>
         </div>
 
@@ -163,7 +235,7 @@ async function openClient(id) {
         <input type="email" id="p-email" value="${client.email || ''}">
 
         <div id="pdf-drop-zone" class="drop-zone" style="grid-column: span 2;">
-          📄 Drop Client PDFs Here (Contracts, Estimates, etc.)
+          📄 Drop Client PDFs Here
         </div>
 
         <div style="grid-column: span 2; display:flex; gap:10px; margin-top:10px;">
@@ -231,9 +303,9 @@ projectPanel.addEventListener('click', async (e) => {
     };
 
     await window.api.updateProject(data);
-    refreshList();
+    await refreshList();
     alert("✅ Saved Successfully!");
-    openClient(activeId); // re-render to refresh maps link
+    openClient(activeId);
   }
 
   if (target.id === 'viewDocsBtn') window.api.openFolder?.(activeId);
@@ -241,7 +313,7 @@ projectPanel.addEventListener('click', async (e) => {
   if (target.id === 'delBtn') {
     if (confirm("Permanently delete this client?")) {
       await window.api.deleteClient(activeId);
-      refreshList();
+      await refreshList();
       closeClientPanel();
     }
   }
