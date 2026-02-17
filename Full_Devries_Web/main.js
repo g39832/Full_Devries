@@ -101,7 +101,8 @@ async function openClient(id) {
         <textarea id="p-notes" style="grid-column: span 2;">${client.notes || ''}</textarea>
 
         <div id="pdf-drop-zone" class="drop-zone" style="grid-column: span 2;">
-          📄 Drop Client PDFs Here (Contracts, Estimates, etc.)
+          📄 Drop Client Files Here
+          <div id="pdfList" class="pdf-list"></div>
         </div>
 
         <div style="grid-column: span 2; display:flex; gap:10px; margin-top:10px;">
@@ -116,9 +117,10 @@ async function openClient(id) {
   setupDropZone();
 }
 
-// ===== Drag & Drop PDF Upload =====
+// ===== Drag & Drop PDF / File Upload =====
 function setupDropZone() {
   const dz = document.getElementById('pdf-drop-zone');
+  const pdfList = document.getElementById('pdfList');
   if (!dz) return;
 
   ['dragover','dragleave','drop'].forEach(evt =>
@@ -127,28 +129,76 @@ function setupDropZone() {
 
   dz.addEventListener('dragover', () => dz.classList.add('drop-zone-active'));
   dz.addEventListener('dragleave', () => dz.classList.remove('drop-zone-active'));
+
   dz.addEventListener('drop', async (e) => {
     dz.classList.remove('drop-zone-active');
     const files = Array.from(e.dataTransfer.files);
+    console.log("Dropped files:", files);
+
+    if (!activeId) { alert("⚠️ Select a client first!"); return; }
+
     for (const f of files) {
-      if (!f.name.toLowerCase().endsWith('.pdf')) {
-        alert("Only PDF files are allowed.");
-        continue;
+      try {
+        const formData = new FormData();
+        formData.append('file', f);
+        formData.append('clientId', activeId);
+
+        const res = await fetch('/api/pdf/upload', { method: 'POST', body: formData });
+        const result = await res.json();
+        console.log("Upload response:", result);
+
+        if (result.success) {
+          alert("✅ Uploaded: " + (result.fileName || f.name));
+          displayFileThumbnail(f);
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+      } catch(err) {
+        console.error("Upload failed:", err);
+        alert("❌ Upload failed, check console");
       }
-
-      const formData = new FormData();
-      formData.append('pdf', f);
-      formData.append('clientId', activeId);
-
-      const res = await fetch('/api/pdf/upload', { method: 'POST', body: formData });
-      const result = await res.json();
-      if (result.success) alert("✅ Uploaded: " + result.fileName);
-      else alert("❌ Error: " + result.error);
     }
   });
+
+  function displayFileThumbnail(file) {
+    const item = document.createElement('div');
+    item.className = 'pdf-item';
+    item.dataset.url = URL.createObjectURL(file);
+
+    if (file.type === 'application/pdf') {
+      const canvas = document.createElement('canvas');
+      item.appendChild(canvas);
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 0.2 });
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+        } catch(err) {
+          console.error("PDF render error:", err);
+          canvas.remove();
+          const icon = document.createElement('div');
+          icon.innerText = file.name;
+          item.appendChild(icon);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const icon = document.createElement('div');
+      icon.innerText = file.name;
+      item.appendChild(icon);
+    }
+
+    pdfList.appendChild(item);
+  }
 }
 
-// ===== Project Panel Button Clicks =====
+// ===== Project Panel Buttons =====
 projectPanel.addEventListener('click', async (e) => {
   const target = e.target;
 
@@ -180,9 +230,7 @@ projectPanel.addEventListener('click', async (e) => {
   }
 
   if (target.id === 'viewDocsBtn') {
-    // Open folder request
-    const res = await apiFetch(`/api/pdf/folder/${activeId}`);
-    if (!res.success) alert("Folder not found or cannot open");
+    alert("Folder is accessible via /uploads/{clientId} path in server.");
   }
 
   if (target.id === 'delBtn') {
@@ -200,7 +248,7 @@ projectPanel.addEventListener('click', async (e) => {
   }
 });
 
-// ===== Open Client from Sidebar =====
+// ===== Sidebar Client Click =====
 clientList.addEventListener('click', (e) => {
   const item = e.target.closest('.client-item');
   if (item) openClient(parseInt(item.getAttribute('data-id')));

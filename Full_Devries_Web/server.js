@@ -1,6 +1,6 @@
-// server.js
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
@@ -9,17 +9,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ===== STATIC FILES =====
-// Serve root files (login.html, css, js)
 app.use(express.static(path.join(__dirname)));
-// Serve assets folder explicitly
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ===== API ROUTES =====
 const authRoutes = require('./api/auth');
 const clientsRoutes = require('./api/clients');
+const pdfRoutes = require('./api/pdf');
 
 app.use('/api', authRoutes);
 app.use('/api', clientsRoutes);
+app.use('/api/pdf', pdfRoutes);
 
 // ===== PAGE ROUTES =====
 app.get('/', (req, res) => {
@@ -35,3 +36,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// ===== ENSURE UPLOADS FOLDER EXISTS =====
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });

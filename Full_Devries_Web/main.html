@@ -70,10 +70,65 @@
       animation: fadeIn 0.3s ease forwards 0.3s;
     }
 
+    .pdf-list canvas {
+      cursor: pointer;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      transition: transform 0.2s ease;
+    }
+
+    .pdf-list canvas:hover {
+      transform: scale(1.05);
+      border-color: #007bff;
+    }
+
+    /* Modal styles */
+    #pdfModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    #pdfModalContent {
+      position: relative;
+      width: 90%;
+      max-width: 900px;
+      height: 90%;
+      background: #fff;
+      padding: 10px;
+      overflow: auto;
+      border-radius: 5px;
+    }
+
+    #pdfModalClose {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #pdfViewer canvas {
+      display: block;
+      margin: 0 auto 10px;
+      border: 1px solid #ccc;
+    }
+
     @keyframes fadeIn {
       to { opacity: 1; }
     }
   </style>
+
+  <!-- PDF.js library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.225/pdf.min.js"></script>
 </head>
 <body class="dashboard-body">
 
@@ -110,6 +165,72 @@
     </main>
   </div>
 
+  <!-- PDF Preview Modal -->
+  <div id="pdfModal">
+    <div id="pdfModalContent">
+      <span id="pdfModalClose">&times;</span>
+      <div id="pdfViewer"></div>
+    </div>
+  </div>
+
+  <!-- Renderer script -->
   <script src="main-renderer.js" defer></script>
+  <script>
+    // PDF.js worker
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.225/pdf.worker.min.js';
+    }
+
+    // Modal logic
+    const pdfModal = document.getElementById('pdfModal');
+    const pdfViewer = document.getElementById('pdfViewer');
+    const pdfModalClose = document.getElementById('pdfModalClose');
+
+    pdfModalClose.addEventListener('click', () => {
+      pdfModal.style.display = 'none';
+      pdfViewer.innerHTML = ''; // clear canvases
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === pdfModal) {
+        pdfModal.style.display = 'none';
+        pdfViewer.innerHTML = '';
+      }
+    });
+
+    // Function to open PDF in modal
+    function openPDFModal(urlOrFile) {
+      pdfViewer.innerHTML = '';
+      pdfModal.style.display = 'flex';
+
+      const loadPDF = async (data) => {
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          pdfViewer.appendChild(canvas);
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+        }
+      };
+
+      if (typeof urlOrFile === 'string') {
+        fetch(urlOrFile).then(r => r.arrayBuffer()).then(loadPDF);
+      } else {
+        urlOrFile.arrayBuffer().then(loadPDF);
+      }
+    }
+
+    // Attach click to thumbnail canvases dynamically
+    document.addEventListener('click', (e) => {
+      if (e.target.tagName === 'CANVAS' && e.target.closest('.pdf-item')) {
+        const url = e.target.closest('.pdf-item').dataset.url;
+        if (url) openPDFModal(url);
+      }
+    });
+  </script>
 </body>
 </html>

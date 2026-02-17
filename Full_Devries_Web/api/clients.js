@@ -1,4 +1,3 @@
-// clients.js
 const express = require('express');
 const db = require('./db');
 const router = express.Router();
@@ -31,7 +30,7 @@ router.post('/save-client', (req, res) => {
     name.trim(),
     email || '',
     phone || '',
-    address || '',   // ✅ Save Job Address
+    address || '',
     status || 'Lead'
   );
 
@@ -55,7 +54,7 @@ router.post('/update-project', (req, res) => {
     name || '',
     email || '',
     phone || '',
-    address || '',   // ✅ Update Job Address
+    address || '',
     status || 'Lead',
     id
   );

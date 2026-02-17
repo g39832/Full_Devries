@@ -13,6 +13,10 @@
     "express": "^4.22.1",
     "express-fileupload": "^1.5.2",
     "express-session": "^1.19.0",
+    "fs": "^0.0.1-security",
+    "multer": "^2.0.2",
+    "path": "^0.12.7",
+    "pdfjs-dist": "^5.4.624",
     "sqlite3": "^5.0.2"
   },
   "engines": {
