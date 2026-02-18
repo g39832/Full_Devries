@@ -124,6 +124,26 @@ window.api = {
     const res = await fetch(`/api/pdf/list/${clientId}`);
     if (!res.ok) throw new Error("List PDFs failed");
     return res.json();
+  },
+
+  async updateTotal(clientId, total_due) {
+    const res = await fetch(`/api/clients/${clientId}/total`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ total_due })
+    });
+    if (!res.ok) throw new Error("Total update failed");
+    return res.json();
+  },
+
+  async addPayment(clientId, payment) {
+    const res = await fetch(`/api/clients/${clientId}/payment`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payment })
+    });
+    if (!res.ok) throw new Error("Payment failed");
+    return res.json();
   }
 };
 
@@ -311,6 +331,26 @@ async function openClient(id) {
           <label>Email Address</label>
           <input type="email" id="p-email" value="${client.email || ""}">
 
+          <!-- FINANCIAL SECTION -->
+          <div style="grid-column: span 2; border-top:1px solid #ddd; padding-top:15px; margin-top:10px;">
+            <h3 style="margin-bottom:10px;">Financial Overview</h3>
+
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+              <input type="number" id="totalDueInput" placeholder="Total Due" step="0.01" style="flex:1;">
+              <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-size:14px;">
+              <div>Amount Paid: <strong id="amountPaidDisplay">$0.00</strong></div>
+              <div>Balance: <strong id="balanceDisplay">$0.00</strong></div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+              <input type="number" id="paymentInput" placeholder="Add Payment" step="0.01" style="flex:1;">
+              <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
+            </div>
+          </div>
+
           <div id="pdf-drop-zone" class="drop-zone" style="grid-column: span 2;">
             📄 Drop Client PDFs Here
           </div>
@@ -344,9 +384,38 @@ async function openClient(id) {
     setupDropZone();
     loadPDFs(id);
 
+    loadFinancialData(client);
+
   } catch (err) {
     console.error(err);
   }
+}
+
+// ======================================================
+// FINANCIAL LOADER
+// ======================================================
+function loadFinancialData(client) {
+  const totalInput = document.getElementById("totalDueInput");
+  const paidDisplay = document.getElementById("amountPaidDisplay");
+  const balanceDisplay = document.getElementById("balanceDisplay");
+
+  if (!totalInput) return;
+
+  totalInput.value = client.total_due || 0;
+  paidDisplay.innerText = `$${(client.amount_paid || 0).toFixed(2)}`;
+  balanceDisplay.innerText = `$${(client.balance || 0).toFixed(2)}`;
+
+  document.getElementById("saveTotalBtn").onclick = async () => {
+    const total = parseFloat(totalInput.value) || 0;
+    await window.api.updateTotal(activeId, total);
+    openClient(activeId);
+  };
+
+  document.getElementById("addPaymentBtn").onclick = async () => {
+    const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
+    await window.api.addPayment(activeId, payment);
+    openClient(activeId);
+  };
 }
 
 // ======================================================

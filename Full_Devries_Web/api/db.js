@@ -1,7 +1,19 @@
+const path = require('path');
 const Database = require('better-sqlite3');
-const db = new Database('crm.db');
 
-// ===== SETTINGS TABLE =====
+/*
+  IMPORTANT:
+  This forces the database file to always live
+  in the ROOT of your project folder,
+  not inside /api
+*/
+
+const dbPath = path.join(__dirname, '..', 'crm.db');
+const db = new Database(dbPath);
+
+// =========================
+// SETTINGS TABLE
+// =========================
 db.prepare(`
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -9,7 +21,9 @@ db.prepare(`
   )
 `).run();
 
-// ===== CLIENTS TABLE =====
+// =========================
+// CLIENTS TABLE
+// =========================
 db.prepare(`
   CREATE TABLE IF NOT EXISTS clients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,4 +37,4 @@ db.prepare(`
 `).run();
 
 module.exports = db;
-// e
+
