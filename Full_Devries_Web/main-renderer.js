@@ -250,31 +250,23 @@ function renderSidebar(list = []) {
       ${STATUS_ORDER.map(s =>
         `<div style="font-size:12px; color:${STATUS_COLORS[s]}">
           ${s}: ${counts[s]}
-        </div>`
-      ).join("")}
-    </div>
-  `;
+        </div>`).join("")}
+    </div>`;
 
   const clientsHTML = list.map(c => {
     const [fName, lName] = (c.name || "").split(" ");
     const color = STATUS_COLORS[c.status] || "#007bff";
 
     return `
-      <li class="client-item"
-          data-id="${c.id}"
-          style="border-left:4px solid ${color}; padding-left:8px;">
+      <li class="client-item" data-id="${c.id}" style="border-left:4px solid ${color}; padding-left:8px;">
         <strong>${fName || ""} ${lName || ""}</strong><br>
         <small>${c.phone || ""}</small><br>
-        <span style="font-size:11px; color:${color}; font-weight:bold;">
-          ${c.status || "Lead"}
-        </span>
-      </li>
-    `;
+        <span style="font-size:11px; color:${color}; font-weight:bold;">${c.status || "Lead"}</span>
+      </li>`;
   }).join("");
 
   clientList.innerHTML = countsHTML + clientsHTML;
 }
-
 // ======================================================
 // OPEN CLIENT PANEL
 // ======================================================
@@ -299,9 +291,7 @@ async function openClient(id) {
           <h2>${fName || ""} ${lName || ""}</h2>
           <div class="contact-quick-links">
             <span>📞 <a href="tel:${client.phone || ""}">${client.phone || ""}</a></span>
-            <span style="margin-left:20px;">
-              ✉️ <a href="mailto:${client.email || ""}">${client.email || ""}</a>
-            </span>
+            <span style="margin-left:20px;">✉️ <a href="mailto:${client.email || ""}">${client.email || ""}</a></span>
           </div>
         </header>
 
@@ -319,10 +309,9 @@ async function openClient(id) {
           <label>Job Address</label>
           <div style="display:flex; flex-direction:column; gap:6px;">
             <input type="text" id="p-address" value="${client.address || ""}">
-            ${client.address ? `
-              <a href="${mapsLink}" target="_blank" style="color:#007bff; font-size:0.9rem;">
-                📍 Open in Google Maps
-              </a>` : ""}
+            ${client.address
+              ? `<a href="${mapsLink}" target="_blank" style="color:#007bff; font-size:0.9rem;">📍 Open in Google Maps</a>`
+              : ""}
           </div>
 
           <label>Phone Number</label>
@@ -331,42 +320,46 @@ async function openClient(id) {
           <label>Email Address</label>
           <input type="email" id="p-email" value="${client.email || ""}">
 
-          <!-- FINANCIAL SECTION -->
           <div style="grid-column: span 2; border-top:1px solid #ddd; padding-top:15px; margin-top:10px;">
             <h3 style="margin-bottom:10px;">Financial Overview</h3>
 
             <div style="display:flex; gap:10px; margin-bottom:10px;">
-              <input type="number" id="totalDueInput" placeholder="Total Due" step="0.01" style="flex:1;">
-              <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
+              <input type="number" id="totalDueInput" placeholder="Total Due" step="0.01"
+                style="flex:1;" value="${client.total_due || 0}">
+              <button id="saveTotalBtn" class="btn-primary"
+                style="background:#17a2b8;">Save</button>
             </div>
 
             <div style="display:flex; justify-content:space-between; font-size:14px;">
-              <div>Amount Paid: <strong id="amountPaidDisplay">$0.00</strong></div>
-              <div>Balance: <strong id="balanceDisplay">$0.00</strong></div>
+              <div>Amount Paid:
+                <strong id="amountPaidDisplay">$${(client.amount_paid || 0).toFixed(2)}</strong>
+              </div>
+              <div>Balance:
+                <strong id="balanceDisplay">$${(client.balance || 0).toFixed(2)}</strong>
+              </div>
             </div>
 
             <div style="display:flex; gap:10px; margin-top:10px;">
-              <input type="number" id="paymentInput" placeholder="Add Payment" step="0.01" style="flex:1;">
-              <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
+              <input type="number" id="paymentInput" placeholder="Add Payment"
+                step="0.01" style="flex:1;">
+              <button id="addPaymentBtn" class="btn-primary"
+                style="background:#28a745;">Add Payment</button>
             </div>
           </div>
 
-          <div id="pdf-drop-zone" class="drop-zone" style="grid-column: span 2;">
-            📄 Drop Client PDFs Here
-          </div>
+          <div id="pdf-drop-zone" class="drop-zone"
+            style="grid-column: span 2;">📄 Drop Client PDFs Here</div>
 
-          <div id="pdf-list" style="grid-column: span 2; margin-top:10px;"></div>
+          <div id="pdf-list"
+            style="grid-column: span 2; margin-top:10px;"></div>
 
           <div style="grid-column: span 2; display:flex; gap:10px; margin-top:10px;">
-            <button id="saveBtn" class="btn-primary" style="background:#28a745; flex:2;">
-              Save Changes
-            </button>
-            <button id="delBtn" class="btn-primary" style="background:#dc3545; flex:1;">
-              Delete
-            </button>
-            <button id="printBtn" class="btn-primary" style="background:#343a40; flex:1;">
-              Print
-            </button>
+            <button id="saveBtn" class="btn-primary"
+              style="background:#28a745; flex:2;">Save Changes</button>
+            <button id="delBtn" class="btn-primary"
+              style="background:#dc3545; flex:1;">Delete</button>
+            <button id="printBtn" class="btn-primary"
+              style="background:#343a40; flex:1;">Print</button>
           </div>
 
         </div>
@@ -383,8 +376,7 @@ async function openClient(id) {
 
     setupDropZone();
     loadPDFs(id);
-
-    loadFinancialData(client);
+    setupFinancialSection(client);
 
   } catch (err) {
     console.error(err);
@@ -392,29 +384,45 @@ async function openClient(id) {
 }
 
 // ======================================================
-// FINANCIAL LOADER
+// FINANCIAL SECTION
 // ======================================================
-function loadFinancialData(client) {
-  const totalInput = document.getElementById("totalDueInput");
-  const paidDisplay = document.getElementById("amountPaidDisplay");
-  const balanceDisplay = document.getElementById("balanceDisplay");
-
-  if (!totalInput) return;
-
-  totalInput.value = client.total_due || 0;
-  paidDisplay.innerText = `$${(client.amount_paid || 0).toFixed(2)}`;
-  balanceDisplay.innerText = `$${(client.balance || 0).toFixed(2)}`;
+function setupFinancialSection(client) {
 
   document.getElementById("saveTotalBtn").onclick = async () => {
-    const total = parseFloat(totalInput.value) || 0;
-    await window.api.updateTotal(activeId, total);
-    openClient(activeId);
+    try {
+      const total = parseFloat(document.getElementById("totalDueInput").value) || 0;
+
+      await window.api.updateTotal(activeId, total);
+
+      await refreshList();
+      await openClient(activeId);
+
+      alert("✅ Total Due updated!");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to update Total Due.");
+    }
   };
 
   document.getElementById("addPaymentBtn").onclick = async () => {
-    const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
-    await window.api.addPayment(activeId, payment);
-    openClient(activeId);
+    try {
+      const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
+
+      if (payment <= 0) {
+        alert("Enter valid payment amount.");
+        return;
+      }
+
+      await window.api.addPayment(activeId, payment);
+
+      await refreshList();
+      await openClient(activeId);
+
+      alert("✅ Payment added!");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to add payment.");
+    }
   };
 }
 
@@ -431,11 +439,15 @@ async function loadPDFs(clientId) {
     const data = await window.api.listPDFs(clientId);
 
     if (!data.files || data.files.length === 0) {
-      container.innerHTML = `<div style="color:#888; font-size:13px;">No PDFs uploaded yet.</div>`;
+      container.innerHTML =
+        `<div style="color:#888; font-size:13px;">
+          No PDFs uploaded yet.
+        </div>`;
       return;
     }
 
     data.files.forEach(file => {
+
       const card = document.createElement("div");
       card.style.display = "flex";
       card.style.justifyContent = "space-between";
@@ -500,9 +512,11 @@ function setupDropZone() {
 // ======================================================
 if (projectPanel) {
   projectPanel.addEventListener("click", async (e) => {
+
     const target = e.target;
 
-    if (target.id === "printBtn") window.print();
+    if (target.id === "printBtn")
+      window.print();
 
     if (target.id === "saveBtn") {
       const data = {
@@ -529,7 +543,8 @@ if (projectPanel) {
       }
     }
 
-    if (target.id === "closeBtn") closePanel();
+    if (target.id === "closeBtn")
+      closePanel();
   });
 }
 
@@ -543,7 +558,9 @@ function getPanelFName() {
 
 function getPanelLName() {
   const h2 = projectPanel.querySelector("h2");
-  return h2 ? h2.innerText.split(" ").slice(1).join(" ") : "";
+  return h2
+    ? h2.innerText.split(" ").slice(1).join(" ")
+    : "";
 }
 
 function closePanel() {
@@ -565,7 +582,8 @@ function closePanel() {
 if (clientList) {
   clientList.addEventListener("click", (e) => {
     const item = e.target.closest(".client-item");
-    if (item) openClient(parseInt(item.dataset.id));
+    if (item)
+      openClient(parseInt(item.dataset.id));
   });
 }
 
@@ -573,3 +591,7 @@ if (clientList) {
 // INITIAL LOAD
 // ======================================================
 refreshList();
+
+// ======================================================
+// END OF FILE
+// ======================================================

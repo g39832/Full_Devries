@@ -32,9 +32,12 @@ db.prepare(`
     email TEXT,
     address TEXT,
     notes TEXT,
+    status TEXT DEFAULT 'Lead',
+    total_due REAL DEFAULT 0,
+    amount_paid REAL DEFAULT 0,
+    balance REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `).run();
 
 module.exports = db;
-

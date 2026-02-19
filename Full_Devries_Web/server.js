@@ -18,9 +18,10 @@ const authRoutes = require('./api/auth');
 const clientsRoutes = require('./api/clients');
 const pdfRoutes = require('./api/pdf');
 
-app.use('/api', authRoutes);
-app.use('/api', clientsRoutes);
-app.use('/api/pdf', pdfRoutes);
+// Mount routers under correct prefixes
+app.use('/api', authRoutes);       // /api/login, /api/change-password
+app.use('/api', clientsRoutes);    // /api/search, /api/save-client, etc.
+app.use('/api/pdf', pdfRoutes);    // /api/pdf/*
 
 // ===== PAGE ROUTES =====
 app.get('/', (req, res) => {
@@ -31,12 +32,17 @@ app.get('/main', (req, res) => {
   res.sendFile(path.join(__dirname, 'main.html'));
 });
 
-// ===== START SERVER =====
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.get('/finance', (req, res) => {
+  res.sendFile(path.join(__dirname, 'finance.html'));
 });
 
 // ===== ENSURE UPLOADS FOLDER EXISTS =====
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+console.log("✅ Uploads folder is ready");
+
+// ===== START SERVER =====
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});

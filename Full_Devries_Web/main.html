@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roofing CRM - Dashboard</title>
+  <title>Clients</title>
   <link rel="stylesheet" href="style.css">
   <style>
     /* Inline style adjustments for this file */
@@ -125,6 +125,27 @@
     @keyframes fadeIn {
       to { opacity: 1; }
     }
+
+    /* Top bar adjustments */
+    header#Main_header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      background: #343a40;
+      color: white;
+      font-size: 1.5rem;
+    }
+
+    header#Main_header button {
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
   </style>
 
   <!-- PDF.js library -->
@@ -132,7 +153,11 @@
 </head>
 <body class="dashboard-body">
 
-  <header id="Main_header">Roofing Pro CRM 2026</header>
+  <!-- Top header with toggle button -->
+  <header id="Main_header">
+    <span>Clients</span>
+    <button id="toggleFinance">Finance Dashboard</button>
+  </header>
 
   <div class="crm-dashboard">
     <!-- Sidebar: Lead & Client Management -->
@@ -176,6 +201,12 @@
   <!-- Renderer script -->
   <script src="main-renderer.js" defer></script>
   <script>
+    // Toggle button to finance page
+    const toggleBtn = document.getElementById('toggleFinance');
+    toggleBtn.addEventListener('click', () => {
+      window.location.href = '/finance.html'; // navigate to finance page
+    });
+
     // PDF.js worker
     if (typeof pdfjsLib !== 'undefined') {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.225/pdf.worker.min.js';
