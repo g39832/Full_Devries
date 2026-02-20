@@ -45,7 +45,8 @@ const STATUS_COLORS = {
     #saveBtn,
     #delBtn,
     #printBtn,
-    #pdf-drop-zone {
+    #pdf-drop-zone,
+    #pdf-upload-btn {
       display: none !important;
     }
 
@@ -267,6 +268,7 @@ function renderSidebar(list = []) {
 
   clientList.innerHTML = countsHTML + clientsHTML;
 }
+
 // ======================================================
 // OPEN CLIENT PANEL
 // ======================================================
@@ -350,6 +352,17 @@ async function openClient(id) {
           <div id="pdf-drop-zone" class="drop-zone"
             style="grid-column: span 2;">📄 Drop Client PDFs Here</div>
 
+          <button id="pdf-upload-btn"
+            style="grid-column: span 2; margin-top:8px; background:#2c3e50; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">
+            Upload PDF
+          </button>
+
+          <input type="file"
+            id="pdf-file-input"
+            accept="application/pdf"
+            multiple
+            hidden />
+
           <div id="pdf-list"
             style="grid-column: span 2; margin-top:10px;"></div>
 
@@ -375,12 +388,39 @@ async function openClient(id) {
     });
 
     setupDropZone();
+    setupPDFUploadButton();
     loadPDFs(id);
     setupFinancialSection(client);
 
   } catch (err) {
     console.error(err);
   }
+}
+
+// ======================================================
+// PDF UPLOAD BUTTON (NEW)
+// ======================================================
+function setupPDFUploadButton() {
+  const uploadBtn = document.getElementById("pdf-upload-btn");
+  const fileInput = document.getElementById("pdf-file-input");
+
+  if (!uploadBtn || !fileInput) return;
+
+  uploadBtn.addEventListener("click", () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", async (e) => {
+    const files = e.target.files;
+    if (!files.length || !activeId) return;
+
+    for (let file of files) {
+      await window.api.uploadPDF(file, activeId);
+    }
+
+    loadPDFs(activeId);
+    fileInput.value = "";
+  });
 }
 
 // ======================================================
@@ -391,12 +431,9 @@ function setupFinancialSection(client) {
   document.getElementById("saveTotalBtn").onclick = async () => {
     try {
       const total = parseFloat(document.getElementById("totalDueInput").value) || 0;
-
       await window.api.updateTotal(activeId, total);
-
       await refreshList();
       await openClient(activeId);
-
       alert("✅ Total Due updated!");
     } catch (err) {
       console.error(err);
@@ -414,10 +451,8 @@ function setupFinancialSection(client) {
       }
 
       await window.api.addPayment(activeId, payment);
-
       await refreshList();
       await openClient(activeId);
-
       alert("✅ Payment added!");
     } catch (err) {
       console.error(err);
