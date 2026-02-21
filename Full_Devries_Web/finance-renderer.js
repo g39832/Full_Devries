@@ -9,6 +9,40 @@ const yearSelector = document.getElementById("finance-year");
 let activeYear = new Date().getFullYear();
 
 // ======================================================
+// LOAD AVAILABLE YEARS (NEW - AUTO DROPDOWN)
+// ======================================================
+async function loadAvailableYears() {
+  if (!yearSelector) return;
+
+  try {
+    const res = await fetch("/api/finance/years");
+    if (!res.ok) throw new Error("Failed to fetch years");
+
+    const years = await res.json();
+
+    yearSelector.innerHTML = "";
+
+    years.forEach((year) => {
+      const option = document.createElement("option");
+      option.value = year;
+      option.textContent = year;
+      yearSelector.appendChild(option);
+    });
+
+    // Default to newest year in DB or current year
+    const newestYear = years[0] || new Date().getFullYear();
+    activeYear = parseInt(newestYear);
+    yearSelector.value = activeYear;
+
+  } catch (err) {
+    console.error("Year dropdown error:", err);
+
+    // Fallback to current year only
+    yearSelector.innerHTML = `<option value="${activeYear}">${activeYear}</option>`;
+  }
+}
+
+// ======================================================
 // SAFE ELEMENT FINDER
 // ======================================================
 function findGroupContainer(group) {
@@ -70,8 +104,6 @@ async function updateFinanceMetrics() {
 // YEAR SELECTOR
 // ======================================================
 if (yearSelector) {
-  yearSelector.value = activeYear;
-
   yearSelector.addEventListener("change", (e) => {
     activeYear = parseInt(e.target.value) || new Date().getFullYear();
     updateFinanceMetrics();
@@ -178,7 +210,6 @@ async function loadPDFs(group) {
       card.style.borderRadius = "8px";
       card.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
 
-      // Thumbnail
       const thumb = document.createElement("embed");
       thumb.src = file.url;
       thumb.type = "application/pdf";
@@ -194,7 +225,6 @@ async function loadPDFs(group) {
       name.style.textAlign = "center";
       card.appendChild(name);
 
-      // VIEW BUTTON (POP COLOR)
       const viewBtn = document.createElement("button");
       viewBtn.innerText = "View";
       viewBtn.style.marginTop = "8px";
@@ -208,7 +238,6 @@ async function loadPDFs(group) {
       viewBtn.onclick = () => openPDFModal(file.url);
       card.appendChild(viewBtn);
 
-      // DELETE BUTTON (STRONG RED)
       const delBtn = document.createElement("button");
       delBtn.innerText = "Delete";
       delBtn.style.marginTop = "6px";
@@ -224,9 +253,7 @@ async function loadPDFs(group) {
         if (!confirm(`Delete ${file.name}?`)) return;
 
         await fetch(
-          `/api/pdf/delete/${group}-${activeYear}?file=${encodeURIComponent(
-            file.name
-          )}`,
+          `/api/pdf/delete/${group}-${activeYear}?file=${encodeURIComponent(file.name)}`,
           { method: "DELETE" }
         );
 
@@ -242,7 +269,7 @@ async function loadPDFs(group) {
 }
 
 // ======================================================
-// RESPONSIVE MODAL VIEWER (Auto Fit Screen)
+// RESPONSIVE MODAL VIEWER
 // ======================================================
 function openPDFModal(url) {
   const modal = document.getElementById("pdfModal");
@@ -287,6 +314,9 @@ function openPDFModal(url) {
 // ======================================================
 // INIT
 // ======================================================
-updateFinanceMetrics();
-taxGroups.forEach((group) => loadPDFs(group));
-addUploadButtons();
+(async function initFinancePage() {
+  await loadAvailableYears();
+  await updateFinanceMetrics();
+  taxGroups.forEach((group) => loadPDFs(group));
+  addUploadButtons();
+})();
