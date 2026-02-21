@@ -139,6 +139,24 @@
       background: #dee2e6;
     }
 
+    .upload-btn {
+      display: block;
+      margin-top: 6px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+      background-color: #17a2b8;
+      text-align: center;
+      width: 100%;
+    }
+
+    .upload-btn:hover {
+      background-color: #138496;
+    }
+
     /* PDF modal */
     #pdfModal {
       display: none;
@@ -219,21 +237,25 @@
         <div class="tax-group" id="w9-group">
           <h4>W-9</h4>
           <div class="drop-zone" data-group="w9">📄 Drop PDFs Here</div>
+          
           <div class="pdf-list" id="w9-list"></div>
         </div>
         <div class="tax-group" id="pnl-group">
           <h4>PNL</h4>
           <div class="drop-zone" data-group="pnl">📄 Drop PDFs Here</div>
+          
           <div class="pdf-list" id="pnl-list"></div>
         </div>
         <div class="tax-group" id="1099-group">
           <h4>1099</h4>
           <div class="drop-zone" data-group="1099">📄 Drop PDFs Here</div>
+         
           <div class="pdf-list" id="1099-list"></div>
         </div>
         <div class="tax-group" id="inference-group">
           <h4>Inference Docs</h4>
           <div class="drop-zone" data-group="inference">📄 Drop PDFs Here</div>
+          
           <div class="pdf-list" id="inference-list"></div>
         </div>
       </div>

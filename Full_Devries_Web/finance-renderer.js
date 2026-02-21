@@ -1,117 +1,133 @@
-// ======================================================
-// FINANCE PAGE RENDERER (Fixed - Correct API Path)
+// ====================================================== 
+// FINANCE PAGE RENDERER (Stable + Instant Preview)
 // ======================================================
 
-// DOM references
-const financeTableBody = document.getElementById("metricsBody");
 const taxGroups = ["w9", "pnl", "1099", "inference"];
+const financeTableBody = document.getElementById("metricsBody");
 const yearSelector = document.getElementById("finance-year");
 
-// Keep track of active year
 let activeYear = new Date().getFullYear();
 
 // ======================================================
-// FETCH FINANCE SUMMARY
+// SAFE ELEMENT FINDER
+// ======================================================
+function findGroupContainer(group) {
+  return document.querySelector(
+    `[id*="${group}"][id*="group"], [data-group="${group}"]`
+  );
+}
+
+function findListContainer(group) {
+  return document.querySelector(
+    `[id*="${group}"][id*="list"], [data-list="${group}"]`
+  );
+}
+
+// ======================================================
+// FETCH SUMMARY
 // ======================================================
 async function fetchFinanceSummary(year) {
   try {
-    // ✅ FIXED ROUTE HERE
     const res = await fetch(`/api/finance/summary?year=${year}`);
-
-    if (!res.ok) throw new Error("Failed to fetch finance summary");
-
+    if (!res.ok) throw new Error("Failed to fetch summary");
     return await res.json();
   } catch (err) {
-    console.error("Error fetching finance summary:", err);
+    console.error("Finance summary error:", err);
     return null;
   }
 }
 
 // ======================================================
-// UPDATE FINANCE METRICS
+// UPDATE METRICS
 // ======================================================
 async function updateFinanceMetrics() {
-  try {
-    if (!financeTableBody) return;
+  if (!financeTableBody) return;
 
+  try {
     const summary = await fetchFinanceSummary(activeYear);
 
     if (!summary) {
       financeTableBody.innerHTML =
-        "<tr><td colspan='5'>No clients found</td></tr>";
+        "<tr><td colspan='5'>No data found</td></tr>";
       return;
     }
 
     financeTableBody.innerHTML = `
       <tr>
         <td>${summary.year}</td>
-        <td style="color:black;">$${Number(summary.totalExpected || 0).toLocaleString()}</td>
+        <td>$${Number(summary.totalExpected || 0).toLocaleString()}</td>
         <td>$${Number(summary.totalReceived || 0).toLocaleString()}</td>
         <td>$${Number(summary.totalRemaining || 0).toLocaleString()}</td>
         <td>${summary.totalClients || 0} clients</td>
       </tr>
     `;
   } catch (err) {
-    console.error("Error loading finance data:", err);
-    if (financeTableBody)
-      financeTableBody.innerHTML =
-        "<tr><td colspan='5'>Failed to load data</td></tr>";
+    console.error("Metrics error:", err);
   }
 }
 
 // ======================================================
-// YEAR SELECTOR LOGIC
+// YEAR SELECTOR
 // ======================================================
 if (yearSelector) {
   yearSelector.value = activeYear;
 
   yearSelector.addEventListener("change", (e) => {
-    activeYear =
-      parseInt(e.target.value) || new Date().getFullYear();
+    activeYear = parseInt(e.target.value) || new Date().getFullYear();
     updateFinanceMetrics();
+    taxGroups.forEach((group) => loadPDFs(group));
   });
 }
 
 // ======================================================
-// PDF DROP ZONE FOR TAX DOCS
+// ADD UPLOAD BUTTONS (Fixed + Styled)
 // ======================================================
-taxGroups.forEach((group) => {
-  const dz = document
-    .getElementById(`${group}-group`)
-    ?.querySelector(".drop-zone");
+function addUploadButtons() {
+  taxGroups.forEach((group) => {
+    const container = findGroupContainer(group);
+    if (!container) return;
 
-  const listContainer = document.getElementById(
-    `${group}-list`
-  );
+    if (container.querySelector(`[data-upload="${group}"]`)) return;
 
-  if (!dz) return;
+    const btn = document.createElement("button");
+    btn.innerText = "Upload PDF";
+    btn.setAttribute("data-upload", group);
 
-  ["dragover", "dragleave", "drop"].forEach((evt) =>
-    dz.addEventListener(evt, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dz.classList.toggle("dragover", evt === "dragover");
-    })
-  );
+    btn.style.marginTop = "10px";
+    btn.style.background = "#0d6efd";
+    btn.style.color = "#fff";
+    btn.style.border = "none";
+    btn.style.padding = "8px 14px";
+    btn.style.borderRadius = "6px";
+    btn.style.cursor = "pointer";
+    btn.style.fontWeight = "600";
+    btn.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
 
-  dz.addEventListener("drop", async (e) => {
-    const files = e.dataTransfer.files;
-    if (!files.length) return;
+    btn.onclick = () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/pdf";
+      input.style.display = "none";
 
-    for (let file of files) {
-      await uploadPDF(file, `${group}-${activeYear}`);
-    }
+      input.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    alert(
-      `✅ ${files.length} file(s) uploaded to ${group.toUpperCase()} for ${activeYear}`
-    );
+        await uploadPDF(file, `${group}-${activeYear}`);
+        loadPDFs(group);
+      });
 
-    loadPDFs(group, listContainer);
+      document.body.appendChild(input);
+      input.click();
+      document.body.removeChild(input);
+    };
+
+    container.appendChild(btn);
   });
-});
+}
 
 // ======================================================
-// UPLOAD PDF FUNCTION
+// UPLOAD
 // ======================================================
 async function uploadPDF(file, groupKey) {
   const formData = new FormData();
@@ -124,131 +140,153 @@ async function uploadPDF(file, groupKey) {
     });
 
     if (!res.ok) throw new Error("Upload failed");
-
     return await res.json();
   } catch (err) {
-    console.error("Error uploading PDF:", err);
+    console.error("Upload error:", err);
   }
 }
 
 // ======================================================
-// LOAD PDFs INTO DROP ZONE LIST
+// LOAD PDFs
 // ======================================================
-async function loadPDFs(group, container) {
+async function loadPDFs(group) {
+  const container = findListContainer(group);
   if (!container) return;
 
   container.innerHTML = "";
 
   try {
-    const res = await fetch(
-      `/api/pdf/list/${group}-${activeYear}`
-    );
-
-    if (!res.ok) throw new Error("Failed to list PDFs");
+    const res = await fetch(`/api/pdf/list/${group}-${activeYear}`);
+    if (!res.ok) throw new Error("List failed");
 
     const data = await res.json();
 
     if (!data.files || data.files.length === 0) {
       container.innerHTML =
-        `<div style="color:#888; font-size:13px;">No PDFs uploaded yet.</div>`;
+        `<div style="color:#888;font-size:13px;">No PDFs uploaded.</div>`;
       return;
     }
 
     data.files.forEach((file) => {
-      const div = document.createElement("div");
-      div.className = "pdf-item";
-      div.dataset.url = file.url;
-      div.innerText = file.name;
-      container.appendChild(div);
+      const card = document.createElement("div");
+      card.style.display = "inline-flex";
+      card.style.flexDirection = "column";
+      card.style.alignItems = "center";
+      card.style.margin = "12px";
+      card.style.padding = "10px";
+      card.style.background = "#f8f9fa";
+      card.style.borderRadius = "8px";
+      card.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+
+      // Thumbnail
+      const thumb = document.createElement("embed");
+      thumb.src = file.url;
+      thumb.type = "application/pdf";
+      thumb.width = "100";
+      thumb.height = "120";
+      thumb.style.borderRadius = "6px";
+      card.appendChild(thumb);
+
+      const name = document.createElement("div");
+      name.innerText = file.name;
+      name.style.fontSize = "12px";
+      name.style.marginTop = "6px";
+      name.style.textAlign = "center";
+      card.appendChild(name);
+
+      // VIEW BUTTON (POP COLOR)
+      const viewBtn = document.createElement("button");
+      viewBtn.innerText = "View";
+      viewBtn.style.marginTop = "8px";
+      viewBtn.style.background = "#198754";
+      viewBtn.style.color = "#fff";
+      viewBtn.style.border = "none";
+      viewBtn.style.padding = "6px 12px";
+      viewBtn.style.borderRadius = "5px";
+      viewBtn.style.cursor = "pointer";
+      viewBtn.style.fontWeight = "600";
+      viewBtn.onclick = () => openPDFModal(file.url);
+      card.appendChild(viewBtn);
+
+      // DELETE BUTTON (STRONG RED)
+      const delBtn = document.createElement("button");
+      delBtn.innerText = "Delete";
+      delBtn.style.marginTop = "6px";
+      delBtn.style.background = "#dc3545";
+      delBtn.style.color = "#fff";
+      delBtn.style.border = "none";
+      delBtn.style.padding = "6px 12px";
+      delBtn.style.borderRadius = "5px";
+      delBtn.style.cursor = "pointer";
+      delBtn.style.fontWeight = "600";
+
+      delBtn.onclick = async () => {
+        if (!confirm(`Delete ${file.name}?`)) return;
+
+        await fetch(
+          `/api/pdf/delete/${group}-${activeYear}?file=${encodeURIComponent(
+            file.name
+          )}`,
+          { method: "DELETE" }
+        );
+
+        loadPDFs(group);
+      };
+
+      card.appendChild(delBtn);
+      container.appendChild(card);
     });
   } catch (err) {
-    console.error(
-      `Error loading PDFs for ${group}:`,
-      err
-    );
+    console.error("Load PDFs error:", err);
   }
 }
 
 // ======================================================
-// PDF MODAL LOGIC
+// RESPONSIVE MODAL VIEWER (Auto Fit Screen)
+// ======================================================
+function openPDFModal(url) {
+  const modal = document.getElementById("pdfModal");
+  const viewer = document.getElementById("pdfViewer");
+  if (!modal || !viewer) return;
+
+  viewer.innerHTML = "";
+
+  const embed = document.createElement("embed");
+  embed.src = url;
+  embed.type = "application/pdf";
+  embed.style.width = "100%";
+  embed.style.height = "90vh";
+  embed.style.border = "none";
+
+  viewer.appendChild(embed);
+  modal.style.display = "flex";
+}
+
+// ======================================================
+// MODAL CLOSE
 // ======================================================
 {
-  const pdfModal = document.getElementById("pdfModal");
-  const pdfViewer = document.getElementById("pdfViewer");
-  const pdfModalClose =
-    document.getElementById("pdfModalClose");
+  const modal = document.getElementById("pdfModal");
+  const closeBtn = document.getElementById("pdfModalClose");
 
-  if (pdfModalClose) {
-    pdfModalClose.addEventListener("click", () => {
-      if (pdfModal) pdfModal.style.display = "none";
-      if (pdfViewer) pdfViewer.innerHTML = "";
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      modal.style.display = "none";
+      document.getElementById("pdfViewer").innerHTML = "";
     });
   }
 
   document.addEventListener("click", (e) => {
-    if (e.target.classList.contains("pdf-item")) {
-      const url = e.target.dataset.url;
-      if (!url) return;
-      openPDFModal(url);
-    }
-
-    if (e.target === pdfModal) {
-      if (pdfModal) pdfModal.style.display = "none";
-      if (pdfViewer) pdfViewer.innerHTML = "";
+    if (e.target === modal) {
+      modal.style.display = "none";
+      document.getElementById("pdfViewer").innerHTML = "";
     }
   });
-
-  async function openPDFModal(url) {
-    if (!pdfViewer || !pdfModal) return;
-
-    pdfViewer.innerHTML = "";
-    pdfModal.style.display = "flex";
-
-    const loadPDF = async (data) => {
-      const pdf = await pdfjsLib
-        .getDocument({ data })
-        .promise;
-
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({
-          scale: 1.5,
-        });
-
-        const canvas = document.createElement(
-          "canvas"
-        );
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        pdfViewer.appendChild(canvas);
-
-        const ctx = canvas.getContext("2d");
-
-        await page.render({
-          canvasContext: ctx,
-          viewport,
-        }).promise;
-      }
-    };
-
-    fetch(url)
-      .then((r) => r.arrayBuffer())
-      .then(loadPDF)
-      .catch((err) =>
-        console.error("Failed to load PDF:", err)
-      );
-  }
 }
 
 // ======================================================
-// INITIAL LOAD
+// INIT
 // ======================================================
 updateFinanceMetrics();
-
-taxGroups.forEach((group) => {
-  const container =
-    document.getElementById(`${group}-list`);
-  loadPDFs(group, container);
-});
+taxGroups.forEach((group) => loadPDFs(group));
+addUploadButtons();

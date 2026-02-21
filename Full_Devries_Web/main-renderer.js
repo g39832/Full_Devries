@@ -4,7 +4,10 @@
 const STATUS_ORDER = [
   "Lead",
   "Prospect",
+  "Approved",
+  "Possible Customer",
   "Customer",
+  "Existing Customer",
   "Completed",
   "Invoice",
   "Closed"
@@ -12,11 +15,14 @@ const STATUS_ORDER = [
 
 const STATUS_COLORS = {
   Lead: "#007bff",
-  Prospect: "#6f42c1",
-  Customer: "#17a2b8",
-  Completed: "#28a745",
-  Invoice: "#fd7e14",
-  Closed: "#6c757d"
+  Prospect: "#a780ee",
+  Approved: "#6dddef",
+  "Possible Customer": "#e85cda",
+  Customer: "#a8f617",
+  "Existing Customer": "#84e7c9",
+  Completed: "#91eda6",
+  Invoice: "#dfa575",
+  Closed: "#000000"
 };
 
 // ======================================================
@@ -45,6 +51,7 @@ const STATUS_COLORS = {
     #saveBtn,
     #delBtn,
     #printBtn,
+    #reviewBtn,
     #pdf-drop-zone,
     #pdf-upload-btn {
       display: none !important;
@@ -124,6 +131,14 @@ window.api = {
   async listPDFs(clientId) {
     const res = await fetch(`/api/pdf/list/${clientId}`);
     if (!res.ok) throw new Error("List PDFs failed");
+    return res.json();
+  },
+
+  async deletePDF(clientId, fileName) {
+    const res = await fetch(`/api/pdf/delete/${clientId}/${encodeURIComponent(fileName)}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) throw new Error("Delete failed");
     return res.json();
   },
 
@@ -367,6 +382,8 @@ async function openClient(id) {
             style="grid-column: span 2; margin-top:10px;"></div>
 
           <div style="grid-column: span 2; display:flex; gap:10px; margin-top:10px;">
+            <button id="reviewBtn" class="btn-primary"
+              style="background:#d32323; flex:2;">Send Yelp Review</button>
             <button id="saveBtn" class="btn-primary"
               style="background:#28a745; flex:2;">Save Changes</button>
             <button id="delBtn" class="btn-primary"
@@ -398,7 +415,7 @@ async function openClient(id) {
 }
 
 // ======================================================
-// PDF UPLOAD BUTTON (NEW)
+// PDF UPLOAD BUTTON
 // ======================================================
 function setupPDFUploadButton() {
   const uploadBtn = document.getElementById("pdf-upload-btn");
@@ -486,14 +503,33 @@ async function loadPDFs(clientId) {
       const card = document.createElement("div");
       card.style.display = "flex";
       card.style.justifyContent = "space-between";
-      card.style.background = "#f8f9fa";
-      card.style.padding = "8px 12px";
-      card.style.borderRadius = "6px";
-      card.style.marginBottom = "6px";
+      card.style.alignItems = "center";
+      card.style.background = "linear-gradient(135deg, #4a7899, #010101)";
+      card.style.padding = "10px 14px";
+      card.style.borderRadius = "8px";
+      card.style.marginBottom = "8px";
+      card.style.border = "1px solid #007bff";
+      card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.08)";
+      card.style.transition = "0.2s ease";
+
+      card.addEventListener("mouseenter", () => {
+        card.style.transform = "translateY(-2px)";
+        card.style.boxShadow = "0 6px 14px rgba(0,0,0,0.12)";
+      });
+
+      card.addEventListener("mouseleave", () => {
+        card.style.transform = "translateY(0)";
+        card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.08)";
+      });
 
       const name = document.createElement("div");
       name.innerHTML = `📄 ${file.name}`;
-      name.style.fontWeight = "500";
+      name.style.fontWeight = "600";
+      name.style.fontSize = "14px";
+
+      const btnGroup = document.createElement("div");
+      btnGroup.style.display = "flex";
+      btnGroup.style.gap = "6px";
 
       const openBtn = document.createElement("a");
       openBtn.href = file.url;
@@ -501,13 +537,37 @@ async function loadPDFs(clientId) {
       openBtn.innerText = "Open";
       openBtn.style.background = "#007bff";
       openBtn.style.color = "white";
-      openBtn.style.padding = "4px 10px";
-      openBtn.style.borderRadius = "5px";
+      openBtn.style.padding = "5px 12px";
+      openBtn.style.borderRadius = "6px";
       openBtn.style.fontSize = "12px";
       openBtn.style.textDecoration = "none";
 
+      const deleteBtn = document.createElement("button");
+      deleteBtn.innerText = "Delete";
+      deleteBtn.style.background = "#dc3545";
+      deleteBtn.style.color = "white";
+      deleteBtn.style.border = "none";
+      deleteBtn.style.padding = "5px 12px";
+      deleteBtn.style.borderRadius = "6px";
+      deleteBtn.style.fontSize = "12px";
+      deleteBtn.style.cursor = "pointer";
+
+      deleteBtn.onclick = async () => {
+        if (!confirm("Delete this PDF permanently?")) return;
+        try {
+          await window.api.deletePDF(clientId, file.name);
+          loadPDFs(clientId);
+        } catch (err) {
+          console.error(err);
+          alert("❌ Failed to delete file.");
+        }
+      };
+
+      btnGroup.appendChild(openBtn);
+      btnGroup.appendChild(deleteBtn);
+
       card.appendChild(name);
-      card.appendChild(openBtn);
+      card.appendChild(btnGroup);
       container.appendChild(card);
     });
 
@@ -552,6 +612,27 @@ if (projectPanel) {
 
     if (target.id === "printBtn")
       window.print();
+
+    if (target.id === "reviewBtn") {
+      const email = document.getElementById("p-email")?.value;
+      if (!email) return alert("Client email not found.");
+
+      const reviewLink = "https://www.yelp.com/writeareview/biz/dTEncYkt4EJJxFFWXv9nxg";
+
+      const subject = encodeURIComponent("We’d Love Your Feedback!");
+      const body = encodeURIComponent(
+`Hi,
+
+Thank you for choosing us!
+
+If you have a moment, we would truly appreciate a quick Yelp review:
+${reviewLink}
+
+It helps our business grow and we really appreciate your support!`
+      );
+
+      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+    }
 
     if (target.id === "saveBtn") {
       const data = {
