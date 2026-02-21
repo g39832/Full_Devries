@@ -148,18 +148,17 @@ button.btn-primary:hover {
   background: rgba(0,0,0,0.2);
   padding: 20px;
   border-radius: 12px;
-  opacity: 0; /* start hidden */
-  transform: translateY(20px); /* start slightly down */
+  opacity: 0;
+  transform: translateY(20px);
   transition: all 0.3s ease;
+  position: relative; /* ensures close button positions properly */
 }
 
-/* Animate panel when opened */
 .animate-panel {
   opacity: 1 !important;
   transform: translateY(0) !important;
 }
 
-/* Detail header */
 .detail-header {
   display: flex;
   justify-content: space-between;
@@ -185,6 +184,7 @@ button.btn-primary:hover {
   border-radius: 6px;
   border: none;
   outline: none;
+  width: 100%;
 }
 
 /* Drop zone */
@@ -275,6 +275,16 @@ button.btn-primary:hover {
 /* =========================
    RESPONSIVE
 ========================= */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 240px;
+  }
+
+  #Main_header {
+    font-size: 1.6rem;
+  }
+}
+
 @media (max-width: 768px) {
   .crm-dashboard {
     flex-direction: column;
@@ -293,7 +303,44 @@ button.btn-primary:hover {
     justify-content: flex-start;
     max-height: 120px;
   }
+
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .detail-header h2 {
+    font-size: 1.2rem;
+  }
 }
+
+/* Extra small devices */
+@media (max-width: 480px) {
+  #Main_header {
+    font-size: 1.3rem;
+    padding: 10px 0;
+  }
+
+  .sidebar {
+    padding: 15px;
+  }
+
+  .main-content {
+    padding: 15px;
+  }
+
+  .client-item {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  button.btn-primary {
+    padding: 10px;
+    font-size: 14px;
+  }
+}
+
 /* =========================
    RESPONSIVE PDF MODAL
 ========================= */
