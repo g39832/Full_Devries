@@ -17,11 +17,19 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const authRoutes = require('./api/auth');
 const clientsRoutes = require('./api/clients');
 const pdfRoutes = require('./api/pdf');
+const notesRoutes = require('./api/notes');
 
-// Mount routers under correct prefixes
+// Mount routers under /api
 app.use('/api', authRoutes);       // /api/login, /api/change-password
-app.use('/api', clientsRoutes);    // /api/search, /api/save-client, etc.
+app.use('/api', clientsRoutes);    // /api/clients/...
 app.use('/api/pdf', pdfRoutes);    // /api/pdf/*
+app.use('/api/notes', notesRoutes); // /api/notes/*
+
+// ===== LOG ALL API REQUESTS =====
+app.use('/api', (req, res, next) => {
+  console.log(`[API] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // ===== PAGE ROUTES =====
 app.get('/', (req, res) => {

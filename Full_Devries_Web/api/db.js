@@ -34,7 +34,6 @@ db.prepare(`
     phone TEXT,
     email TEXT,
     address TEXT,
-    notes TEXT,
     status TEXT DEFAULT 'Lead',
     total_due REAL DEFAULT 0,
     amount_paid REAL DEFAULT 0,
@@ -44,7 +43,7 @@ db.prepare(`
 `).run();
 
 // =========================
-// PAYMENTS TABLE (NEW - PROFESSIONAL UPGRADE)
+// PAYMENTS TABLE
 // =========================
 db.prepare(`
   CREATE TABLE IF NOT EXISTS payments (
@@ -56,7 +55,6 @@ db.prepare(`
   )
 `).run();
 
-// Helpful index for faster yearly queries
 db.prepare(`
   CREATE INDEX IF NOT EXISTS idx_payments_client
   ON payments(client_id)
@@ -65,6 +63,24 @@ db.prepare(`
 db.prepare(`
   CREATE INDEX IF NOT EXISTS idx_payments_date
   ON payments(payment_date)
+`).run();
+
+// =========================
+// NOTES TABLE
+// =========================
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+  )
+`).run();
+
+db.prepare(`
+  CREATE INDEX IF NOT EXISTS idx_notes_client
+  ON notes(client_id)
 `).run();
 
 module.exports = db;

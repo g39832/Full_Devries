@@ -153,7 +153,7 @@ router.put('/clients/:id/total', (req, res) => {
 });
 
 // ======================================================
-// RECORD PAYMENT (UPGRADED)
+// RECORD PAYMENT
 // ======================================================
 router.put('/clients/:id/payment', (req, res) => {
   const id = req.params.id;
@@ -176,13 +176,12 @@ router.put('/clients/:id/payment', (req, res) => {
   const newBalance = (client.total_due || 0) - newPaid;
 
   const transaction = db.transaction(() => {
-    // Insert into payments table (NEW)
+
     db.prepare(`
       INSERT INTO payments (client_id, amount, payment_date)
       VALUES (?, ?, datetime('now'))
     `).run(id, amount);
 
-    // Update client totals (BACKWARD COMPATIBLE)
     db.prepare(`
       UPDATE clients
       SET amount_paid = ?, balance = ?
@@ -196,7 +195,53 @@ router.put('/clients/:id/payment', (req, res) => {
 });
 
 // ======================================================
-// FINANCE PAGE: PROJECT-BASED SUMMARY (UNCHANGED)
+// RESET BALANCE (FORCE RE-CALC)
+// ======================================================
+router.put('/clients/:id/reset-paid', (req, res) => {
+  const id = req.params.id;
+
+  const client = db.prepare(`
+    SELECT total_due, amount_paid
+    FROM clients
+    WHERE id = ?
+  `).get(id);
+
+  if (!client) return res.status(404).json({ error: "Client not found" });
+
+  const alreadyPaid = client.amount_paid || 0;
+
+  const transaction = db.transaction(() => {
+
+    // If money was previously paid, insert NEGATIVE entry
+    if (alreadyPaid > 0) {
+      db.prepare(`
+        INSERT INTO payments (client_id, amount, payment_date)
+        VALUES (?, ?, datetime('now'))
+      `).run(id, -alreadyPaid);
+    }
+
+    // Forcefully reset client totals and recalc balance
+    const newBalance = client.total_due; // always set balance = total_due
+    db.prepare(`
+      UPDATE clients
+      SET amount_paid = 0,
+          balance = ?
+      WHERE id = ?
+    `).run(newBalance, id);
+  });
+
+  transaction();
+
+  console.log(`Reset API called for client ID: ${id}`);
+  console.log('Before reset:', client);
+  const after = db.prepare(`SELECT total_due, amount_paid, balance FROM clients WHERE id = ?`).get(id);
+  console.log('After reset:', after);
+
+  res.json({ success: true, client: after });
+});
+
+// ======================================================
+// FINANCE PAGE: PROJECT SUMMARY
 // ======================================================
 router.get('/finance/summary', (req, res) => {
   const year = getValidYear(req.query.year);
@@ -221,13 +266,13 @@ router.get('/finance/summary', (req, res) => {
       totalRemaining: summary.totalRemaining || 0
     });
   } catch (err) {
-    console.error("Project summary error:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to fetch project summary" });
   }
 });
 
 // ======================================================
-// FINANCE PAGE: CASH-BASED SUMMARY (NEW)
+// FINANCE PAGE: CASH SUMMARY
 // ======================================================
 router.get('/finance/cash-summary', (req, res) => {
   const year = getValidYear(req.query.year);
@@ -248,9 +293,76 @@ router.get('/finance/cash-summary', (req, res) => {
       totalCashReceived: summary.totalCashReceived || 0
     });
   } catch (err) {
-    console.error("Cash summary error:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to fetch cash summary" });
   }
+});
+
+// ======================================================
+// NOTES ROUTES
+// ======================================================
+router.get('/clients/:id/notes', (req, res) => {
+  const id = req.params.id;
+  const notes = db.prepare(`
+    SELECT id, content, created_at
+    FROM notes
+    WHERE client_id = ?
+    ORDER BY created_at DESC
+  `).all(id);
+
+  res.json(notes);
+});
+
+router.post('/clients/:id/notes', (req, res) => {
+  const id = req.params.id;
+  const { content } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: "Note content required" });
+  }
+
+  db.prepare(`
+    INSERT INTO notes (client_id, content)
+    VALUES (?, ?)
+  `).run(id, content.trim());
+
+  res.json({ success: true });
+});
+
+router.put('/clients/:id/notes/:noteId', (req, res) => {
+  const { id, noteId } = req.params;
+  const { content } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: "Note content required" });
+  }
+
+  const result = db.prepare(`
+    UPDATE notes
+    SET content = ?
+    WHERE id = ? AND client_id = ?
+  `).run(content.trim(), noteId, id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Note not found" });
+  }
+
+  res.json({ success: true });
+});
+
+router.delete('/clients/:id/notes/:noteId', (req, res) => {
+  const { id, noteId } = req.params;
+
+  const result = db.prepare(`
+    DELETE FROM notes
+    WHERE id = ? AND client_id = ?
+  `).run(noteId, id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Note not found" });
+  }
+
+  res.json({ success: true });
 });
 
 module.exports = router;

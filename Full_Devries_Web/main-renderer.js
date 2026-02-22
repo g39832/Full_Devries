@@ -1,26 +1,18 @@
-// ======================================================
+ // ======================================================
 // STATUS CONFIG
 // ======================================================
 const STATUS_ORDER = [
-  "Lead",
   "Prospect",
   "Approved",
-  "Possible Customer",
-  "Customer",
-  "Existing Customer",
   "Completed",
   "Invoice",
   "Closed"
 ];
 
 const STATUS_COLORS = {
-  Lead: "#007bff",
   Prospect: "#a780ee",
   Approved: "#6dddef",
-  "Possible Customer": "#e85cda",
-  Customer: "#a8f617",
-  "Existing Customer": "#84e7c9",
-  Completed: "#91eda6",
+  Completed: "#f0ad4e",
   Invoice: "#dfa575",
   Closed: "#000000"
 };
@@ -69,7 +61,6 @@ const STATUS_COLORS = {
 // API WRAPPER
 // ======================================================
 window.api = {
-
   async searchClients(term = '') {
     const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
     if (!res.ok) throw new Error("Search failed");
@@ -78,13 +69,11 @@ window.api = {
 
   async saveClient(client) {
     const name = `${client.fName || ''} ${client.lName || ''}`.trim();
-
     const res = await fetch('/api/save-client', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...client, name })
     });
-
     if (!res.ok) throw new Error("Save failed");
     return res.json();
   },
@@ -93,13 +82,11 @@ window.api = {
     if (data.fName || data.lName) {
       data.name = `${data.fName || ''} ${data.lName || ''}`.trim();
     }
-
     const res = await fetch('/api/update-project', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     });
-
     if (!res.ok) throw new Error("Update failed");
     return res.json();
   },
@@ -110,7 +97,6 @@ window.api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id })
     });
-
     if (!res.ok) throw new Error("Delete failed");
     return res.json();
   },
@@ -118,12 +104,10 @@ window.api = {
   async uploadPDF(file, clientId) {
     const formData = new FormData();
     formData.append("file", file);
-
     const res = await fetch(`/api/pdf/upload/${clientId}`, {
       method: "POST",
       body: formData
     });
-
     if (!res.ok) throw new Error("Upload failed");
     return res.json();
   },
@@ -160,6 +144,54 @@ window.api = {
     });
     if (!res.ok) throw new Error("Payment failed");
     return res.json();
+  },
+
+  async resetAmountPaid(clientId) {
+    const res = await fetch(`/api/clients/${clientId}/reset-paid`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" }
+    });
+    if (!res.ok) throw new Error("Reset failed");
+    return res.json();
+  },
+
+  // ==========================
+  // NOTES API
+  // ==========================
+  async listNotes(clientId) {
+    const res = await fetch(`/api/notes/list/${clientId}`);
+    if (!res.ok) throw new Error("Failed to list notes");
+    return res.json();
+  },
+
+  async addNote(clientId, content) {
+    clientId = Number(clientId);
+    const res = await fetch(`/api/notes/add/${clientId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: content })
+    });
+    if (!res.ok) throw new Error("Failed to add note");
+    return res.json();
+  },
+
+  async updateNote(clientId, noteId, content) {
+    const res = await fetch(`/api/notes/update/${clientId}/${noteId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: content })
+    });
+    if (!res.ok) throw new Error("Failed to update note");
+    return res.json();
+  },
+
+  async deleteNote(clientId, noteId) {
+    clientId = Number(clientId);
+    const res = await fetch(`/api/notes/delete/${clientId}/${noteId}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) throw new Error("Failed to delete note");
+    return res.json();
   }
 };
 
@@ -169,7 +201,7 @@ window.api = {
 const clientList = document.getElementById("clientList");
 const projectPanel = document.getElementById("projectPanel");
 const searchInput = document.getElementById("searchClients");
-const intakeForm = document.getElementById("clientIntakeForm");
+const intakeFormEl = document.getElementById("clientIntakeForm");
 
 let activeId = null;
 let searchTimeout = null;
@@ -185,7 +217,6 @@ if (searchInput) {
     searchTimeout = setTimeout(async () => {
       try {
         const allClients = await window.api.searchClients("");
-
         const matchedStatus = STATUS_ORDER.find(
           s => s.toLowerCase() === term
         );
@@ -212,13 +243,19 @@ if (searchInput) {
 // ======================================================
 // ADD CLIENT
 // ======================================================
-if (intakeForm) {
-  intakeForm.addEventListener("submit", async (e) => {
+if (intakeFormEl) {
+  const fNameInput = document.getElementById("fName");
+  const lNameInput = document.getElementById("lName");
+
+  if (fNameInput) fNameInput.style.borderLeft = "4px solid #007bff";
+  if (lNameInput) lNameInput.style.borderLeft = "4px solid #28a745";
+
+  intakeFormEl.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const client = {
-      fName: document.getElementById("fName")?.value || "",
-      lName: document.getElementById("lName")?.value || "",
+      fName: fNameInput?.value || "",
+      lName: lNameInput?.value || "",
       email: document.getElementById("email")?.value || "",
       phone: document.getElementById("phone")?.value || "",
       address: document.getElementById("address")?.value || "",
@@ -253,8 +290,7 @@ function renderSidebar(list = []) {
   if (!clientList) return;
 
   list.sort((a, b) =>
-    STATUS_ORDER.indexOf(a.status || "Lead") -
-    STATUS_ORDER.indexOf(b.status || "Lead")
+    STATUS_ORDER.indexOf(a.status || "Lead") - STATUS_ORDER.indexOf(b.status || "Lead")
   );
 
   const counts = {};
@@ -264,13 +300,14 @@ function renderSidebar(list = []) {
   const countsHTML = `
     <div style="padding:10px; border-bottom:1px solid #ddd;">
       ${STATUS_ORDER.map(s =>
-        `<div style="font-size:12px; color:${STATUS_COLORS[s]}">
+        `<div style="font-size:12px; color:${STATUS_COLORS[s] || "#007bff"}">
           ${s}: ${counts[s]}
         </div>`).join("")}
     </div>`;
 
   const clientsHTML = list.map(c => {
-    const [fName, lName] = (c.name || "").split(" ");
+    const [fName, ...rest] = (c.name || "").split(" ");
+    const lName = rest.join(" ");
     const color = STATUS_COLORS[c.status] || "#007bff";
 
     return `
@@ -288,14 +325,15 @@ function renderSidebar(list = []) {
 // OPEN CLIENT PANEL
 // ======================================================
 async function openClient(id) {
+  if (!id) return;
   activeId = id;
-
   try {
     const clients = await window.api.searchClients("");
     const client = clients.find(c => c.id == id);
     if (!client) return;
 
-    const [fName, lName] = (client.name || "").split(" ");
+    const [fName, ...rest] = (client.name || "").split(" ");
+    const lName = rest.join(" ");
     const mapsLink = client.address
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(client.address)}`
       : "";
@@ -303,7 +341,6 @@ async function openClient(id) {
     projectPanel.innerHTML = `
       <div class="detail-card animate-panel" style="opacity:0; transform:translateY(-20px); transition:0.25s ease;">
         <button id="closeBtn" class="close-x">&times;</button>
-
         <header class="detail-header">
           <h2>${fName || ""} ${lName || ""}</h2>
           <div class="contact-quick-links">
@@ -313,7 +350,6 @@ async function openClient(id) {
         </header>
 
         <div class="roofing-grid">
-
           <div style="grid-column: span 2;">
             <label>Job Status</label>
             <select id="p-status">
@@ -343,8 +379,7 @@ async function openClient(id) {
             <div style="display:flex; gap:10px; margin-bottom:10px;">
               <input type="number" id="totalDueInput" placeholder="Total Due" step="0.01"
                 style="flex:1;" value="${client.total_due || 0}">
-              <button id="saveTotalBtn" class="btn-primary"
-                style="background:#17a2b8;">Save</button>
+              <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
             </div>
 
             <div style="display:flex; justify-content:space-between; font-size:14px;">
@@ -359,8 +394,7 @@ async function openClient(id) {
             <div style="display:flex; gap:10px; margin-top:10px;">
               <input type="number" id="paymentInput" placeholder="Add Payment"
                 step="0.01" style="flex:1;">
-              <button id="addPaymentBtn" class="btn-primary"
-                style="background:#28a745;">Add Payment</button>
+              <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
             </div>
           </div>
 
@@ -369,8 +403,7 @@ async function openClient(id) {
 
           <button id="pdf-upload-btn"
             style="grid-column: span 2; margin-top:8px; background:#2c3e50; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">
-            Upload PDF
-          </button>
+            Upload PDF</button>
 
           <input type="file"
             id="pdf-file-input"
@@ -381,15 +414,20 @@ async function openClient(id) {
           <div id="pdf-list"
             style="grid-column: span 2; margin-top:10px;"></div>
 
+          <div id="notes-section" style="grid-column: span 2; margin-top:15px; border-top:1px solid #ddd; padding-top:10px;">
+            <h3>Client Notes</h3>
+            <div id="notes-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
+            <div style="display:flex; gap:6px;">
+              <input type="text" id="new-note-input" placeholder="Add a note..." style="flex:1; padding:4px 6px;">
+              <button id="add-note-btn" class="btn-primary" style="background:#007bff;">Add Note</button>
+            </div>
+          </div>
+
           <div style="grid-column: span 2; display:flex; gap:10px; margin-top:10px;">
-            <button id="reviewBtn" class="btn-primary"
-              style="background:#d32323; flex:2;">Send Yelp Review</button>
-            <button id="saveBtn" class="btn-primary"
-              style="background:#28a745; flex:2;">Save Changes</button>
-            <button id="delBtn" class="btn-primary"
-              style="background:#dc3545; flex:1;">Delete</button>
-            <button id="printBtn" class="btn-primary"
-              style="background:#343a40; flex:1;">Print</button>
+            <button id="reviewBtn" class="btn-primary" style="background:#d32323; flex:2;">Send Google Review</button>
+            <button id="saveBtn" class="btn-primary" style="background:#28a745; flex:2;">Save Changes</button>
+            <button id="delBtn" class="btn-primary" style="background:#dc3545; flex:1;">Delete</button>
+            <button id="printBtn" class="btn-primary" style="background:#343a40; flex:1;">Print</button>
           </div>
 
         </div>
@@ -408,6 +446,7 @@ async function openClient(id) {
     setupPDFUploadButton();
     loadPDFs(id);
     setupFinancialSection(client);
+    setupNotesSection(id);
 
   } catch (err) {
     console.error(err);
@@ -415,37 +454,13 @@ async function openClient(id) {
 }
 
 // ======================================================
-// PDF UPLOAD BUTTON
-// ======================================================
-function setupPDFUploadButton() {
-  const uploadBtn = document.getElementById("pdf-upload-btn");
-  const fileInput = document.getElementById("pdf-file-input");
-
-  if (!uploadBtn || !fileInput) return;
-
-  uploadBtn.addEventListener("click", () => {
-    fileInput.click();
-  });
-
-  fileInput.addEventListener("change", async (e) => {
-    const files = e.target.files;
-    if (!files.length || !activeId) return;
-
-    for (let file of files) {
-      await window.api.uploadPDF(file, activeId);
-    }
-
-    loadPDFs(activeId);
-    fileInput.value = "";
-  });
-}
-
-// ======================================================
 // FINANCIAL SECTION
 // ======================================================
 function setupFinancialSection(client) {
+  const saveTotalBtn = document.getElementById("saveTotalBtn");
+  const addPaymentBtn = document.getElementById("addPaymentBtn");
 
-  document.getElementById("saveTotalBtn").onclick = async () => {
+  saveTotalBtn.onclick = async () => {
     try {
       const total = parseFloat(document.getElementById("totalDueInput").value) || 0;
       await window.api.updateTotal(activeId, total);
@@ -458,15 +473,10 @@ function setupFinancialSection(client) {
     }
   };
 
-  document.getElementById("addPaymentBtn").onclick = async () => {
+  addPaymentBtn.onclick = async () => {
     try {
       const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
-
-      if (payment <= 0) {
-        alert("Enter valid payment amount.");
-        return;
-      }
-
+      if (payment <= 0) { alert("Enter valid payment amount."); return; }
       await window.api.addPayment(activeId, payment);
       await refreshList();
       await openClient(activeId);
@@ -479,6 +489,130 @@ function setupFinancialSection(client) {
 }
 
 // ======================================================
+// NOTES SECTION
+// ======================================================
+async function setupNotesSection(clientId) {
+  const notesList = document.getElementById("notes-list");
+  const newNoteInput = document.getElementById("new-note-input");
+  const addNoteBtn = document.getElementById("add-note-btn");
+  if (!notesList || !newNoteInput || !addNoteBtn) return;
+
+  clientId = Number(clientId);
+
+  async function loadNotes() {
+    notesList.innerHTML = "";
+
+    try {
+      const data = await window.api.listNotes(clientId);
+      if (!data.notes || data.notes.length === 0) {
+        notesList.innerHTML = `<div style="color:#888; font-size:13px;">No notes yet.</div>`;
+        return;
+      }
+
+      data.notes.forEach(note => {
+        const noteDiv = document.createElement("div");
+        noteDiv.style.display = "flex";
+        noteDiv.style.justifyContent = "space-between";
+        noteDiv.style.alignItems = "center";
+        noteDiv.style.background = "#f5f5f5";
+        noteDiv.style.padding = "6px 10px";
+        noteDiv.style.borderRadius = "6px";
+
+        const contentDiv = document.createElement("div");
+        contentDiv.innerText = note.content || "";
+        contentDiv.style.flex = "1";
+        contentDiv.style.marginRight = "6px";
+        contentDiv.style.color = "#000";
+
+        const editBtn = document.createElement("button");
+        editBtn.innerText = "Edit";
+        editBtn.style.background = "#ffc107";
+        editBtn.style.border = "none";
+        editBtn.style.padding = "4px 8px";
+        editBtn.style.borderRadius = "4px";
+        editBtn.style.cursor = "pointer";
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.innerText = "Delete";
+        deleteBtn.style.background = "#dc3545";
+        deleteBtn.style.border = "none";
+        deleteBtn.style.padding = "4px 8px";
+        deleteBtn.style.borderRadius = "4px";
+        deleteBtn.style.cursor = "pointer";
+
+        editBtn.onclick = async () => {
+          const newContent = prompt("Edit note:", contentDiv.innerText);
+          if (newContent === null) return;
+          const trimmed = newContent.trim();
+          if (!trimmed) return alert("Note cannot be empty.");
+          try {
+            await window.api.updateNote(clientId, note.id, trimmed);
+            loadNotes();
+          } catch (err) {
+            console.error(err);
+            alert("❌ Failed to update note.");
+          }
+        };
+
+        deleteBtn.onclick = async () => {
+          if (!confirm("Delete this note?")) return;
+          try {
+            await window.api.deleteNote(clientId, note.id);
+            loadNotes();
+          } catch (err) {
+            console.error(err);
+            alert("❌ Failed to delete note.");
+          }
+        };
+
+        noteDiv.appendChild(contentDiv);
+        noteDiv.appendChild(editBtn);
+        noteDiv.appendChild(deleteBtn);
+        notesList.appendChild(noteDiv);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  addNoteBtn.onclick = async () => {
+    const content = newNoteInput.value.trim();
+    if (!content) return alert("Cannot add empty note.");
+    try {
+      await window.api.addNote(clientId, content);
+      newNoteInput.value = "";
+      loadNotes();
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to add note.");
+    }
+  };
+
+  loadNotes();
+}
+
+// ======================================================
+// PDF UPLOAD BUTTON
+// ======================================================
+function setupPDFUploadButton() {
+  const uploadBtn = document.getElementById("pdf-upload-btn");
+  const fileInput = document.getElementById("pdf-file-input");
+  if (!uploadBtn || !fileInput) return;
+
+  uploadBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length || !activeId) return;
+
+    await Promise.all(files.map(file => window.api.uploadPDF(file, activeId)));
+
+    loadPDFs(activeId);
+    fileInput.value = "";
+  });
+}
+
+// ======================================================
 // PDF DISPLAY
 // ======================================================
 async function loadPDFs(clientId) {
@@ -486,20 +620,14 @@ async function loadPDFs(clientId) {
   if (!container) return;
 
   container.innerHTML = "";
-
   try {
     const data = await window.api.listPDFs(clientId);
-
     if (!data.files || data.files.length === 0) {
-      container.innerHTML =
-        `<div style="color:#888; font-size:13px;">
-          No PDFs uploaded yet.
-        </div>`;
+      container.innerHTML = `<div style="color:#888; font-size:13px;">No PDFs uploaded yet.</div>`;
       return;
     }
 
     data.files.forEach(file => {
-
       const card = document.createElement("div");
       card.style.display = "flex";
       card.style.justifyContent = "space-between";
@@ -565,7 +693,6 @@ async function loadPDFs(clientId) {
 
       btnGroup.appendChild(openBtn);
       btnGroup.appendChild(deleteBtn);
-
       card.appendChild(name);
       card.appendChild(btnGroup);
       container.appendChild(card);
@@ -591,13 +718,9 @@ function setupDropZone() {
   );
 
   dz.addEventListener("drop", async (e) => {
-    const files = e.dataTransfer.files;
+    const files = Array.from(e.dataTransfer.files);
     if (!files.length || !activeId) return;
-
-    for (let file of files) {
-      await window.api.uploadPDF(file, activeId);
-    }
-
+    await Promise.all(files.map(file => window.api.uploadPDF(file, activeId)));
     loadPDFs(activeId);
   });
 }
@@ -607,31 +730,13 @@ function setupDropZone() {
 // ======================================================
 if (projectPanel) {
   projectPanel.addEventListener("click", async (e) => {
-
     const target = e.target;
 
-    if (target.id === "printBtn")
-      window.print();
+    if (target.id === "printBtn") window.print();
 
     if (target.id === "reviewBtn") {
-      const email = document.getElementById("p-email")?.value;
-      if (!email) return alert("Client email not found.");
-
-      const reviewLink = "https://www.yelp.com/writeareview/biz/dTEncYkt4EJJxFFWXv9nxg";
-
-      const subject = encodeURIComponent("We’d Love Your Feedback!");
-      const body = encodeURIComponent(
-`Hi,
-
-Thank you for choosing us!
-
-If you have a moment, we would truly appreciate a quick Yelp review:
-${reviewLink}
-
-It helps our business grow and we really appreciate your support!`
-      );
-
-      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+      const googleLink = "https://www.google.com/maps/place/DeVries+Brothers+Roofing+and+Construction/@36.9772676,-86.4834052,12z/data=!4m8!3m7!1s0xa03088fa81602de1:0x9f671e0d27f600cb!8m2!3d36.977159!4d-86.4008325!9m1!1b1!16s%2Fg%2F11x90mpwmq?entry=ttu&g_ep=EgoyMDI2MDIxOC4wIKXMDSoASAFQAw%3D%3D";
+      window.open(googleLink, "_blank");
     }
 
     if (target.id === "saveBtn") {
@@ -644,7 +749,6 @@ It helps our business grow and we really appreciate your support!`
         phone: document.getElementById("p-phone")?.value || "",
         email: document.getElementById("p-email")?.value || ""
       };
-
       await window.api.updateProject(data);
       await refreshList();
       alert("✅ Saved Successfully!");
@@ -659,8 +763,7 @@ It helps our business grow and we really appreciate your support!`
       }
     }
 
-    if (target.id === "closeBtn")
-      closePanel();
+    if (target.id === "closeBtn") closePanel();
   });
 }
 
@@ -669,14 +772,16 @@ It helps our business grow and we really appreciate your support!`
 // ======================================================
 function getPanelFName() {
   const h2 = projectPanel.querySelector("h2");
-  return h2 ? h2.innerText.split(" ")[0] : "";
+  if (!h2) return "";
+  const parts = h2.innerText.trim().split(" ");
+  return parts[0] || "";
 }
 
 function getPanelLName() {
   const h2 = projectPanel.querySelector("h2");
-  return h2
-    ? h2.innerText.split(" ").slice(1).join(" ")
-    : "";
+  if (!h2) return "";
+  const parts = h2.innerText.trim().split(" ");
+  return parts.slice(1).join(" ") || "";
 }
 
 function closePanel() {
@@ -687,8 +792,7 @@ function closePanel() {
   panel.style.transform = "translateY(-20px)";
 
   setTimeout(() => {
-    projectPanel.innerHTML =
-      '<div class="welcome-screen"><p>Select a client on the left</p></div>';
+    projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
   }, 250);
 }
 
@@ -698,8 +802,7 @@ function closePanel() {
 if (clientList) {
   clientList.addEventListener("click", (e) => {
     const item = e.target.closest(".client-item");
-    if (item)
-      openClient(parseInt(item.dataset.id));
+    if (item) openClient(parseInt(item.dataset.id));
   });
 }
 
@@ -707,7 +810,3 @@ if (clientList) {
 // INITIAL LOAD
 // ======================================================
 refreshList();
-
-// ======================================================
-// END OF FILE
-// ======================================================
