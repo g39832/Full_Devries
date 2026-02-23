@@ -155,6 +155,8 @@ window.api = {
     return res.json();
   },
 
+
+
   // ==========================
   // NOTES API
   // ==========================
@@ -194,6 +196,13 @@ window.api = {
     return res.json();
   }
 };
+// ======================================================
+// UPDATE FINANCE PAGE WHEN CLIENT TOTAL OR PAYMENT CHANGES
+// ======================================================
+function triggerFinanceUpdate() {
+  // Dispatch a custom event for any finance listeners
+  document.dispatchEvent(new Event('financeUpdated'));
+}
 
 // ======================================================
 // DOM REFERENCES
@@ -453,6 +462,7 @@ async function openClient(id) {
   }
 }
 
+
 // ======================================================
 // FINANCIAL SECTION
 // ======================================================
@@ -466,6 +476,10 @@ function setupFinancialSection(client) {
       await window.api.updateTotal(activeId, total);
       await refreshList();
       await openClient(activeId);
+
+      // Trigger finance page to refresh
+      triggerFinanceUpdate();
+
       alert("✅ Total Due updated!");
     } catch (err) {
       console.error(err);
@@ -476,10 +490,17 @@ function setupFinancialSection(client) {
   addPaymentBtn.onclick = async () => {
     try {
       const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
-      if (payment <= 0) { alert("Enter valid payment amount."); return; }
+      if (payment <= 0) {
+        alert("Enter valid payment amount.");
+        return;
+      }
       await window.api.addPayment(activeId, payment);
       await refreshList();
       await openClient(activeId);
+
+      // Trigger finance page to refresh
+      triggerFinanceUpdate();
+
       alert("✅ Payment added!");
     } catch (err) {
       console.error(err);

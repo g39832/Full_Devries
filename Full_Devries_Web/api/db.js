@@ -78,6 +78,41 @@ db.prepare(`
   )
 `).run();
 
+// =========================
+// FINANCE OVERRIDES TABLE
+// =========================
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS finance_overrides (
+    year INTEGER PRIMARY KEY,
+    notes TEXT
+  )
+`).run();
+
+db.prepare(`
+  CREATE INDEX IF NOT EXISTS idx_notes_client
+  ON notes(client_id)
+`).run();
+
+
+// =========================
+// FINANCE OVERRIDES TABLE (NEW)
+// =========================
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS finance_overrides (
+    year INTEGER PRIMARY KEY,
+    totalClients INTEGER DEFAULT 0,
+    totalExpected REAL DEFAULT 0,
+    totalReceived REAL DEFAULT 0,
+    totalRemaining REAL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`).run();
+
+
+module.exports = db;
+
+
+
 db.prepare(`
   CREATE INDEX IF NOT EXISTS idx_notes_client
   ON notes(client_id)

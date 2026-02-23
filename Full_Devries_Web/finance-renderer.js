@@ -1,5 +1,5 @@
 // ====================================================== 
-// FINANCE PAGE RENDERER (Stable + Instant Preview)
+// FINANCE PAGE RENDERER (Stable + Live Updates from Payments & Clients)
 // ======================================================
 
 const taxGroups = ["w9", "pnl", "1099", "inference"];
@@ -9,7 +9,7 @@ const yearSelector = document.getElementById("finance-year");
 let activeYear = new Date().getFullYear();
 
 // ======================================================
-// LOAD AVAILABLE YEARS (NEW - AUTO DROPDOWN)
+// LOAD AVAILABLE YEARS (AUTO DROPDOWN)
 // ======================================================
 async function loadAvailableYears() {
   if (!yearSelector) return;
@@ -29,15 +29,12 @@ async function loadAvailableYears() {
       yearSelector.appendChild(option);
     });
 
-    // Default to newest year in DB or current year
     const newestYear = years[0] || new Date().getFullYear();
     activeYear = parseInt(newestYear);
     yearSelector.value = activeYear;
 
   } catch (err) {
     console.error("Year dropdown error:", err);
-
-    // Fallback to current year only
     yearSelector.innerHTML = `<option value="${activeYear}">${activeYear}</option>`;
   }
 }
@@ -72,7 +69,7 @@ async function fetchFinanceSummary(year) {
 }
 
 // ======================================================
-// UPDATE METRICS
+// UPDATE METRICS (Editable Version)
 // ======================================================
 async function updateFinanceMetrics() {
   if (!financeTableBody) return;
@@ -80,23 +77,63 @@ async function updateFinanceMetrics() {
   try {
     const summary = await fetchFinanceSummary(activeYear);
 
-    if (!summary) {
-      financeTableBody.innerHTML =
-        "<tr><td colspan='5'>No data found</td></tr>";
-      return;
-    }
+    const expected = summary?.totalExpected || 0;
+    const received = summary?.totalReceived || 0;
+    const remaining = summary?.totalRemaining || 0;
+    const clients = summary?.totalClients || 0;
 
     financeTableBody.innerHTML = `
       <tr>
-        <td>${summary.year}</td>
-        <td>$${Number(summary.totalExpected || 0).toLocaleString()}</td>
-        <td>$${Number(summary.totalReceived || 0).toLocaleString()}</td>
-        <td>$${Number(summary.totalRemaining || 0).toLocaleString()}</td>
-        <td>${summary.totalClients || 0} clients</td>
+        <td>${activeYear}</td>
+        <td><input type="number" id="input-expected" value="${expected}" /></td>
+        <td><input type="number" id="input-received" value="${received}" /></td>
+        <td><input type="number" id="input-remaining" value="${remaining}" /></td>
+        <td><input type="number" id="input-clients" value="${clients}" /></td>
+      </tr>
+      <tr>
+        <td colspan="5" style="text-align:right;">
+          <button id="saveFinanceBtn">Save Year Data</button>
+        </td>
       </tr>
     `;
+
+    document
+      .getElementById("saveFinanceBtn")
+      .addEventListener("click", saveFinanceYear);
+
   } catch (err) {
     console.error("Metrics error:", err);
+  }
+}
+
+// ======================================================
+// SAVE MANUAL YEAR DATA
+// ======================================================
+async function saveFinanceYear() {
+  const data = {
+    year: activeYear,
+    totalExpected: Number(document.getElementById("input-expected").value),
+    totalReceived: Number(document.getElementById("input-received").value),
+    totalRemaining: Number(document.getElementById("input-remaining").value),
+    totalClients: Number(document.getElementById("input-clients").value),
+  };
+
+  try {
+    const res = await fetch("/api/finance/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) throw new Error("Save failed");
+
+    alert("Finance data saved successfully.");
+
+    // Trigger update for live metrics
+    document.dispatchEvent(new Event("financeUpdated"));
+  } catch (err) {
+    console.error("Save error:", err);
+    alert("Error saving finance data.");
   }
 }
 
@@ -112,7 +149,7 @@ if (yearSelector) {
 }
 
 // ======================================================
-// ADD UPLOAD BUTTONS (Fixed + Styled)
+// ADD UPLOAD BUTTONS (Styled)
 // ======================================================
 function addUploadButtons() {
   taxGroups.forEach((group) => {
@@ -147,6 +184,9 @@ function addUploadButtons() {
 
         await uploadPDF(file, `${group}-${activeYear}`);
         loadPDFs(group);
+
+        // Update metrics after PDF upload
+        document.dispatchEvent(new Event("financeUpdated"));
       });
 
       document.body.appendChild(input);
@@ -258,6 +298,7 @@ async function loadPDFs(group) {
         );
 
         loadPDFs(group);
+        document.dispatchEvent(new Event("financeUpdated"));
       };
 
       card.appendChild(delBtn);
@@ -309,6 +350,21 @@ function openPDFModal(url) {
       document.getElementById("pdfViewer").innerHTML = "";
     }
   });
+}
+
+// ======================================================
+// LISTEN FOR FINANCE UPDATES (Live from Payments, PDFs, Manual Saves, Client Updates)
+// ======================================================
+document.addEventListener("financeUpdated", () => {
+  updateFinanceMetrics();
+  taxGroups.forEach((group) => loadPDFs(group));
+});
+
+// ======================================================
+// AUTO REFRESH METRICS WHEN CLIENT DATA CHANGES
+// ======================================================
+function refreshFinanceMetrics() {
+  document.dispatchEvent(new Event("financeUpdated"));
 }
 
 // ======================================================
