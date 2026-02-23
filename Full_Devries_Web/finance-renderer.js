@@ -7,6 +7,7 @@ const financeTableBody = document.getElementById("metricsBody");
 const yearSelector = document.getElementById("finance-year");
 
 let activeYear = new Date().getFullYear();
+let financeUndoStack = [];
 
 // ======================================================
 // LOAD AVAILABLE YEARS (AUTO DROPDOWN)
@@ -92,14 +93,22 @@ async function updateFinanceMetrics() {
       </tr>
       <tr>
         <td colspan="5" style="text-align:right;">
-          <button id="saveFinanceBtn">Save Year Data</button>
-        </td>
+        <button id="saveFinanceBtn">Save Year Data</button>
+          <button id="undoFinanceYearBtn"
+          style="margin-left:10px; background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">
+            Undo
+           </button>
+</td>
       </tr>
     `;
 
     document
       .getElementById("saveFinanceBtn")
       .addEventListener("click", saveFinanceYear);
+
+    document
+    .getElementById("undoFinanceYearBtn")
+    .addEventListener("click", undoFinanceYear);
 
   } catch (err) {
     console.error("Metrics error:", err);
@@ -110,6 +119,18 @@ async function updateFinanceMetrics() {
 // SAVE MANUAL YEAR DATA
 // ======================================================
 async function saveFinanceYear() {
+
+  // 🔥 Store previous saved state before overwriting
+  const previousSummary = await fetchFinanceSummary(activeYear);
+
+  financeUndoStack.push({
+    year: activeYear,
+    totalExpected: previousSummary?.totalExpected || 0,
+    totalReceived: previousSummary?.totalReceived || 0,
+    totalRemaining: previousSummary?.totalRemaining || 0,
+    totalClients: previousSummary?.totalClients || 0
+  });
+
   const data = {
     year: activeYear,
     totalExpected: Number(document.getElementById("input-expected").value),
@@ -128,12 +149,38 @@ async function saveFinanceYear() {
     if (!res.ok) throw new Error("Save failed");
 
     alert("Finance data saved successfully.");
-
-    // Trigger update for live metrics
     document.dispatchEvent(new Event("financeUpdated"));
+
   } catch (err) {
     console.error("Save error:", err);
     alert("Error saving finance data.");
+  }
+}
+
+
+async function undoFinanceYear() {
+  if (financeUndoStack.length === 0) {
+    alert("Nothing to undo.");
+    return;
+  }
+
+  const lastState = financeUndoStack.pop();
+
+  try {
+    const res = await fetch("/api/finance/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lastState),
+    });
+
+    if (!res.ok) throw new Error("Undo failed");
+
+    alert("Finance year restored.");
+    document.dispatchEvent(new Event("financeUpdated"));
+
+  } catch (err) {
+    console.error("Undo error:", err);
+    alert("Error restoring finance data.");
   }
 }
 

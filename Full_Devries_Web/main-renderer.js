@@ -203,6 +203,10 @@ function triggerFinanceUpdate() {
   // Dispatch a custom event for any finance listeners
   document.dispatchEvent(new Event('financeUpdated'));
 }
+// ======================================================
+// FINANCE UNDO STACK (GLOBAL)
+// ======================================================
+let financeUndoStack = [];
 
 // ======================================================
 // DOM REFERENCES
@@ -404,6 +408,7 @@ async function openClient(id) {
               <input type="number" id="paymentInput" placeholder="Add Payment"
                 step="0.01" style="flex:1;">
               <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
+             
             </div>
           </div>
 
@@ -470,14 +475,25 @@ function setupFinancialSection(client) {
   const saveTotalBtn = document.getElementById("saveTotalBtn");
   const addPaymentBtn = document.getElementById("addPaymentBtn");
 
+  // ==============================
+  // SAVE TOTAL
+  // ==============================
   saveTotalBtn.onclick = async () => {
     try {
-      const total = parseFloat(document.getElementById("totalDueInput").value) || 0;
-      await window.api.updateTotal(activeId, total);
+      const newTotal = parseFloat(document.getElementById("totalDueInput").value) || 0;
+
+      // 🧠 Save PREVIOUS state to undo stack
+      financeUndoStack.push({
+        clientId: activeId,
+        total_due: client.total_due,
+        amount_paid: client.amount_paid
+      });
+
+      await window.api.updateTotal(activeId, newTotal);
+
       await refreshList();
       await openClient(activeId);
 
-      // Trigger finance page to refresh
       triggerFinanceUpdate();
 
       alert("✅ Total Due updated!");
@@ -487,6 +503,9 @@ function setupFinancialSection(client) {
     }
   };
 
+  // ==============================
+  // ADD PAYMENT
+  // ==============================
   addPaymentBtn.onclick = async () => {
     try {
       const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
@@ -494,11 +513,19 @@ function setupFinancialSection(client) {
         alert("Enter valid payment amount.");
         return;
       }
+
+      // 🧠 Save PREVIOUS state to undo stack
+      financeUndoStack.push({
+        clientId: activeId,
+        total_due: client.total_due,
+        amount_paid: client.amount_paid
+      });
+
       await window.api.addPayment(activeId, payment);
+
       await refreshList();
       await openClient(activeId);
 
-      // Trigger finance page to refresh
       triggerFinanceUpdate();
 
       alert("✅ Payment added!");
@@ -752,6 +779,43 @@ function setupDropZone() {
 if (projectPanel) {
   projectPanel.addEventListener("click", async (e) => {
     const target = e.target;
+
+    // ==============================
+// UNDO FINANCIAL CHANGE
+// ==============================
+if (target.id === "undoFinanceBtn") {
+  if (financeUndoStack.length === 0) {
+    alert("Nothing to undo!");
+    return;
+  }
+
+  const last = financeUndoStack.pop();
+
+  try {
+    // Reset amount paid completely
+    await window.api.resetAmountPaid(last.clientId);
+
+    // Restore total_due
+    await window.api.updateTotal(last.clientId, last.total_due);
+
+    // Restore amount_paid
+    if (last.amount_paid > 0) {
+      await window.api.addPayment(last.clientId, last.amount_paid);
+    }
+
+    await refreshList();
+    await openClient(last.clientId);
+
+    triggerFinanceUpdate();
+
+    alert("✅ Financial change undone!");
+  } catch (err) {
+    console.error(err);
+    alert("❌ Failed to undo change.");
+  }
+
+  return;
+}
 
     if (target.id === "printBtn") window.print();
 
