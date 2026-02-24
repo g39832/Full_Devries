@@ -25,7 +25,6 @@ body.dashboard-body {
   text-shadow: 1px 1px 6px rgba(0,0,0,0.5);
 }
 
-/* Dashboard grid */
 .crm-dashboard {
   display: flex;
   flex: 1;
@@ -37,7 +36,9 @@ body.dashboard-body {
 ========================= */
 .sidebar {
   width: 300px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255,255,255,0.08);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -70,7 +71,7 @@ body.dashboard-body {
   outline: none;
 }
 
-/* Modern input colors */
+/* Inputs */
 input[type="email"],
 input[type="tel"] {
   margin-bottom: 10px;
@@ -83,19 +84,13 @@ input[type="tel"] {
   transition: all 0.3s ease;
 }
 
-/* Light-blue phone input */
 input[type="tel"] {
   color: #7fdbff;
-}
-
-input[type="tel"]::placeholder {
-  color: rgba(127, 219, 255, 0.6);
 }
 
 input[type="tel"]:focus {
   box-shadow: 0 0 6px 2px rgba(127, 219, 255, 0.5);
   background: rgba(255, 255, 255, 0.1);
-  color: #7fdbff;
 }
 
 /* Buttons */
@@ -122,33 +117,35 @@ button.btn-primary:hover {
   outline: none;
 }
 
-/* Scrollable client list */
+/* =========================
+   CLIENT LIST
+========================= */
 .client-list {
   list-style: none;
   margin-top: 15px;
   overflow-y: auto;
-  max-height: 400px;
+  flex: 1;
 }
 
 .client-item {
-  padding: 10px;
-  border-radius: 6px;
+  padding: 12px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  transform: translateX(0);
-  opacity: 1;
-  border-left: 3px solid transparent;
+  transition: all 0.25s ease;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 8px;
 }
 
 .client-item:hover {
-  background: rgba(108, 92, 231, 0.3);
-  transform: translateX(5px) scale(1.02);
-  border-left: 3px solid #6c5ce7;
+  background: rgba(108, 92, 231, 0.25);
+  border: 1px solid rgba(108, 92, 231, 0.6);
+  transform: translateX(4px);
 }
 
 .client-item.active {
-  background: rgba(108, 92, 231, 0.5);
-  border-left: 3px solid #a29bfe;
+  background: rgba(108, 92, 231, 0.35);
+  border: 1px solid #a29bfe;
 }
 
 /* =========================
@@ -156,12 +153,11 @@ button.btn-primary:hover {
 ========================= */
 .main-content {
   flex: 1;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.04);
   padding: 20px;
   overflow-y: auto;
 }
 
-/* Welcome screen */
 .welcome-screen {
   display: flex;
   align-items: center;
@@ -171,15 +167,15 @@ button.btn-primary:hover {
   text-align: center;
 }
 
-/* Detail card */
 .detail-card {
   background: rgba(20,20,40,0.8);
   padding: 20px;
   border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
   opacity: 0;
   transform: translateY(20px);
   transition: all 0.3s ease;
-  position: relative; /* ensures close button positions properly */
+  position: relative;
 }
 
 .animate-panel {
@@ -199,7 +195,7 @@ button.btn-primary:hover {
   color: #dcd6f7;
 }
 
-/* Roofing grid layout */
+/* Roofing grid */
 .roofing-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -216,7 +212,6 @@ button.btn-primary:hover {
   width: 100%;
   background: rgba(255,255,255,0.08);
   color: #f5f5f5;
-  transition: all 0.3s ease;
 }
 
 .roofing-grid input:focus,
@@ -239,18 +234,7 @@ button.btn-primary:hover {
   border-color: #6c5ce7;
 }
 
-/* Buttons inside project panel */
-.detail-card button {
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-/* Close button (X) */
+/* Close button */
 .close-x {
   color: #ff6b6b;
   font-size: 1.5rem;
@@ -260,127 +244,16 @@ button.btn-primary:hover {
   position: absolute;
   top: 10px;
   right: 10px;
-  transition: all 0.2s ease;
 }
 
-.close-x:hover {
-  color: #c0392b;
-  transform: scale(1.2);
-}
-
-/* Panel slide/fade animations */
+/* Animations */
 @keyframes slideInUp {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 
-@keyframes slideOutUp {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(-20px); opacity: 0; }
-}
-
 /* =========================
-   PDF THUMBNAILS
-========================= */
-.pdf-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  max-height: 150px;
-  overflow-y: auto;
-  margin-top: 10px;
-  padding: 5px;
-}
-
-.pdf-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 80px;
-  font-size: 12px;
-  text-align: center;
-  cursor: pointer;
-}
-
-.pdf-item canvas {
-  width: 80px;
-  height: 100px;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 4px;
-  margin-bottom: 4px;
-}
-
-/* =========================
-   RESPONSIVE
-========================= */
-@media (max-width: 1024px) {
-  .sidebar {
-    width: 240px;
-  }
-
-  #Main_header {
-    font-size: 1.6rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .crm-dashboard {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-    max-height: 300px;
-  }
-
-  .roofing-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .pdf-list {
-    justify-content: flex-start;
-    max-height: 120px;
-  }
-
-  .detail-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .detail-header h2 {
-    font-size: 1.2rem;
-  }
-}
-
-/* Extra small devices */
-@media (max-width: 480px) {
-  #Main_header {
-    font-size: 1.3rem;
-    padding: 10px 0;
-  }
-
-  .sidebar {
-    padding: 15px;
-  }
-
-  .main-content {
-    padding: 15px;
-  }
-
-  .client-item {
-    padding: 8px;
-    font-size: 14px;
-  }
-
-  button.btn-primary {
-    padding: 10px;
-    font-size: 14px;
-  }
-}
-
-/* =========================
-   RESPONSIVE PDF MODAL
+   PDF MODAL
 ========================= */
 #pdfModal {
   display: none;
@@ -403,28 +276,14 @@ button.btn-primary:hover {
   background: #fff;
   border-radius: 8px;
   overflow: hidden;
-  padding: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-#pdfModalClose {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 1.5rem;
-  font-weight: bold;
-  cursor: pointer;
-  z-index: 10;
 }
 
 #pdfViewer {
   width: 100%;
   height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 #pdfViewer object {
@@ -432,20 +291,27 @@ button.btn-primary:hover {
   height: 100%;
 }
 
-/* Mobile adjustments */
-@media (max-width: 768px) {
-  #pdfModalContent {
-    width: 100%;
-    height: 95%;
-    border-radius: 0;
-  }
-}
-
 #p-status {
-  background-color: #1e293b;  /* dark background */
-  color: white;               /* text color */
+  background-color: #1e293b;
+  color: white;
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid #334155;
-  font-weight: 500;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width: 768px) {
+  .crm-dashboard {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+
+  .roofing-grid {
+    grid-template-columns: 1fr;
+  }
 }

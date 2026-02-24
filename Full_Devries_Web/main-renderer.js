@@ -14,7 +14,7 @@ const STATUS_COLORS = {
   Approved: "#6dddef",
   Completed: "#f0ad4e",
   Invoice: "#dfa575",
-  Closed: "#000000"
+  Closed: "#aa1b1b"
 };
 
 // ======================================================
@@ -303,7 +303,8 @@ function renderSidebar(list = []) {
   if (!clientList) return;
 
   list.sort((a, b) =>
-    STATUS_ORDER.indexOf(a.status || "Lead") - STATUS_ORDER.indexOf(b.status || "Lead")
+    STATUS_ORDER.indexOf(a.status || "Lead") -
+    STATUS_ORDER.indexOf(b.status || "Lead")
   );
 
   const counts = {};
@@ -311,12 +312,14 @@ function renderSidebar(list = []) {
   list.forEach(c => counts[c.status || "Lead"]++);
 
   const countsHTML = `
-    <div style="padding:10px; border-bottom:1px solid #ddd;">
+    <div class="status-counts">
       ${STATUS_ORDER.map(s =>
-        `<div style="font-size:12px; color:${STATUS_COLORS[s] || "#007bff"}">
+        `<div style="color:${STATUS_COLORS[s] || "#007bff"}">
           ${s}: ${counts[s]}
-        </div>`).join("")}
-    </div>`;
+        </div>`
+      ).join("")}
+    </div>
+  `;
 
   const clientsHTML = list.map(c => {
     const [fName, ...rest] = (c.name || "").split(" ");
@@ -324,11 +327,20 @@ function renderSidebar(list = []) {
     const color = STATUS_COLORS[c.status] || "#007bff";
 
     return `
-      <li class="client-item" data-id="${c.id}" style="border-left:4px solid ${color}; padding-left:8px;">
-        <strong>${fName || ""} ${lName || ""}</strong><br>
-        <small>${c.phone || ""}</small><br>
-        <span style="font-size:11px; color:${color}; font-weight:bold;">${c.status || "Lead"}</span>
-      </li>`;
+      <div class="client-card" data-id="${c.id}" style="border-left:4px solid ${color};">
+        <div class="client-name">
+          ${fName || ""} ${lName || ""}
+        </div>
+
+        <div class="client-meta">
+          📞 ${c.phone || ""}
+        </div>
+
+        <div class="client-status" style="color:${color};">
+          ${c.status || "Lead"}
+        </div>
+      </div>
+    `;
   }).join("");
 
   clientList.innerHTML = countsHTML + clientsHTML;
@@ -886,7 +898,7 @@ function closePanel() {
 // ======================================================
 if (clientList) {
   clientList.addEventListener("click", (e) => {
-    const item = e.target.closest(".client-item");
+    const item = e.target.closest(".client-card");
     if (item) openClient(parseInt(item.dataset.id));
   });
 }
