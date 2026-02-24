@@ -315,3 +315,15 @@ button.btn-primary:hover {
     grid-template-columns: 1fr;
   }
 }
+/* ===== MOBILE CLIENT VIEW SWITCH ===== */
+@media (max-width: 768px) {
+
+  .sidebar.mobile-hidden {
+    display: none;
+  }
+
+  .main-content.mobile-full {
+    width: 100%;
+  }
+
+}

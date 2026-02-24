@@ -473,6 +473,16 @@ async function openClient(id) {
     loadPDFs(id);
     setupFinancialSection(client);
     setupNotesSection(id);
+    // ==============================
+    // MOBILE VIEW SWITCH
+    // ==============================
+    if (window.innerWidth <= 768) {
+      const sidebar = document.querySelector(".sidebar");
+      const mainContent = document.querySelector(".main-content");
+
+  if (sidebar) sidebar.classList.add("mobile-hidden");
+  if (mainContent) mainContent.classList.add("mobile-full");
+}
 
   } catch (err) {
     console.error(err);
@@ -891,6 +901,17 @@ function closePanel() {
   setTimeout(() => {
     projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
   }, 250);
+
+  // ==============================
+// RESTORE MOBILE VIEW
+// ==============================
+if (window.innerWidth <= 768) {
+  const sidebar = document.querySelector(".sidebar");
+  const mainContent = document.querySelector(".main-content");
+
+  if (sidebar) sidebar.classList.remove("mobile-hidden");
+  if (mainContent) mainContent.classList.remove("mobile-full");
+}
 }
 
 // ======================================================
