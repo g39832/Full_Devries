@@ -215,9 +215,22 @@ const clientList = document.getElementById("clientList");
 const projectPanel = document.getElementById("projectPanel");
 const searchInput = document.getElementById("searchClients");
 const intakeFormEl = document.getElementById("clientIntakeForm");
+const overlay = document.getElementById("projectOverlay");
+// Keep overlay only as a backdrop layer; do not close modal on backdrop click.
+// Client panel should close via explicit actions (X button / Delete flow).
 
 let activeId = null;
 let searchTimeout = null;
+
+function isCenteredSidebarLayout() {
+  const dashboard = document.querySelector(".crm-dashboard");
+  if (!dashboard) return false;
+  return window.getComputedStyle(dashboard).flexDirection === "column";
+}
+
+function shouldUseMobileSidebarSwitch() {
+  return window.innerWidth <= 768;
+}
 
 // ======================================================
 // SEARCH
@@ -468,15 +481,19 @@ async function openClient(id) {
       }
     });
 
+
     setupDropZone();
     setupPDFUploadButton();
     loadPDFs(id);
     setupFinancialSection(client);
     setupNotesSection(id);
+    // SHOW MODAL
+    projectPanel.style.display = "block";
+    if (overlay) overlay.style.display = "none";
     // ==============================
     // MOBILE VIEW SWITCH
     // ==============================
-    if (window.innerWidth <= 768) {
+    if (shouldUseMobileSidebarSwitch()) {
       const sidebar = document.querySelector(".sidebar");
       const mainContent = document.querySelector(".main-content");
 
@@ -892,26 +909,28 @@ function getPanelLName() {
 }
 
 function closePanel() {
-  const panel = projectPanel.querySelector(".animate-panel");
-  if (!panel) return;
 
-  panel.style.opacity = 0;
-  panel.style.transform = "translateY(-20px)";
+  if (overlay) overlay.style.display = "none";
+
+  const panel = projectPanel.querySelector(".animate-panel");
+  if (panel) {
+    panel.style.opacity = 0;
+    panel.style.transform = "translateY(-20px)";
+  }
 
   setTimeout(() => {
-    projectPanel.innerHTML = '<div class="welcome-screen"><p>Select a client on the left</p></div>';
+    projectPanel.innerHTML = '';
+    projectPanel.style.display = "none";
   }, 250);
 
-  // ==============================
-// RESTORE MOBILE VIEW
-// ==============================
-if (window.innerWidth <= 768) {
-  const sidebar = document.querySelector(".sidebar");
-  const mainContent = document.querySelector(".main-content");
+  // RESTORE MOBILE VIEW
+  if (shouldUseMobileSidebarSwitch()) {
+    const sidebar = document.querySelector(".sidebar");
+    const mainContent = document.querySelector(".main-content");
 
-  if (sidebar) sidebar.classList.remove("mobile-hidden");
-  if (mainContent) mainContent.classList.remove("mobile-full");
-}
+    if (sidebar) sidebar.classList.remove("mobile-hidden");
+    if (mainContent) mainContent.classList.remove("mobile-full");
+  }
 }
 
 // ======================================================
@@ -927,4 +946,10 @@ if (clientList) {
 // ======================================================
 // INITIAL LOAD
 // ======================================================
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && projectPanel && projectPanel.style.display === "block") {
+    closePanel();
+  }
+});
+
 refreshList();
