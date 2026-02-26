@@ -537,7 +537,7 @@ async function openClient(id) {
             <div id="notes-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:240px; overflow:auto; padding-right:4px;"></div>
             <div style="display:flex; gap:8px;">
               <textarea id="new-note-input" placeholder="Add a note..." rows="6" style="flex:1; padding:10px 12px; resize:vertical; min-height:140px;"></textarea>
-              <button id="add-note-btn" class="btn-primary" style="background:#007bff;">Add Note</button>
+              <button id="add-note-btn" class="btn-primary" style="background:#007bff; padding:8px 10px; font-size:0.85rem; line-height:1.1; height:40px; align-self:flex-start;">Add Note</button>
             </div>
           </div>
 
