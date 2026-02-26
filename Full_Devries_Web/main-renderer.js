@@ -44,6 +44,7 @@ const STATUS_COLORS = {
     #delBtn,
     #printBtn,
     #reviewBtn,
+    #undoFinanceBtn,
     #pdf-drop-zone,
     #pdf-upload-btn {
       display: none !important;
@@ -101,9 +102,9 @@ window.api = {
     return res.json();
   },
 
-  async uploadPDF(file, clientId) {
+  async uploadPDFs(files, clientId) {
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach(file => formData.append("files", file));
     const res = await fetch(`/api/pdf/upload/${clientId}`, {
       method: "POST",
       body: formData
@@ -221,6 +222,16 @@ const overlay = document.getElementById("projectOverlay");
 
 let activeId = null;
 let searchTimeout = null;
+let isSaving = false;
+let queuedSave = false;
+let lastSearchTerm = "";
+let selectedIndex = -1;
+let sidebarAllClients = [];
+let sidebarSearchTerm = "";
+let sidebarRenderCount = 0;
+const sidebarChunkSize = 60;
+let sidebarListContainer = null;
+let newNoteSaving = false;
 
 function isCenteredSidebarLayout() {
   const dashboard = document.querySelector(".crm-dashboard");
@@ -238,6 +249,7 @@ function shouldUseMobileSidebarSwitch() {
 if (searchInput) {
   searchInput.addEventListener("input", (e) => {
     const term = e.target.value.trim().toLowerCase();
+    lastSearchTerm = term;
     clearTimeout(searchTimeout);
 
     searchTimeout = setTimeout(async () => {
@@ -251,18 +263,45 @@ if (searchInput) {
           renderSidebar(
             allClients.filter(c =>
               (c.status || "Lead").toLowerCase() === term
-            )
+            ),
+            term
           );
           return;
         }
 
         const filtered = await window.api.searchClients(term);
-        renderSidebar(filtered);
+        renderSidebar(filtered, term);
 
       } catch (err) {
         console.error(err);
       }
     }, 300);
+  });
+
+  searchInput.addEventListener("keydown", (e) => {
+    if (!["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
+    const items = Array.from(document.querySelectorAll(".client-card"));
+    if (!items.length) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % items.length;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+    }
+
+    items.forEach((item, idx) => {
+      item.classList.toggle("kb-selected", idx === selectedIndex);
+      if (idx === selectedIndex) item.scrollIntoView({ block: "nearest" });
+    });
+
+    if (e.key === "Enter" && selectedIndex >= 0) {
+      const id = parseInt(items[selectedIndex].dataset.id);
+      if (!Number.isNaN(id)) openClient(id);
+    }
   });
 }
 
@@ -309,10 +348,16 @@ async function refreshList() {
     renderSidebar(clients);
   } catch (err) {
     console.error(err);
+    if (clientList) {
+      clientList.innerHTML =
+        `<div style="color:#ffb4b4; font-size:13px; padding:10px;">
+          Unable to load clients. Check server connection and refresh.
+        </div>`;
+    }
   }
 }
 
-function renderSidebar(list = []) {
+function renderSidebar(list = [], term = "") {
   if (!clientList) return;
 
   list.sort((a, b) =>
@@ -325,38 +370,71 @@ function renderSidebar(list = []) {
   list.forEach(c => counts[c.status || "Lead"]++);
 
   const countsHTML = `
-    <div class="status-counts">
+    <li class="status-counts" style="list-style:none; padding:0; margin:0 0 8px 0;">
       ${STATUS_ORDER.map(s =>
         `<div style="color:${STATUS_COLORS[s] || "#007bff"}">
           ${s}: ${counts[s]}
         </div>`
       ).join("")}
-    </div>
+    </li>
   `;
 
-  const clientsHTML = list.map(c => {
-    const [fName, ...rest] = (c.name || "").split(" ");
-    const lName = rest.join(" ");
-    const color = STATUS_COLORS[c.status] || "#007bff";
+  sidebarAllClients = list;
+  sidebarSearchTerm = term;
+  sidebarRenderCount = 0;
 
-    return `
-      <div class="client-card" data-id="${c.id}" style="border-left:4px solid ${color};">
-        <div class="client-name">
-          ${fName || ""} ${lName || ""}
-        </div>
+  clientList.innerHTML =
+    countsHTML +
+    `<li id="clientListItems" style="list-style:none; padding:0; margin:0;"></li>`;
+  sidebarListContainer = document.getElementById("clientListItems");
+  renderSidebarChunk();
 
-        <div class="client-meta">
-          📞 ${c.phone || ""}
-        </div>
+  selectedIndex = -1;
+}
 
-        <div class="client-status" style="color:${color};">
-          ${c.status || "Lead"}
-        </div>
+function buildClientCard(c, term = "") {
+  const [fName, ...rest] = (c.name || "").split(" ");
+  const lName = rest.join(" ");
+  const color = STATUS_COLORS[c.status] || "#007bff";
+  const displayName = `${fName || ""} ${lName || ""}`.trim();
+  const displayPhone = c.phone || "";
+  const safeTerm = term ? term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
+  const nameHighlighted = safeTerm
+    ? displayName.replace(new RegExp(safeTerm, "ig"), (m) => `<mark>${m}</mark>`)
+    : displayName;
+  const phoneHighlighted = safeTerm
+    ? displayPhone.replace(new RegExp(safeTerm, "ig"), (m) => `<mark>${m}</mark>`)
+    : displayPhone;
+
+  return `
+    <div class="client-card" data-id="${c.id}" data-name="${displayName}" style="border-left:4px solid ${color};">
+      <div class="client-name">
+        ${nameHighlighted}
       </div>
-    `;
-  }).join("");
 
-  clientList.innerHTML = countsHTML + clientsHTML;
+      <div class="client-meta">
+        📞 ${phoneHighlighted}
+      </div>
+
+      <div class="client-status" style="color:${color};">
+        ${c.status || "Lead"}
+      </div>
+    </div>
+  `;
+}
+
+function renderSidebarChunk() {
+  if (!sidebarListContainer) return;
+  if (sidebarRenderCount >= sidebarAllClients.length) return;
+
+  const next = sidebarAllClients.slice(
+    sidebarRenderCount,
+    sidebarRenderCount + sidebarChunkSize
+  );
+  sidebarRenderCount += next.length;
+
+  const html = next.map(c => buildClientCard(c, sidebarSearchTerm)).join("");
+  sidebarListContainer.insertAdjacentHTML("beforeend", html);
 }
 
 // ======================================================
@@ -385,6 +463,7 @@ async function openClient(id) {
             <span>📞 <a href="tel:${client.phone || ""}">${client.phone || ""}</a></span>
             <span style="margin-left:20px;">✉️ <a href="mailto:${client.email || ""}">${client.email || ""}</a></span>
           </div>
+          <span id="saveStatus" style="margin-left:auto; font-size:12px; color:#9ad0ff;">Saved</span>
         </header>
 
         <div class="roofing-grid">
@@ -415,25 +494,25 @@ async function openClient(id) {
             <h3 style="margin-bottom:10px;">Financial Overview</h3>
 
             <div style="display:flex; gap:10px; margin-bottom:10px;">
-              <input type="number" id="totalDueInput" placeholder="Total Due" step="0.01"
-                style="flex:1;" value="${client.total_due || 0}">
+              <input type="text" id="totalDueInput" placeholder="Total Due"
+                inputmode="decimal" style="flex:1;" value="${formatMoney(client.total_due || 0)}">
               <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
             </div>
 
             <div style="display:flex; justify-content:space-between; font-size:14px;">
               <div>Amount Paid:
-                <strong id="amountPaidDisplay">$${(client.amount_paid || 0).toFixed(2)}</strong>
+                <strong id="amountPaidDisplay">$${formatMoney(client.amount_paid || 0)}</strong>
               </div>
               <div>Balance:
-                <strong id="balanceDisplay">$${(client.balance || 0).toFixed(2)}</strong>
+                <strong id="balanceDisplay">$${formatMoney(client.balance || 0)}</strong>
               </div>
             </div>
 
             <div style="display:flex; gap:10px; margin-top:10px;">
-              <input type="number" id="paymentInput" placeholder="Add Payment"
-                step="0.01" style="flex:1;">
+              <input type="text" id="paymentInput" placeholder="Add Payment"
+                inputmode="decimal" style="flex:1;">
               <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
-             
+              <button id="undoFinanceBtn" class="btn-primary" style="background:#dc3545;">Undo Payment</button>
             </div>
           </div>
 
@@ -453,11 +532,11 @@ async function openClient(id) {
           <div id="pdf-list"
             style="grid-column: span 2; margin-top:10px;"></div>
 
-          <div id="notes-section" style="grid-column: span 2; margin-top:15px; border-top:1px solid #ddd; padding-top:10px;">
+          <div id="notes-section" style="grid-column: span 2; margin-top:18px; border-top:1px solid #ddd; padding-top:14px;">
             <h3>Client Notes</h3>
-            <div id="notes-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
-            <div style="display:flex; gap:6px;">
-              <input type="text" id="new-note-input" placeholder="Add a note..." style="flex:1; padding:4px 6px;">
+            <div id="notes-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:240px; overflow:auto; padding-right:4px;"></div>
+            <div style="display:flex; gap:8px;">
+              <textarea id="new-note-input" placeholder="Add a note..." rows="6" style="flex:1; padding:10px 12px; resize:vertical; min-height:140px;"></textarea>
               <button id="add-note-btn" class="btn-primary" style="background:#007bff;">Add Note</button>
             </div>
           </div>
@@ -487,6 +566,8 @@ async function openClient(id) {
     loadPDFs(id);
     setupFinancialSection(client);
     setupNotesSection(id);
+    setupDirtyTracking();
+    setSaveStatus("saved");
     // SHOW MODAL
     projectPanel.style.display = "block";
     if (overlay) overlay.style.display = "none";
@@ -513,13 +594,18 @@ async function openClient(id) {
 function setupFinancialSection(client) {
   const saveTotalBtn = document.getElementById("saveTotalBtn");
   const addPaymentBtn = document.getElementById("addPaymentBtn");
+  const totalDueInput = document.getElementById("totalDueInput");
+  const paymentInput = document.getElementById("paymentInput");
+
+  applyMoneyInputBehavior(totalDueInput);
+  applyMoneyInputBehavior(paymentInput);
 
   // ==============================
   // SAVE TOTAL
   // ==============================
   saveTotalBtn.onclick = async () => {
     try {
-      const newTotal = parseFloat(document.getElementById("totalDueInput").value) || 0;
+      const newTotal = parseMoney(totalDueInput?.value) || 0;
 
       // 🧠 Save PREVIOUS state to undo stack
       financeUndoStack.push({
@@ -547,7 +633,7 @@ function setupFinancialSection(client) {
   // ==============================
   addPaymentBtn.onclick = async () => {
     try {
-      const payment = parseFloat(document.getElementById("paymentInput").value) || 0;
+      const payment = parseMoney(paymentInput?.value) || 0;
       if (payment <= 0) {
         alert("Enter valid payment amount.");
         return;
@@ -573,6 +659,55 @@ function setupFinancialSection(client) {
       alert("❌ Failed to add payment.");
     }
   };
+}
+
+
+// ======================================================
+// SAVE STATUS UI
+// ======================================================
+function setSaveStatus(state) {
+  const el = document.getElementById("saveStatus");
+  if (!el) return;
+
+  if (state === "saving") {
+    el.textContent = "Saving…";
+    el.style.color = "#ffd37a";
+    return;
+  }
+
+  if (state === "error") {
+    el.textContent = "Save failed";
+    el.style.color = "#ff9aa2";
+    return;
+  }
+
+  if (state === "unsaved") {
+    el.textContent = "Unsaved changes";
+    el.style.color = "#ffcc66";
+    return;
+  }
+
+  el.textContent = "Saved";
+  el.style.color = "#9ad0ff";
+}
+
+function markDirty() {
+  setSaveStatus("unsaved");
+}
+
+function setupDirtyTracking() {
+  const statusEl = document.getElementById("p-status");
+  const addrEl = document.getElementById("p-address");
+  const phoneEl = document.getElementById("p-phone");
+  const emailEl = document.getElementById("p-email");
+  const totalDueEl = document.getElementById("totalDueInput");
+  const newNoteInput = document.getElementById("new-note-input");
+
+  [statusEl, addrEl, phoneEl, emailEl, totalDueEl, newNoteInput].forEach(el => {
+    if (!el) return;
+    el.addEventListener("input", markDirty);
+    el.addEventListener("change", markDirty);
+  });
 }
 
 // ======================================================
@@ -610,6 +745,8 @@ async function setupNotesSection(clientId) {
         contentDiv.style.flex = "1";
         contentDiv.style.marginRight = "6px";
         contentDiv.style.color = "#000";
+        contentDiv.style.whiteSpace = "pre-wrap";
+        contentDiv.style.wordBreak = "break-word";
 
         const editBtn = document.createElement("button");
         editBtn.innerText = "Edit";
@@ -628,24 +765,62 @@ async function setupNotesSection(clientId) {
         deleteBtn.style.cursor = "pointer";
 
         editBtn.onclick = async () => {
-          const newContent = prompt("Edit note:", contentDiv.innerText);
-          if (newContent === null) return;
-          const trimmed = newContent.trim();
-          if (!trimmed) return alert("Note cannot be empty.");
-          try {
-            await window.api.updateNote(clientId, note.id, trimmed);
-            loadNotes();
-          } catch (err) {
-            console.error(err);
-            alert("❌ Failed to update note.");
-          }
+          const current = note.content || "";
+          const textarea = document.createElement("textarea");
+          textarea.value = current;
+          textarea.rows = 4;
+          textarea.style.flex = "1";
+          textarea.style.padding = "6px 8px";
+          textarea.style.resize = "vertical";
+          textarea.dataset.noteId = note.id;
+          textarea.dataset.clientId = clientId;
+          textarea.dataset.original = current;
+
+          const saveBtn = document.createElement("button");
+          saveBtn.innerText = "Save";
+          saveBtn.style.background = "#28a745";
+          saveBtn.style.border = "none";
+          saveBtn.style.padding = "4px 8px";
+          saveBtn.style.borderRadius = "4px";
+          saveBtn.style.cursor = "pointer";
+          saveBtn.style.marginLeft = "6px";
+
+          const cancelBtn = document.createElement("button");
+          cancelBtn.innerText = "Cancel";
+          cancelBtn.style.background = "#6c757d";
+          cancelBtn.style.border = "none";
+          cancelBtn.style.padding = "4px 8px";
+          cancelBtn.style.borderRadius = "4px";
+          cancelBtn.style.cursor = "pointer";
+          cancelBtn.style.marginLeft = "6px";
+
+          noteDiv.replaceChild(textarea, contentDiv);
+          noteDiv.insertBefore(saveBtn, editBtn);
+          noteDiv.insertBefore(cancelBtn, editBtn);
+          editBtn.style.display = "none";
+        textarea.addEventListener("input", markDirty);
+
+          cancelBtn.onclick = () => loadNotes();
+          saveBtn.onclick = async () => {
+            const trimmed = textarea.value.trim();
+            if (!trimmed) return alert("Note cannot be empty.");
+            try {
+              await window.api.updateNote(clientId, note.id, trimmed);
+              loadNotes();
+            } catch (err) {
+              console.error(err);
+              alert("Failed to update note.");
+            }
+          };
         };
 
         deleteBtn.onclick = async () => {
           if (!confirm("Delete this note?")) return;
           try {
+            setSaveStatus("saving");
             await window.api.deleteNote(clientId, note.id);
             loadNotes();
+            setSaveStatus("saved");
           } catch (err) {
             console.error(err);
             alert("❌ Failed to delete note.");
@@ -662,18 +837,34 @@ async function setupNotesSection(clientId) {
     }
   }
 
-  addNoteBtn.onclick = async () => {
+
+  async function addNoteFromInput({ silent = false } = {}) {
+    if (newNoteSaving) return;
     const content = newNoteInput.value.trim();
-    if (!content) return alert("Cannot add empty note.");
+    if (!content) return;
+    newNoteSaving = true;
     try {
+      setSaveStatus("saving");
       await window.api.addNote(clientId, content);
       newNoteInput.value = "";
       loadNotes();
+      setSaveStatus("saved");
     } catch (err) {
       console.error(err);
-      alert("❌ Failed to add note.");
+      setSaveStatus("error");
+      if (!silent) alert("Failed to add note.");
+    } finally {
+      newNoteSaving = false;
     }
+  }
+
+  addNoteBtn.onclick = async () => {
+    const content = newNoteInput.value.trim();
+    if (!content) return alert("Cannot add empty note.");
+    await addNoteFromInput({ silent: false });
   };
+
+  newNoteInput.addEventListener("input", markDirty);
 
   loadNotes();
 }
@@ -691,8 +882,7 @@ function setupPDFUploadButton() {
   fileInput.addEventListener("change", async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length || !activeId) return;
-
-    await Promise.all(files.map(file => window.api.uploadPDF(file, activeId)));
+    await window.api.uploadPDFs(files, activeId);
 
     loadPDFs(activeId);
     fileInput.value = "";
@@ -807,7 +997,7 @@ function setupDropZone() {
   dz.addEventListener("drop", async (e) => {
     const files = Array.from(e.dataTransfer.files);
     if (!files.length || !activeId) return;
-    await Promise.all(files.map(file => window.api.uploadPDF(file, activeId)));
+    await window.api.uploadPDFs(files, activeId);
     loadPDFs(activeId);
   });
 }
@@ -827,6 +1017,9 @@ if (target.id === "undoFinanceBtn") {
     alert("Nothing to undo!");
     return;
   }
+
+  if (!confirm("Undo the last payment/total change?")) return;
+  if (!confirm("This will reverse the most recent change. Continue?")) return;
 
   const last = financeUndoStack.pop();
 
@@ -864,18 +1057,7 @@ if (target.id === "undoFinanceBtn") {
     }
 
     if (target.id === "saveBtn") {
-      const data = {
-        id: activeId,
-        fName: getPanelFName(),
-        lName: getPanelLName(),
-        address: document.getElementById("p-address")?.value || "",
-        status: document.getElementById("p-status")?.value || "",
-        phone: document.getElementById("p-phone")?.value || "",
-        email: document.getElementById("p-email")?.value || ""
-      };
-      await window.api.updateProject(data);
-      await refreshList();
-      alert("✅ Saved Successfully!");
+      await savePanelChanges({ silent: false, force: true });
       openClient(activeId);
     }
 
@@ -887,13 +1069,135 @@ if (target.id === "undoFinanceBtn") {
       }
     }
 
-    if (target.id === "closeBtn") closePanel();
+    if (target.id === "closeBtn") {
+      await savePanelChanges({ silent: true, force: true });
+      closePanel();
+    }
   });
 }
 
 // ======================================================
 // HELPERS
 // ======================================================
+function formatMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0.00";
+  return num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function parseMoney(value) {
+  if (value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/[^0-9.-]/g, "");
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
+
+function applyMoneyInputBehavior(input) {
+  if (!input) return;
+
+  const initial = input.value?.trim();
+  if (initial) {
+    input.value = formatMoney(parseMoney(initial));
+  }
+
+  input.addEventListener("focus", () => {
+    input.value = input.value.replace(/,/g, "");
+  });
+
+  input.addEventListener("blur", () => {
+    const raw = input.value.trim();
+    if (!raw) return;
+    input.value = formatMoney(parseMoney(raw));
+  });
+}
+
+
+
+async function savePendingNotes({ silent = false } = {}) {
+  if (!activeId) return;
+
+  const noteEdits = document.querySelectorAll("textarea[data-note-id]");
+  for (const ta of noteEdits) {
+    const noteId = ta.dataset.noteId;
+    const clientId = ta.dataset.clientId;
+    const original = ta.dataset.original || "";
+    const trimmed = ta.value.trim();
+    if (!noteId || !clientId || !trimmed || trimmed === original) continue;
+    try {
+      await window.api.updateNote(clientId, noteId, trimmed);
+      ta.dataset.original = trimmed;
+    } catch (err) {
+      console.error(err);
+      if (!silent) alert("Failed to update note.");
+    }
+  }
+
+  const newNoteInput = document.getElementById("new-note-input");
+  if (newNoteInput) {
+    const content = newNoteInput.value.trim();
+    if (content) {
+      try {
+        await window.api.addNote(activeId, content);
+        newNoteInput.value = "";
+      } catch (err) {
+        console.error(err);
+        if (!silent) alert("Failed to add note.");
+      }
+    }
+  }
+}
+
+function collectPanelData() {
+  return {
+    id: activeId,
+    fName: getPanelFName(),
+    lName: getPanelLName(),
+    address: document.getElementById("p-address")?.value || "",
+    status: document.getElementById("p-status")?.value || "",
+    phone: document.getElementById("p-phone")?.value || "",
+    email: document.getElementById("p-email")?.value || ""
+  };
+}
+
+async function savePanelChanges({ silent = false, force = false } = {}) {
+  if (!activeId) return;
+  if (isSaving) {
+    queuedSave = true;
+    return;
+  }
+
+  isSaving = true;
+  setSaveStatus("saving");
+  try {
+    await savePendingNotes({ silent: true });
+
+    const data = collectPanelData();
+    if (!force && !data) return;
+
+    await window.api.updateProject(data);
+    await refreshList();
+    await setupNotesSection(activeId);
+    setSaveStatus("saved");
+    if (!silent) {
+      alert("Saved successfully.");
+    }
+  } catch (err) {
+    console.error(err);
+    setSaveStatus("error");
+    if (!silent) alert("Failed to save changes.");
+  } finally {
+    isSaving = false;
+    if (queuedSave) {
+      queuedSave = false;
+      savePanelChanges({ silent: true, force: true });
+    }
+  }
+}
+
 function getPanelFName() {
   const h2 = projectPanel.querySelector("h2");
   if (!h2) return "";
@@ -921,6 +1225,7 @@ function closePanel() {
   setTimeout(() => {
     projectPanel.innerHTML = '';
     projectPanel.style.display = "none";
+    activeId = null;
   }, 250);
 
   // RESTORE MOBILE VIEW
@@ -937,6 +1242,13 @@ function closePanel() {
 // SIDEBAR CLICK
 // ======================================================
 if (clientList) {
+  clientList.addEventListener("scroll", () => {
+    if (!sidebarListContainer) return;
+    const nearBottom =
+      clientList.scrollTop + clientList.clientHeight >= clientList.scrollHeight - 120;
+    if (nearBottom) renderSidebarChunk();
+  });
+
   clientList.addEventListener("click", (e) => {
     const item = e.target.closest(".client-card");
     if (item) openClient(parseInt(item.dataset.id));
@@ -946,10 +1258,14 @@ if (clientList) {
 // ======================================================
 // INITIAL LOAD
 // ======================================================
-document.addEventListener("keydown", (e) => {
+document.addEventListener("keydown", async (e) => {
   if (e.key === "Escape" && projectPanel && projectPanel.style.display === "block") {
+    await savePanelChanges({ silent: true, force: true });
     closePanel();
   }
 });
+
+
+// Ensure latest edits are sent before leaving the page
 
 refreshList();

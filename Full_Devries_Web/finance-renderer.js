@@ -223,13 +223,14 @@ function addUploadButtons() {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "application/pdf";
+      input.multiple = true;
       input.style.display = "none";
 
       input.addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
 
-        await uploadPDF(file, `${group}-${activeYear}`);
+        await uploadPDFs(files, `${group}-${activeYear}`);
         loadPDFs(group);
 
         // Update metrics after PDF upload
@@ -248,9 +249,9 @@ function addUploadButtons() {
 // ======================================================
 // UPLOAD
 // ======================================================
-async function uploadPDF(file, groupKey) {
+async function uploadPDFs(files, groupKey) {
   const formData = new FormData();
-  formData.append("file", file);
+  files.forEach(file => formData.append("files", file));
 
   try {
     const res = await fetch(`/api/pdf/upload/${groupKey}`, {
@@ -286,6 +287,8 @@ async function loadPDFs(group) {
       return;
     }
 
+    const isMobile = window.innerWidth <= 768;
+
     data.files.forEach((file) => {
       const card = document.createElement("div");
       card.style.display = "inline-flex";
@@ -297,18 +300,20 @@ async function loadPDFs(group) {
       card.style.borderRadius = "8px";
       card.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
 
-      const thumb = document.createElement("embed");
-      thumb.src = file.url;
-      thumb.type = "application/pdf";
-      thumb.width = "100";
-      thumb.height = "120";
-      thumb.style.borderRadius = "6px";
-      card.appendChild(thumb);
+      if (!isMobile) {
+        const thumb = document.createElement("embed");
+        thumb.src = file.url;
+        thumb.type = "application/pdf";
+        thumb.width = "100";
+        thumb.height = "120";
+        thumb.style.borderRadius = "6px";
+        card.appendChild(thumb);
+      }
 
       const name = document.createElement("div");
       name.innerText = file.name;
       name.style.fontSize = "12px";
-      name.style.marginTop = "6px";
+      name.style.marginTop = isMobile ? "2px" : "6px";
       name.style.textAlign = "center";
       card.appendChild(name);
 

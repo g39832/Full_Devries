@@ -213,6 +213,55 @@
       font-weight: bold;
       cursor: pointer;
     }
+
+    @media (max-width: 768px) {
+      header#Main_header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px 16px;
+      }
+
+      #toggleClientsBtn {
+        width: 100%;
+      }
+
+      .finance-container {
+        padding: 16px;
+        gap: 20px;
+      }
+
+      .section {
+        padding: 16px;
+      }
+
+      .metrics-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .metrics-table thead,
+      .metrics-table tbody {
+        display: table;
+        width: max-content;
+        min-width: 680px;
+      }
+
+      .metrics-table th,
+      .metrics-table td {
+        padding: 12px;
+      }
+
+      .tax-groups {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .drop-zone {
+        padding: 20px;
+      }
+    }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.225/pdf.min.js"></script>

@@ -92,10 +92,15 @@ router.get('/search', (req, res) => {
   if (!term) return res.json(db.prepare(`SELECT * FROM clients ORDER BY created_at DESC`).all());
 
   const clients = db.prepare(`
-    SELECT * FROM clients
-    WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? OR address LIKE ?
-    ORDER BY created_at DESC
-  `).all(`%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`);
+    SELECT DISTINCT clients.* FROM clients
+    LEFT JOIN notes ON notes.client_id = clients.id
+    WHERE clients.name LIKE ?
+       OR clients.phone LIKE ?
+       OR clients.email LIKE ?
+       OR clients.address LIKE ?
+       OR notes.content LIKE ?
+    ORDER BY clients.created_at DESC
+  `).all(`%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`);
 
   res.json(clients);
 });
