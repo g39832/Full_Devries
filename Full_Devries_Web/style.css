@@ -5,6 +5,28 @@
   font-family: 'Nunito', sans-serif;
 }
 
+:root {
+  --tap-size: 44px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+}
+
+input,
+select,
+textarea,
+button {
+  min-height: var(--tap-size);
+}
+
+body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /* =========================
    BODY & DASHBOARD LAYOUT
 ========================= */
@@ -416,6 +438,53 @@ button.btn-primary:hover {
 /* =========================
    RESPONSIVE
 ========================= */
+/* Notes section */
+.notes-section {
+  margin-top: 18px;
+  border-top: 1px solid #ddd;
+  padding-top: 14px;
+}
+
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  max-height: 240px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.notes-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notes-actions textarea {
+  width: 100%;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 140px;
+  border-radius: var(--radius-sm);
+}
+
+.notes-actions .add-note-btn {
+  align-self: flex-end;
+  width: 120px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  line-height: 1.1;
+  height: 40px;
+}
+
+.loading-state,
+.empty-state {
+  color: #ffb4b4;
+  font-size: 13px;
+  padding: 10px;
+}
+
 @media (max-width: 768px) {
   .crm-dashboard {
     flex-direction: column;
@@ -450,11 +519,19 @@ button.btn-primary:hover {
   }
 
   .detail-card .btn-primary {
-    width: 100%;
+    width: auto;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    min-height: 36px;
   }
 
   .drop-zone {
     padding: 16px;
+  }
+
+  .notes-actions .add-note-btn {
+    width: 100%;
+    align-self: stretch;
   }
 }
 /* ===== MOBILE CLIENT VIEW SWITCH ===== */

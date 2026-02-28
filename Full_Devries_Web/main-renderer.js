@@ -344,15 +344,20 @@ if (intakeFormEl) {
 // ======================================================
 async function refreshList() {
   try {
+    if (clientList) {
+      clientList.innerHTML = `<li class="loading-state">Loading clients...</li>`;
+    }
     const clients = await window.api.searchClients("");
+    if (!clients || clients.length === 0) {
+      clientList.innerHTML = `<li class="empty-state">No clients found.</li>`;
+      return;
+    }
     renderSidebar(clients);
   } catch (err) {
     console.error(err);
     if (clientList) {
       clientList.innerHTML =
-        `<div style="color:#ffb4b4; font-size:13px; padding:10px;">
-          Unable to load clients. Check server connection and refresh.
-        </div>`;
+        `<li class="empty-state">Unable to load clients. Check server connection and refresh.</li>`;
     }
   }
 }
@@ -532,12 +537,12 @@ async function openClient(id) {
           <div id="pdf-list"
             style="grid-column: span 2; margin-top:10px;"></div>
 
-          <div id="notes-section" style="grid-column: span 2; margin-top:18px; border-top:1px solid #ddd; padding-top:14px;">
+          <div id="notes-section" class="notes-section" style="grid-column: span 2;">
             <h3>Client Notes</h3>
-            <div id="notes-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:240px; overflow:auto; padding-right:4px;"></div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <textarea id="new-note-input" placeholder="Add a note..." rows="6" style="width:100%; padding:10px 12px; resize:vertical; min-height:140px;"></textarea>
-              <button id="add-note-btn" class="btn-primary" style="background:#007bff; padding:8px 12px; font-size:0.9rem; line-height:1.1; height:40px; align-self:flex-end; width:120px;">Add Note</button>
+            <div id="notes-list" class="notes-list"></div>
+            <div class="notes-actions">
+              <textarea id="new-note-input" placeholder="Add a note..." rows="6"></textarea>
+              <button id="add-note-btn" class="btn-primary add-note-btn" style="background:#007bff;">Add Note</button>
             </div>
           </div>
 
