@@ -331,10 +331,10 @@ if (intakeFormEl) {
       await window.api.saveClient(client);
       await refreshList();
       e.target.reset();
-      alert("✅ Client added!");
+      showToast("Client added", "success");
     } catch (err) {
       console.error(err);
-      alert("❌ Failed to add client.");
+      showToast("Failed to add client", "error");
     }
   });
 }
@@ -626,10 +626,10 @@ function setupFinancialSection(client) {
 
       triggerFinanceUpdate();
 
-      alert("✅ Total Due updated!");
+      showToast("Total updated", "success");
     } catch (err) {
       console.error(err);
-      alert("❌ Failed to update Total Due.");
+      showToast("Failed to update total", "error");
     }
   };
 
@@ -640,7 +640,7 @@ function setupFinancialSection(client) {
     try {
       const payment = parseMoney(paymentInput?.value) || 0;
       if (payment <= 0) {
-        alert("Enter valid payment amount.");
+        showToast("Enter a valid payment", "error");
         return;
       }
 
@@ -658,10 +658,10 @@ function setupFinancialSection(client) {
 
       triggerFinanceUpdate();
 
-      alert("✅ Payment added!");
+      showToast("Payment added", "success");
     } catch (err) {
       console.error(err);
-      alert("❌ Failed to add payment.");
+      showToast("Failed to add payment", "error");
     }
   };
 }
@@ -808,13 +808,13 @@ async function setupNotesSection(clientId) {
           cancelBtn.onclick = () => loadNotes();
           saveBtn.onclick = async () => {
             const trimmed = textarea.value.trim();
-            if (!trimmed) return alert("Note cannot be empty.");
+            if (!trimmed) { showToast("Note cannot be empty", "error"); return; }
             try {
               await window.api.updateNote(clientId, note.id, trimmed);
               loadNotes();
             } catch (err) {
               console.error(err);
-              alert("Failed to update note.");
+              showToast("Failed to update note", "error");
             }
           };
         };
@@ -828,7 +828,7 @@ async function setupNotesSection(clientId) {
             setSaveStatus("saved");
           } catch (err) {
             console.error(err);
-            alert("❌ Failed to delete note.");
+            showToast("Failed to delete note", "error");
           }
         };
 
@@ -857,7 +857,7 @@ async function setupNotesSection(clientId) {
     } catch (err) {
       console.error(err);
       setSaveStatus("error");
-      if (!silent) alert("Failed to add note.");
+      if (!silent) showToast("Failed to add note", "error");
     } finally {
       newNoteSaving = false;
     }
@@ -865,7 +865,7 @@ async function setupNotesSection(clientId) {
 
   addNoteBtn.onclick = async () => {
     const content = newNoteInput.value.trim();
-    if (!content) return alert("Cannot add empty note.");
+    if (!content) { showToast("Cannot add empty note", "error"); return; }
     await addNoteFromInput({ silent: false });
   };
 
@@ -887,10 +887,23 @@ function setupPDFUploadButton() {
   fileInput.addEventListener("change", async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length || !activeId) return;
-    await window.api.uploadPDFs(files, activeId);
 
-    loadPDFs(activeId);
-    fileInput.value = "";
+    const originalText = uploadBtn.textContent;
+    uploadBtn.textContent = "Uploading...";
+    uploadBtn.disabled = true;
+
+    try {
+      await window.api.uploadPDFs(files, activeId);
+      showToast("Upload complete", "success");
+      loadPDFs(activeId);
+    } catch (err) {
+      console.error(err);
+      showToast("Upload failed", "error");
+    } finally {
+      uploadBtn.textContent = originalText;
+      uploadBtn.disabled = false;
+      fileInput.value = "";
+    }
   });
 }
 
@@ -969,7 +982,7 @@ async function loadPDFs(clientId) {
           loadPDFs(clientId);
         } catch (err) {
           console.error(err);
-          alert("❌ Failed to delete file.");
+          showToast("Failed to delete file", "error");
         }
       };
 
@@ -1002,8 +1015,19 @@ function setupDropZone() {
   dz.addEventListener("drop", async (e) => {
     const files = Array.from(e.dataTransfer.files);
     if (!files.length || !activeId) return;
-    await window.api.uploadPDFs(files, activeId);
-    loadPDFs(activeId);
+
+    const original = dz.textContent;
+    dz.textContent = "Uploading...";
+    try {
+      await window.api.uploadPDFs(files, activeId);
+      showToast("Upload complete", "success");
+      loadPDFs(activeId);
+    } catch (err) {
+      console.error(err);
+      showToast("Upload failed", "error");
+    } finally {
+      dz.textContent = original;
+    }
   });
 }
 
@@ -1019,7 +1043,7 @@ if (projectPanel) {
 // ==============================
 if (target.id === "undoFinanceBtn") {
   if (financeUndoStack.length === 0) {
-    alert("Nothing to undo!");
+    showToast("Nothing to undo", "info");
     return;
   }
 
@@ -1045,10 +1069,10 @@ if (target.id === "undoFinanceBtn") {
 
     triggerFinanceUpdate();
 
-    alert("✅ Financial change undone!");
+    showToast("Undo complete", "success");
   } catch (err) {
     console.error(err);
-    alert("❌ Failed to undo change.");
+    showToast("Undo failed", "error");
   }
 
   return;
@@ -1084,6 +1108,24 @@ if (target.id === "undoFinanceBtn") {
 // ======================================================
 // HELPERS
 // ======================================================
+
+function showToast(message, type = "info", timeout = 2200) {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add("show"));
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 200);
+  }, timeout);
+}
+
 function formatMoney(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return "0.00";
@@ -1137,7 +1179,7 @@ async function savePendingNotes({ silent = false } = {}) {
       ta.dataset.original = trimmed;
     } catch (err) {
       console.error(err);
-      if (!silent) alert("Failed to update note.");
+      if (!silent) showToast("Failed to update note", "error");
     }
   }
 
@@ -1150,7 +1192,7 @@ async function savePendingNotes({ silent = false } = {}) {
         newNoteInput.value = "";
       } catch (err) {
         console.error(err);
-        if (!silent) alert("Failed to add note.");
+        if (!silent) showToast("Failed to add note", "error");
       }
     }
   }
@@ -1188,12 +1230,12 @@ async function savePanelChanges({ silent = false, force = false } = {}) {
     await setupNotesSection(activeId);
     setSaveStatus("saved");
     if (!silent) {
-      alert("Saved successfully.");
+      showToast("Saved", "success");
     }
   } catch (err) {
     console.error(err);
     setSaveStatus("error");
-    if (!silent) alert("Failed to save changes.");
+    if (!silent) showToast("Save failed", "error");
   } finally {
     isSaving = false;
     if (queuedSave) {
