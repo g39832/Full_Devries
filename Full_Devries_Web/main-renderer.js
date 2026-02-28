@@ -24,19 +24,68 @@ const STATUS_COLORS = {
   const style = document.createElement("style");
   style.innerHTML = `
   @media print {
-    body * { visibility: hidden; }
+    @page {
+      margin: 0.5in;
+    }
 
-    #projectPanel, #projectPanel * {
-      visibility: visible;
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+      color: #000 !important;
+      min-height: auto !important;
+    }
+
+    #Main_header,
+    .sidebar,
+    #toastContainer,
+    #pdfModal,
+    #projectOverlay {
+      display: none !important;
+    }
+
+    .crm-dashboard,
+    .main-content {
+      display: block !important;
+      width: 100% !important;
+      background: #fff !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: visible !important;
+    }
+
+    * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     #projectPanel {
-      position: absolute;
+      display: block !important;
+      position: static;
       left: 0;
       top: 0;
       width: 100%;
+      max-width: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      transform: none !important;
+      box-shadow: none !important;
       background: white !important;
       color: black !important;
+    }
+
+    #projectPanel .detail-card {
+      box-shadow: none !important;
+      background: white !important;
+      color: black !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .notes-list {
+      max-height: none !important;
+      overflow: visible !important;
     }
 
     #closeBtn,
