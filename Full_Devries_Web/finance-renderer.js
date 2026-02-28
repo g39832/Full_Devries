@@ -9,6 +9,22 @@ const yearSelector = document.getElementById("finance-year");
 let activeYear = new Date().getFullYear();
 let financeUndoStack = [];
 
+function formatCurrencyValue(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0.00";
+  return num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function parseCurrencyValue(value) {
+  if (value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/[^0-9.-]/g, "");
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
 // ======================================================
 // LOAD AVAILABLE YEARS (AUTO DROPDOWN)
 // ======================================================
@@ -86,9 +102,9 @@ async function updateFinanceMetrics() {
     financeTableBody.innerHTML = `
       <tr>
         <td>${activeYear}</td>
-        <td><input type="number" id="input-expected" value="${expected}" /></td>
-        <td><input type="number" id="input-received" value="${received}" /></td>
-        <td><input type="number" id="input-remaining" value="${remaining}" /></td>
+        <td><input type="text" id="input-expected" inputmode="decimal" value="${formatCurrencyValue(expected)}" /></td>
+        <td><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
+        <td><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
         <td><input type="number" id="input-clients" value="${clients}" /></td>
       </tr>
       <tr>
@@ -109,6 +125,17 @@ async function updateFinanceMetrics() {
     document
     .getElementById("undoFinanceYearBtn")
     .addEventListener("click", undoFinanceYear);
+
+    ["input-expected", "input-received", "input-remaining"].forEach((id) => {
+      const input = document.getElementById(id);
+      if (!input) return;
+      input.addEventListener("focus", () => {
+        input.value = input.value.replace(/,/g, "");
+      });
+      input.addEventListener("blur", () => {
+        input.value = formatCurrencyValue(parseCurrencyValue(input.value));
+      });
+    });
 
   } catch (err) {
     console.error("Metrics error:", err);
@@ -133,9 +160,9 @@ async function saveFinanceYear() {
 
   const data = {
     year: activeYear,
-    totalExpected: Number(document.getElementById("input-expected").value),
-    totalReceived: Number(document.getElementById("input-received").value),
-    totalRemaining: Number(document.getElementById("input-remaining").value),
+    totalExpected: parseCurrencyValue(document.getElementById("input-expected").value),
+    totalReceived: parseCurrencyValue(document.getElementById("input-received").value),
+    totalRemaining: parseCurrencyValue(document.getElementById("input-remaining").value),
     totalClients: Number(document.getElementById("input-clients").value),
   };
 

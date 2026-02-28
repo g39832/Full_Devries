@@ -247,6 +247,37 @@ router.put('/clients/:id/reset-paid', (req, res) => {
 });
 
 // ======================================================
+// RESTORE FINANCE STATE (FOR UNDO)
+// ======================================================
+router.put('/clients/:id/finance-state', (req, res) => {
+  const id = req.params.id;
+  const { total_due, amount_paid } = req.body || {};
+
+  const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const nextTotal = Number(total_due) || 0;
+  const nextPaid = Number(amount_paid) || 0;
+  const nextBalance = nextTotal - nextPaid;
+  const deltaPaid = nextPaid - (client.amount_paid || 0);
+
+  const transaction = db.transaction(() => {
+    if (deltaPaid !== 0) {
+      db.prepare(`INSERT INTO payments (client_id, amount, payment_date) VALUES (?, ?, datetime('now'))`).run(id, deltaPaid);
+    }
+    db.prepare(`UPDATE clients SET total_due = ?, amount_paid = ?, balance = ? WHERE id = ?`)
+      .run(nextTotal, nextPaid, nextBalance, id);
+  });
+  transaction();
+
+  const year = new Date(client.created_at).getFullYear();
+  updateFinanceTotals(year);
+
+  const updatedClient = db.prepare(`SELECT total_due, amount_paid, balance FROM clients WHERE id = ?`).get(id);
+  res.json({ success: true, client: updatedClient, financeUpdated: true });
+});
+
+// ======================================================
 // FINANCE PAGE ROUTES
 // ======================================================
 

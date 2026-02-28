@@ -205,6 +205,16 @@ window.api = {
     return res.json();
   },
 
+  async restoreFinanceState(clientId, state) {
+    const res = await fetch(`/api/clients/${clientId}/finance-state`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state)
+    });
+    if (!res.ok) throw new Error("Restore failed");
+    return res.json();
+  },
+
 
 
   // ==========================
@@ -665,7 +675,8 @@ function setupFinancialSection(client) {
       financeUndoStack.push({
         clientId: activeId,
         total_due: client.total_due,
-        amount_paid: client.amount_paid
+        amount_paid: client.amount_paid,
+        balance: client.balance
       });
 
       await window.api.updateTotal(activeId, newTotal);
@@ -697,7 +708,8 @@ function setupFinancialSection(client) {
       financeUndoStack.push({
         clientId: activeId,
         total_due: client.total_due,
-        amount_paid: client.amount_paid
+        amount_paid: client.amount_paid,
+        balance: client.balance
       });
 
       await window.api.addPayment(activeId, payment);
@@ -1097,21 +1109,15 @@ if (target.id === "undoFinanceBtn") {
   }
 
   if (!confirm("Undo the last payment/total change?")) return;
-  if (!confirm("This will reverse the most recent change. Continue?")) return;
 
   const last = financeUndoStack.pop();
 
   try {
-    // Reset amount paid completely
-    await window.api.resetAmountPaid(last.clientId);
-
-    // Restore total_due
-    await window.api.updateTotal(last.clientId, last.total_due);
-
-    // Restore amount_paid
-    if (last.amount_paid > 0) {
-      await window.api.addPayment(last.clientId, last.amount_paid);
-    }
+    await window.api.restoreFinanceState(last.clientId, {
+      total_due: last.total_due,
+      amount_paid: last.amount_paid,
+      balance: last.balance
+    });
 
     await refreshList();
     await openClient(last.clientId);
