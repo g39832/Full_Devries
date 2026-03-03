@@ -1,95 +1,67 @@
 const express = require('express');
 const db = require('./db');
+const { asyncHandler, assertObject, parseIntField, parseStringField } = require('./request-utils');
 
 const router = express.Router();
 
 // ======================================================
 // LIST NOTES
 // ======================================================
-router.get('/list/:clientId', (req, res) => {
-  const clientId = parseInt(req.params.clientId);
-  if (isNaN(clientId)) return res.status(400).json({ error: 'Invalid client ID' });
-
-  try {
-    const notes = db.prepare(
-      'SELECT id, content, created_at FROM notes WHERE client_id = ? ORDER BY created_at ASC'
-    ).all(clientId);
-    res.json({ notes });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to list notes' });
-  }
-});
+router.get('/list/:clientId', asyncHandler(async (req, res) => {
+  const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  const notes = db.prepare(
+    'SELECT id, content, created_at FROM notes WHERE client_id = ? ORDER BY created_at ASC'
+  ).all(clientId);
+  res.json({ notes });
+}));
 
 // ======================================================
 // ADD NOTE (matches frontend)
 // ======================================================
-router.post('/add/:clientId', (req, res) => {
-  const clientId = parseInt(req.params.clientId);
-  const { note } = req.body; // <-- changed to match frontend
+router.post('/add/:clientId', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  const note = parseStringField(req.body.note, 'note', { minLength: 1, maxLength: 10000 });
 
-  if (isNaN(clientId)) return res.status(400).json({ error: 'Invalid client ID' });
-  if (!note || !note.trim()) return res.status(400).json({ error: 'Note content is required' });
+  const result = db.prepare(
+    'INSERT INTO notes (client_id, content) VALUES (?, ?)'
+  ).run(clientId, note);
 
-  try {
-    const result = db.prepare(
-      'INSERT INTO notes (client_id, content) VALUES (?, ?)'
-    ).run(clientId, note.trim());
+  const newNote = db.prepare(
+    'SELECT id, content, created_at FROM notes WHERE id = ?'
+  ).get(result.lastInsertRowid);
 
-    const newNote = db.prepare(
-      'SELECT id, content, created_at FROM notes WHERE id = ?'
-    ).get(result.lastInsertRowid);
-
-    res.json({ note: newNote });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to add note' });
-  }
-});
+  res.json({ note: newNote });
+}));
 
 // ======================================================
 // DELETE NOTE
 // ======================================================
-router.delete('/delete/:clientId/:noteId', (req, res) => {
-  const clientId = parseInt(req.params.clientId);
-  const noteId = parseInt(req.params.noteId);
-
-  if (isNaN(clientId) || isNaN(noteId)) return res.status(400).json({ error: 'Invalid parameters' });
-
-  try {
-    db.prepare('DELETE FROM notes WHERE id = ? AND client_id = ?').run(noteId, clientId);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete note' });
-  }
-});
+router.delete('/delete/:clientId/:noteId', asyncHandler(async (req, res) => {
+  const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
+  db.prepare('DELETE FROM notes WHERE id = ? AND client_id = ?').run(noteId, clientId);
+  res.json({ success: true });
+}));
 
 // ======================================================
 // UPDATE NOTE
 // ======================================================
-router.put('/update/:clientId/:noteId', (req, res) => {
-  const clientId = parseInt(req.params.clientId);
-  const noteId = parseInt(req.params.noteId);
-  const { note } = req.body; // <-- changed to match frontend
+router.put('/update/:clientId/:noteId', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
+  const note = parseStringField(req.body.note, 'note', { minLength: 1, maxLength: 10000 });
 
-  if (isNaN(clientId) || isNaN(noteId)) return res.status(400).json({ error: 'Invalid parameters' });
-  if (!note || !note.trim()) return res.status(400).json({ error: 'Note content is required' });
+  db.prepare(
+    'UPDATE notes SET content = ? WHERE id = ? AND client_id = ?'
+  ).run(note, noteId, clientId);
 
-  try {
-    db.prepare(
-      'UPDATE notes SET content = ? WHERE id = ? AND client_id = ?'
-    ).run(note.trim(), noteId, clientId);
+  const updatedNote = db.prepare(
+    'SELECT id, content, created_at FROM notes WHERE id = ?'
+  ).get(noteId);
 
-    const updatedNote = db.prepare(
-      'SELECT id, content, created_at FROM notes WHERE id = ?'
-    ).get(noteId);
-
-    res.json({ note: updatedNote });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update note' });
-  }
-});
+  res.json({ note: updatedNote });
+}));
 
 module.exports = router;

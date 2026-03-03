@@ -1,18 +1,25 @@
 const path = require('path');
 const Database = require('better-sqlite3');
 
-/*
-  IMPORTANT:
-  This forces the database file to always live
-  in the ROOT of your project folder,
-  not inside /api
-*/
-
-const dbPath = path.join(__dirname, '..', 'crm.db');
+const configuredDbPath = process.env.DB_PATH;
+const dbPath = configuredDbPath
+  ? (path.isAbsolute(configuredDbPath)
+      ? configuredDbPath
+      : path.resolve(__dirname, '..', configuredDbPath))
+  : path.join(__dirname, '..', 'crm.db');
 const db = new Database(dbPath);
 
-// Enable foreign keys (IMPORTANT for relational integrity)
+// Keep database durability/safety defaults explicit.
 db.pragma('foreign_keys = ON');
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+
+function ensureColumn(tableName, columnName, columnDef) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all().map((col) => col.name);
+  if (!columns.includes(columnName)) {
+    db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`).run();
+  }
+}
 
 // =========================
 // SETTINGS TABLE
@@ -40,6 +47,11 @@ db.prepare(`
     balance REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
+`).run();
+
+db.prepare(`
+  CREATE INDEX IF NOT EXISTS idx_clients_created_at
+  ON clients(created_at)
 `).run();
 
 // =========================
@@ -78,44 +90,37 @@ db.prepare(`
   )
 `).run();
 
+db.prepare(`
+  CREATE INDEX IF NOT EXISTS idx_notes_client
+  ON notes(client_id)
+`).run();
+
 // =========================
 // FINANCE OVERRIDES TABLE
 // =========================
 db.prepare(`
   CREATE TABLE IF NOT EXISTS finance_overrides (
-    year INTEGER PRIMARY KEY,
-    notes TEXT
-  )
-`).run();
-
-db.prepare(`
-  CREATE INDEX IF NOT EXISTS idx_notes_client
-  ON notes(client_id)
-`).run();
-
-
-// =========================
-// FINANCE OVERRIDES TABLE (NEW)
-// =========================
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS finance_overrides (
-    year INTEGER PRIMARY KEY,
-    totalClients INTEGER DEFAULT 0,
-    totalExpected REAL DEFAULT 0,
-    totalReceived REAL DEFAULT 0,
-    totalRemaining REAL DEFAULT 0,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER UNIQUE,
+    total_expected REAL DEFAULT 0,
+    total_received REAL DEFAULT 0,
+    total_remaining REAL DEFAULT 0,
+    total_clients INTEGER DEFAULT 0,
+    notes TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `).run();
 
+ensureColumn('finance_overrides', 'year', 'INTEGER UNIQUE');
+ensureColumn('finance_overrides', 'total_expected', 'REAL DEFAULT 0');
+ensureColumn('finance_overrides', 'total_received', 'REAL DEFAULT 0');
+ensureColumn('finance_overrides', 'total_remaining', 'REAL DEFAULT 0');
+ensureColumn('finance_overrides', 'total_clients', 'INTEGER DEFAULT 0');
+ensureColumn('finance_overrides', 'notes', 'TEXT');
+ensureColumn('finance_overrides', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
 
-module.exports = db;
-
-
-
-db.prepare(`
-  CREATE INDEX IF NOT EXISTS idx_notes_client
-  ON notes(client_id)
-`).run();
+db.createBackup = async function createBackup(destinationPath) {
+  return db.backup(destinationPath);
+};
 
 module.exports = db;

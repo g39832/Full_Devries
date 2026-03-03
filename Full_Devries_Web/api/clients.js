@@ -1,36 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('./db');
-
-// ======================================================
-// ENSURE FINANCE_OVERRIDES TABLE HAS REQUIRED COLUMNS
-// ======================================================
-function ensureFinanceOverridesColumns() {
-  db.prepare(`
-    CREATE TABLE IF NOT EXISTS finance_overrides (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      year INTEGER UNIQUE
-    )
-  `).run();
-
-  const columnsToAdd = [
-    { name: 'total_expected', type: 'REAL', default: 0 },
-    { name: 'total_received', type: 'REAL', default: 0 },
-    { name: 'total_remaining', type: 'REAL', default: 0 },
-    { name: 'total_clients', type: 'INTEGER', default: 0 },
-  ];
-
-  const existingColumns = db.prepare(`PRAGMA table_info(finance_overrides)`).all().map(c => c.name);
-
-  columnsToAdd.forEach(col => {
-    if (!existingColumns.includes(col.name)) {
-      db.prepare(`ALTER TABLE finance_overrides ADD COLUMN ${col.name} ${col.type} DEFAULT ${col.default}`).run();
-      console.log(`Added missing column '${col.name}' to finance_overrides`);
-    }
-  });
-}
-
-ensureFinanceOverridesColumns();
+const { asyncHandler, assertObject, parseIntField, parseNumberField, parseStringField, parseYear } = require('./request-utils');
 
 // ======================================================
 // HELPER: SAFE YEAR HANDLER
@@ -87,8 +58,8 @@ function updateFinanceTotals(year) {
 // ======================================================
 // SEARCH CLIENTS
 // ======================================================
-router.get('/search', (req, res) => {
-  const term = req.query.q || '';
+router.get('/search', asyncHandler(async (req, res) => {
+  const term = parseStringField(req.query.q ?? '', 'q', { required: false, maxLength: 200, defaultValue: '' });
   if (!term) return res.json(db.prepare(`SELECT * FROM clients ORDER BY created_at DESC`).all());
 
   const clients = db.prepare(`
@@ -103,17 +74,25 @@ router.get('/search', (req, res) => {
   `).all(`%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`);
 
   res.json(clients);
-});
+}));
 
 // ======================================================
 // SAVE CLIENT
 // ======================================================
-router.post('/save-client', (req, res) => {
-  const { fName, lName, name, phone, email, address, status, total_due } = req.body;
-  const finalName = name || ((fName || '') + ' ' + (lName || '')).trim();
+router.post('/save-client', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const fName = parseStringField(req.body.fName ?? '', 'fName', { required: false, maxLength: 120, defaultValue: '' });
+  const lName = parseStringField(req.body.lName ?? '', 'lName', { required: false, maxLength: 120, defaultValue: '' });
+  const name = parseStringField(req.body.name ?? '', 'name', { required: false, maxLength: 260, defaultValue: '' });
+  const phone = parseStringField(req.body.phone ?? '', 'phone', { required: false, maxLength: 40, defaultValue: '' });
+  const email = parseStringField(req.body.email ?? '', 'email', { required: false, maxLength: 254, defaultValue: '' });
+  const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500, defaultValue: '' });
+  const status = parseStringField(req.body.status ?? 'Lead', 'status', { required: false, maxLength: 30, defaultValue: 'Lead' });
+  const totalDueInput = req.body.total_due;
+  const finalName = name || `${fName} ${lName}`.trim();
   if (!finalName) return res.status(400).json({ error: 'Name required' });
 
-  const total = Number(total_due) || 0;
+  const total = parseNumberField(totalDueInput ?? 0, 'total_due', { required: false, defaultValue: 0 });
   const createdAt = new Date().toISOString();
 
   db.prepare(`
@@ -126,19 +105,30 @@ router.post('/save-client', (req, res) => {
   updateFinanceTotals(year);
 
   res.json({ success: true, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // UPDATE CLIENT
 // ======================================================
-router.post('/update-project', (req, res) => {
-  const { id, fName, lName, name, phone, email, address, status, total_due } = req.body;
-  const finalName = name || ((fName || '') + ' ' + (lName || '')).trim();
+router.post('/update-project', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.body.id, 'id', { min: 1 });
+  const fName = parseStringField(req.body.fName ?? '', 'fName', { required: false, maxLength: 120, defaultValue: '' });
+  const lName = parseStringField(req.body.lName ?? '', 'lName', { required: false, maxLength: 120, defaultValue: '' });
+  const name = parseStringField(req.body.name ?? '', 'name', { required: false, maxLength: 260, defaultValue: '' });
+  const phone = parseStringField(req.body.phone ?? '', 'phone', { required: false, maxLength: 40, defaultValue: '' });
+  const email = parseStringField(req.body.email ?? '', 'email', { required: false, maxLength: 254, defaultValue: '' });
+  const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500, defaultValue: '' });
+  const status = parseStringField(req.body.status ?? '', 'status', { required: false, maxLength: 30, defaultValue: '' });
+  const totalDueInput = req.body.total_due;
+  const finalName = name || `${fName} ${lName}`.trim();
 
   const client = db.prepare(`SELECT amount_paid, total_due, created_at FROM clients WHERE id = ?`).get(id);
   if (!client) return res.status(404).json({ error: 'Client not found' });
 
-  const newTotal = typeof total_due !== 'undefined' ? Number(total_due) : client.total_due;
+  const newTotal = typeof totalDueInput !== 'undefined'
+    ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: client.total_due })
+    : client.total_due;
   const newBalance = (newTotal || 0) - (client.amount_paid || 0);
 
   db.prepare(`
@@ -152,13 +142,14 @@ router.post('/update-project', (req, res) => {
   updateFinanceTotals(year);
 
   res.json({ success: true, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // DELETE CLIENT
 // ======================================================
-router.post('/delete-client', (req, res) => {
-  const { id } = req.body;
+router.post('/delete-client', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.body.id, 'id', { min: 1 });
   const client = db.prepare(`SELECT created_at FROM clients WHERE id = ?`).get(id);
 
   db.prepare(`DELETE FROM clients WHERE id = ?`).run(id);
@@ -169,19 +160,19 @@ router.post('/delete-client', (req, res) => {
   }
 
   res.json({ success: true, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // UPDATE TOTAL DUE
 // ======================================================
-router.put('/clients/:id/total', (req, res) => {
-  const id = req.params.id;
-  const { total_due } = req.body;
+router.put('/clients/:id/total', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const total = parseNumberField(req.body.total_due, 'total_due', { required: false, defaultValue: 0 });
 
   const client = db.prepare(`SELECT amount_paid, created_at FROM clients WHERE id = ?`).get(id);
   if (!client) return res.status(404).json({ error: 'Client not found' });
 
-  const total = Number(total_due) || 0;
   const newBalance = total - (client.amount_paid || 0);
 
   db.prepare(`UPDATE clients SET total_due = ?, balance = ? WHERE id = ?`).run(total, newBalance, id);
@@ -190,16 +181,15 @@ router.put('/clients/:id/total', (req, res) => {
   updateFinanceTotals(year);
 
   res.json({ success: true, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // RECORD PAYMENT
 // ======================================================
-router.put('/clients/:id/payment', (req, res) => {
-  const id = req.params.id;
-  const { payment } = req.body;
-
-  const amount = Number(payment || 0);
+router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const amount = parseNumberField(req.body.payment ?? 0, 'payment', { required: false, defaultValue: 0 });
   if (amount <= 0) return res.status(400).json({ error: 'Invalid payment amount' });
 
   const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
@@ -218,13 +208,13 @@ router.put('/clients/:id/payment', (req, res) => {
   updateFinanceTotals(year);
 
   res.json({ success: true, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // RESET BALANCE (FORCE RE-CALC)
 // ======================================================
-router.put('/clients/:id/reset-paid', (req, res) => {
-  const id = req.params.id;
+router.put('/clients/:id/reset-paid', asyncHandler(async (req, res) => {
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
   const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
   if (!client) return res.status(404).json({ error: 'Client not found' });
 
@@ -244,20 +234,22 @@ router.put('/clients/:id/reset-paid', (req, res) => {
 
   const updatedClient = db.prepare(`SELECT total_due, amount_paid, balance FROM clients WHERE id = ?`).get(id);
   res.json({ success: true, client: updatedClient, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // RESTORE FINANCE STATE (FOR UNDO)
 // ======================================================
-router.put('/clients/:id/finance-state', (req, res) => {
-  const id = req.params.id;
-  const { total_due, amount_paid } = req.body || {};
+router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const total_due = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0 });
+  const amount_paid = parseNumberField(req.body.amount_paid ?? 0, 'amount_paid', { required: false, defaultValue: 0 });
 
   const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
   if (!client) return res.status(404).json({ error: 'Client not found' });
 
-  const nextTotal = Number(total_due) || 0;
-  const nextPaid = Number(amount_paid) || 0;
+  const nextTotal = total_due;
+  const nextPaid = amount_paid;
   const nextBalance = nextTotal - nextPaid;
   const deltaPaid = nextPaid - (client.amount_paid || 0);
 
@@ -275,14 +267,14 @@ router.put('/clients/:id/finance-state', (req, res) => {
 
   const updatedClient = db.prepare(`SELECT total_due, amount_paid, balance FROM clients WHERE id = ?`).get(id);
   res.json({ success: true, client: updatedClient, financeUpdated: true });
-});
+}));
 
 // ======================================================
 // FINANCE PAGE ROUTES
 // ======================================================
 
 // Available Years
-router.get('/finance/years', (req, res) => {
+router.get('/finance/years', asyncHandler(async (req, res) => {
   try {
     const clientYears = db.prepare(`SELECT DISTINCT strftime('%Y', created_at) AS year FROM clients`).all().map(r => parseInt(r.year));
     const paymentYears = db.prepare(`SELECT DISTINCT strftime('%Y', payment_date) AS year FROM payments`).all().map(r => parseInt(r.year));
@@ -300,19 +292,18 @@ router.get('/finance/years', (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch years' });
   }
-});
+}));
 
 // Save Year Data (Manual Override)
-router.post('/finance/save', (req, res) => {
-  const { year, totalExpected, totalReceived, totalRemaining, totalClients } = req.body;
-  if (!year || isNaN(year)) return res.status(400).json({ error: 'Valid year required' });
+router.post('/finance/save', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const year = parseYear(req.body.year, 'year');
+  const totalExpected = parseNumberField(req.body.totalExpected ?? 0, 'totalExpected', { required: false, defaultValue: 0 });
+  const totalReceived = parseNumberField(req.body.totalReceived ?? 0, 'totalReceived', { required: false, defaultValue: 0 });
+  const totalRemaining = parseNumberField(req.body.totalRemaining ?? 0, 'totalRemaining', { required: false, defaultValue: 0 });
+  const totalClients = parseIntField(req.body.totalClients ?? 0, 'totalClients', { required: false, min: 0 });
 
   try {
-    const expected = Number(totalExpected) || 0;
-    const received = Number(totalReceived) || 0;
-    const remaining = Number(totalRemaining) || 0;
-    const clients = Number(totalClients) || 0;
-
     db.prepare(`
       INSERT INTO finance_overrides (year, total_expected, total_received, total_remaining, total_clients)
       VALUES (?, ?, ?, ?, ?)
@@ -321,20 +312,20 @@ router.post('/finance/save', (req, res) => {
         total_received=excluded.total_received,
         total_remaining=excluded.total_remaining,
         total_clients=excluded.total_clients
-    `).run(year, expected, received, remaining, clients);
+    `).run(year, totalExpected, totalReceived, totalRemaining, totalClients);
 
     res.json({ success: true });
   } catch (err) {
     console.error("Finance save error:", err);
     res.status(500).json({ error: 'Failed to save finance data' });
   }
-});
+}));
 
 // ======================================================
 // UPDATED FINANCE SUMMARY (CUMULATIVE BALANCES)
 // ======================================================
-router.get('/finance/summary', (req, res) => {
-  const year = getValidYear(req.query.year);
+router.get('/finance/summary', asyncHandler(async (req, res) => {
+  const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
 
   try {
     // Totals from ALL clients
@@ -376,13 +367,13 @@ router.get('/finance/summary', (req, res) => {
     console.error("Finance summary error:", err);
     res.status(500).json({ error: 'Failed to fetch project summary' });
   }
-});
+}));
 
 // ======================================================
 // CASH SUMMARY
 // ======================================================
-router.get('/finance/cash-summary', (req, res) => {
-  const year = getValidYear(req.query.year);
+router.get('/finance/cash-summary', asyncHandler(async (req, res) => {
+  const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
   try {
     const summary = db.prepare(`
       SELECT
@@ -402,40 +393,42 @@ router.get('/finance/cash-summary', (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch cash summary' });
   }
-});
+}));
 
 // ======================================================
 // NOTES ROUTES
 // ======================================================
-router.get('/clients/:id/notes', (req, res) => {
-  const id = req.params.id;
+router.get('/clients/:id/notes', asyncHandler(async (req, res) => {
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
   res.json(db.prepare(`SELECT id, content, created_at FROM notes WHERE client_id = ? ORDER BY created_at DESC`).all(id));
-});
+}));
 
-router.post('/clients/:id/notes', (req, res) => {
-  const id = req.params.id;
-  const { content } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Note content required' });
+router.post('/clients/:id/notes', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const content = parseStringField(req.body.content, 'content', { minLength: 1, maxLength: 10000 });
 
-  db.prepare(`INSERT INTO notes (client_id, content) VALUES (?, ?)`).run(id, content.trim());
+  db.prepare(`INSERT INTO notes (client_id, content) VALUES (?, ?)`).run(id, content);
   res.json({ success: true });
-});
+}));
 
-router.put('/clients/:id/notes/:noteId', (req, res) => {
-  const { id, noteId } = req.params;
-  const { content } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Note content required' });
+router.put('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
+  const content = parseStringField(req.body.content, 'content', { minLength: 1, maxLength: 10000 });
 
-  const result = db.prepare(`UPDATE notes SET content = ? WHERE id = ? AND client_id = ?`).run(content.trim(), noteId, id);
+  const result = db.prepare(`UPDATE notes SET content = ? WHERE id = ? AND client_id = ?`).run(content, noteId, id);
   if (result.changes === 0) return res.status(404).json({ error: 'Note not found' });
   res.json({ success: true });
-});
+}));
 
-router.delete('/clients/:id/notes/:noteId', (req, res) => {
-  const { id, noteId } = req.params;
+router.delete('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
   const result = db.prepare(`DELETE FROM notes WHERE id = ? AND client_id = ?`).run(noteId, id);
   if (result.changes === 0) return res.status(404).json({ error: 'Note not found' });
   res.json({ success: true });
-});
+}));
 
 module.exports = router;

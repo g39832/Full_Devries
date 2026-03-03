@@ -3,38 +3,72 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { asyncHandler, parseStringField } = require('./request-utils');
+const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
+
+function isValidUploadKey(key) {
+  return typeof key === 'string' && /^[a-zA-Z0-9_-]+$/.test(key);
+}
+
+function safeUploadDir(key) {
+  if (!isValidUploadKey(key)) return null;
+  const resolved = path.resolve(uploadsRoot, key);
+  if (!resolved.startsWith(uploadsRoot + path.sep)) return null;
+  return resolved;
+}
+
+function safeFilePath(key, fileName) {
+  const dir = safeUploadDir(key);
+  if (!dir || !fileName) return null;
+  const baseName = path.basename(fileName);
+  if (baseName !== fileName) return null;
+  const resolved = path.resolve(dir, baseName);
+  if (!resolved.startsWith(dir + path.sep)) return null;
+  return resolved;
+}
 
 // ======================================================
 // STORAGE CONFIG
 // ======================================================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const key = req.params.clientId || req.params.groupKey || req.params.key;
-    if (!key) return cb(new Error("No upload key provided"));
+    const key = req.params.key;
+    if (!isValidUploadKey(key)) return cb(new Error('Invalid upload key'));
 
-    const dir = path.join(__dirname, '..', 'uploads', key);
+    const dir = safeUploadDir(key);
+    if (!dir) return cb(new Error('Invalid upload path'));
 
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+    const cleanName = path.basename(file.originalname || 'file');
+    cb(null, Date.now() + '-' + cleanName);
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+    files: 20
+  }
+});
 
 // ======================================================
 // UPLOAD FILE(S) BY KEY (clientId or groupKey)
 // ======================================================
 router.post('/upload/:key', upload.any(), (req, res) => {
   const files = req.files || [];
+  const key = req.params.key;
+  if (!isValidUploadKey(key)) {
+    return res.status(400).json({ success: false, error: 'Invalid upload key.' });
+  }
   if (!files.length) {
     return res.status(400).json({ success: false, error: 'No files uploaded.' });
   }
 
-  const key = req.params.key;
   res.json({
     success: true,
     files: files.map(f => ({
@@ -47,9 +81,12 @@ router.post('/upload/:key', upload.any(), (req, res) => {
 // ======================================================
 // LIST FILES BY KEY (clientId or groupKey)
 // ======================================================
-router.get('/list/:key', (req, res) => {
-  const key = req.params.key;
-  const dir = path.join(__dirname, '..', 'uploads', key);
+router.get('/list/:key', asyncHandler(async (req, res) => {
+  const key = parseStringField(req.params.key, 'key', { minLength: 1, maxLength: 128 });
+  const dir = safeUploadDir(key);
+  if (!dir) {
+    return res.status(400).json({ success: false, error: 'Invalid list key.' });
+  }
 
   if (!fs.existsSync(dir)) return res.json({ success: true, files: [] });
 
@@ -63,20 +100,23 @@ router.get('/list/:key', (req, res) => {
     }));
 
   res.json({ success: true, files });
-});
+}));
 
 // ======================================================
 // DELETE FILE BY CLIENT ID (existing)
 // ======================================================
-router.delete('/delete/:clientId/:fileName', (req, res) => {
-  const clientId = req.params.clientId;
-  const fileName = req.params.fileName;
+router.delete('/delete/:clientId/:fileName', asyncHandler(async (req, res) => {
+  const clientId = parseStringField(req.params.clientId, 'clientId', { minLength: 1, maxLength: 128 });
+  const fileName = parseStringField(req.params.fileName, 'fileName', { minLength: 1, maxLength: 512, trim: false });
 
   if (!clientId || !fileName) {
     return res.status(400).json({ success: false, error: 'Missing clientId or fileName' });
   }
 
-  const filePath = path.join(__dirname, '..', 'uploads', clientId, fileName);
+  const filePath = safeFilePath(clientId, fileName);
+  if (!filePath) {
+    return res.status(400).json({ success: false, error: 'Invalid path input' });
+  }
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ success: false, error: 'File not found' });
@@ -89,21 +129,24 @@ router.delete('/delete/:clientId/:fileName', (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, error: 'Failed to delete file' });
   }
-});
+}));
 
 // ======================================================
 // DELETE FILE BY GROUP-YEAR (FINANCE FIX)
 // ======================================================
-router.delete('/delete/:groupKey', (req, res) => {
-  const groupKey = req.params.groupKey;
-  const fileName = req.query.file;
+router.delete('/delete/:groupKey', asyncHandler(async (req, res) => {
+  const groupKey = parseStringField(req.params.groupKey, 'groupKey', { minLength: 1, maxLength: 128 });
+  const fileName = parseStringField(req.query.file, 'file', { minLength: 1, maxLength: 512, trim: false });
 
   if (!groupKey || !fileName) {
     return res.status(400).json({ error: 'Missing groupKey or file name' });
   }
 
   const decodedFile = decodeURIComponent(fileName);
-  const filePath = path.join(__dirname, '..', 'uploads', groupKey, decodedFile);
+  const filePath = safeFilePath(groupKey, decodedFile);
+  if (!filePath) {
+    return res.status(400).json({ error: 'Invalid path input' });
+  }
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File not found' });
@@ -116,6 +159,6 @@ router.delete('/delete/:groupKey', (req, res) => {
     console.error('Finance delete error:', err);
     res.status(500).json({ error: 'Delete failed' });
   }
-});
+}));
 
 module.exports = router;

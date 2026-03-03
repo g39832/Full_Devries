@@ -5,7 +5,9 @@
   "type": "commonjs",
   "description": "Roofing CRM 2026 - Web Version",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:smoke": "node scripts/smoke-test.js",
+    "test:backup-restore": "node scripts/verify-backup-restore.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
