@@ -1,3 +1,27 @@
+try {
+  // Prefer dotenv when installed.
+  require('dotenv').config();
+} catch {
+  // Fallback .env loader for local dev when dotenv is unavailable.
+  const fsFallback = require('fs');
+  const pathFallback = require('path');
+  const envPath = pathFallback.join(__dirname, '.env');
+  if (fsFallback.existsSync(envPath)) {
+    const lines = fsFallback.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const equalsIndex = trimmed.indexOf('=');
+      if (equalsIndex === -1) continue;
+      const key = trimmed.slice(0, equalsIndex).trim();
+      const rawValue = trimmed.slice(equalsIndex + 1).trim();
+      const unquoted = rawValue.replace(/^['"]|['"]$/g, '');
+      if (key && process.env[key] === undefined) {
+        process.env[key] = unquoted;
+      }
+    }
+  }
+}
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -44,9 +68,13 @@ function requireApiAuth(req, res, next) {
   return res.status(401).json({ success: false, error: 'Unauthorized' });
 }
 
-// ===== API REQUEST LOGGING =====
+// ===== API REQUEST TIMING =====
 app.use('/api', (req, res, next) => {
-  console.log(`[API] ${req.method} ${req.originalUrl}`);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[API] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+  });
   next();
 });
 
@@ -105,9 +133,27 @@ app.use((req, res, next) => {
 });
 
 // ===== STATIC FILES =====
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
-app.use('/uploads', requirePageAuth, express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname)));
+app.use('/assets', express.static(path.join(__dirname, 'assets'), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}));
+app.use('/uploads', requirePageAuth, express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '5m',
+  etag: true,
+  lastModified: true
+}));
+app.use(express.static(path.join(__dirname), {
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  }
+}));
 
 // ===== PAGE ROUTES =====
 app.get('/', (req, res) => {

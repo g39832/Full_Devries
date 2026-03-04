@@ -9,10 +9,12 @@ const router = express.Router();
 // ======================================================
 router.get('/list/:clientId', asyncHandler(async (req, res) => {
   const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
-  const notes = db.prepare(
-    'SELECT id, content, created_at FROM notes WHERE client_id = ? ORDER BY created_at ASC'
-  ).all(clientId);
-  res.json({ notes });
+  await db.schemaReady;
+  const { rows } = await db.query(
+    'SELECT id, content, created_at FROM notes WHERE client_id = $1 ORDER BY created_at ASC',
+    [clientId]
+  );
+  res.json({ notes: rows });
 }));
 
 // ======================================================
@@ -23,15 +25,13 @@ router.post('/add/:clientId', asyncHandler(async (req, res) => {
   const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
   const note = parseStringField(req.body.note, 'note', { minLength: 1, maxLength: 10000 });
 
-  const result = db.prepare(
-    'INSERT INTO notes (client_id, content) VALUES (?, ?)'
-  ).run(clientId, note);
+  await db.schemaReady;
+  const { rows } = await db.query(
+    'INSERT INTO notes (client_id, content) VALUES ($1, $2) RETURNING id, content, created_at',
+    [clientId, note]
+  );
 
-  const newNote = db.prepare(
-    'SELECT id, content, created_at FROM notes WHERE id = ?'
-  ).get(result.lastInsertRowid);
-
-  res.json({ note: newNote });
+  res.json({ note: rows[0] });
 }));
 
 // ======================================================
@@ -40,7 +40,9 @@ router.post('/add/:clientId', asyncHandler(async (req, res) => {
 router.delete('/delete/:clientId/:noteId', asyncHandler(async (req, res) => {
   const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
   const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
-  db.prepare('DELETE FROM notes WHERE id = ? AND client_id = ?').run(noteId, clientId);
+
+  await db.schemaReady;
+  await db.query('DELETE FROM notes WHERE id = $1 AND client_id = $2', [noteId, clientId]);
   res.json({ success: true });
 }));
 
@@ -53,15 +55,18 @@ router.put('/update/:clientId/:noteId', asyncHandler(async (req, res) => {
   const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
   const note = parseStringField(req.body.note, 'note', { minLength: 1, maxLength: 10000 });
 
-  db.prepare(
-    'UPDATE notes SET content = ? WHERE id = ? AND client_id = ?'
-  ).run(note, noteId, clientId);
+  await db.schemaReady;
+  await db.query(
+    'UPDATE notes SET content = $1 WHERE id = $2 AND client_id = $3',
+    [note, noteId, clientId]
+  );
 
-  const updatedNote = db.prepare(
-    'SELECT id, content, created_at FROM notes WHERE id = ?'
-  ).get(noteId);
+  const { rows } = await db.query(
+    'SELECT id, content, created_at FROM notes WHERE id = $1',
+    [noteId]
+  );
 
-  res.json({ note: updatedNote });
+  res.json({ note: rows[0] || null });
 }));
 
 module.exports = router;

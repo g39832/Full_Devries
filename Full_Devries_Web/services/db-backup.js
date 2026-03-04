@@ -25,7 +25,7 @@ function ensureBackupDir() {
 function listBackups() {
   ensureBackupDir();
   return fs.readdirSync(backupRoot)
-    .filter((name) => name.startsWith(backupPrefix) && name.endsWith('.db'))
+    .filter((name) => name.startsWith(backupPrefix) && name.endsWith('.json'))
     .map((name) => ({
       name,
       fullPath: path.join(backupRoot, name),
@@ -49,9 +49,23 @@ function pruneBackups(maxBackups) {
 
 async function runBackup({ retention = 30 } = {}) {
   ensureBackupDir();
-  const fileName = `${backupPrefix}${getTimestamp()}.db`;
+  await db.schemaReady;
+
+  const tables = ['settings', 'clients', 'payments', 'notes', 'finance_overrides'];
+  const snapshot = {
+    createdAt: new Date().toISOString(),
+    tables: {}
+  };
+
+  for (const table of tables) {
+    const { rows } = await db.query(`SELECT * FROM ${table}`);
+    snapshot.tables[table] = rows;
+  }
+
+  const fileName = `${backupPrefix}${getTimestamp()}.json`;
   const destination = path.join(backupRoot, fileName);
-  await db.createBackup(destination);
+  fs.writeFileSync(destination, JSON.stringify(snapshot, null, 2), 'utf8');
+
   pruneBackups(retention);
   console.log(`Database backup created: ${fileName}`);
 }

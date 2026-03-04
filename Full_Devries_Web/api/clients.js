@@ -8,51 +8,59 @@ const { asyncHandler, assertObject, parseIntField, parseNumberField, parseString
 // ======================================================
 function getValidYear(inputYear) {
   const currentYear = new Date().getFullYear();
-  const parsed = parseInt(inputYear);
+  const parsed = Number.parseInt(inputYear, 10);
   return !parsed || parsed < 2000 || parsed > currentYear + 5
     ? currentYear
     : parsed;
 }
 
+function parseOptionalPagination(value, max) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.min(parsed, max);
+}
+
 // ======================================================
 // HELPER: UPDATE FINANCE TOTALS FOR A YEAR
 // ======================================================
-function updateFinanceTotals(year) {
+async function updateFinanceTotals(year) {
   year = getValidYear(year);
 
-  // Total clients created in that year
-  const clientSummary = db.prepare(`
+  const clientSummaryResult = await db.query(`
     SELECT
-      COUNT(*) AS totalClients,
-      COALESCE(SUM(total_due), 0) AS totalExpected,
-      COALESCE(SUM(balance), 0) AS totalRemaining
+      COUNT(*)::int AS total_clients,
+      COALESCE(SUM(total_due), 0) AS total_expected,
+      COALESCE(SUM(balance), 0) AS total_remaining
     FROM clients
-    WHERE strftime('%Y', created_at) = ?
-  `).get(year.toString());
+    WHERE EXTRACT(YEAR FROM created_at)::int = $1
+  `, [year]);
 
-  // Payments made in that year
-  const paymentSummary = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) AS totalReceived
+  const paymentSummaryResult = await db.query(`
+    SELECT COALESCE(SUM(amount), 0) AS total_received
     FROM payments
-    WHERE strftime('%Y', payment_date) = ?
-  `).get(year.toString());
+    WHERE EXTRACT(YEAR FROM payment_date)::int = $1
+  `, [year]);
 
-  // Upsert totals into finance_overrides
-  db.prepare(`
+  const clientSummary = clientSummaryResult.rows[0] || {};
+  const paymentSummary = paymentSummaryResult.rows[0] || {};
+
+  await db.query(`
     INSERT INTO finance_overrides (year, total_expected, total_received, total_remaining, total_clients)
-    VALUES (?, ?, ?, ?, ?)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT(year) DO UPDATE SET
-      total_expected=excluded.total_expected,
-      total_received=excluded.total_received,
-      total_remaining=excluded.total_remaining,
-      total_clients=excluded.total_clients
-  `).run(
+      total_expected = EXCLUDED.total_expected,
+      total_received = EXCLUDED.total_received,
+      total_remaining = EXCLUDED.total_remaining,
+      total_clients = EXCLUDED.total_clients,
+      updated_at = CURRENT_TIMESTAMP
+  `, [
     year,
-    clientSummary.totalExpected,
-    paymentSummary.totalReceived,
-    clientSummary.totalRemaining,
-    clientSummary.totalClients
-  );
+    Number(clientSummary.total_expected || 0),
+    Number(paymentSummary.total_received || 0),
+    Number(clientSummary.total_remaining || 0),
+    Number(clientSummary.total_clients || 0)
+  ]);
 }
 
 // ======================================================
@@ -60,20 +68,42 @@ function updateFinanceTotals(year) {
 // ======================================================
 router.get('/search', asyncHandler(async (req, res) => {
   const term = parseStringField(req.query.q ?? '', 'q', { required: false, maxLength: 200, defaultValue: '' });
-  if (!term) return res.json(db.prepare(`SELECT * FROM clients ORDER BY created_at DESC`).all());
+  const limit = parseOptionalPagination(req.query.limit, 500);
+  const offset = parseOptionalPagination(req.query.offset, 1000000) ?? 0;
+  await db.schemaReady;
 
-  const clients = db.prepare(`
-    SELECT DISTINCT clients.* FROM clients
+  if (!term) {
+    if (limit === null) {
+      const { rows } = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
+      return res.json(rows);
+    }
+    const { rows } = await db.query(
+      'SELECT * FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return res.json(rows);
+  }
+
+  const like = `%${term}%`;
+  let sql = `
+    SELECT DISTINCT clients.*
+    FROM clients
     LEFT JOIN notes ON notes.client_id = clients.id
-    WHERE clients.name LIKE ?
-       OR clients.phone LIKE ?
-       OR clients.email LIKE ?
-       OR clients.address LIKE ?
-       OR notes.content LIKE ?
+    WHERE clients.name ILIKE $1
+       OR clients.phone ILIKE $2
+       OR clients.email ILIKE $3
+       OR clients.address ILIKE $4
+       OR notes.content ILIKE $5
     ORDER BY clients.created_at DESC
-  `).all(`%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`);
+  `;
+  const params = [like, like, like, like, like];
+  if (limit !== null) {
+    sql += ' LIMIT $6 OFFSET $7';
+    params.push(limit, offset);
+  }
+  const { rows } = await db.query(sql, params);
 
-  res.json(clients);
+  return res.json(rows);
 }));
 
 // ======================================================
@@ -95,16 +125,16 @@ router.post('/save-client', asyncHandler(async (req, res) => {
   const total = parseNumberField(totalDueInput ?? 0, 'total_due', { required: false, defaultValue: 0 });
   const createdAt = new Date().toISOString();
 
-  db.prepare(`
+  await db.schemaReady;
+  await db.query(`
     INSERT INTO clients (name, phone, email, address, status, total_due, amount_paid, balance, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
-  `).run(finalName, phone, email, address, status || 'Lead', total, total, createdAt);
+    VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8)
+  `, [finalName, phone, email, address, status || 'Lead', total, total, createdAt]);
 
-  // Update finance totals for the year of the new client
   const year = new Date(createdAt).getFullYear();
-  updateFinanceTotals(year);
+  await updateFinanceTotals(year);
 
-  res.json({ success: true, financeUpdated: true });
+  return res.json({ success: true, financeUpdated: true });
 }));
 
 // ======================================================
@@ -123,25 +153,26 @@ router.post('/update-project', asyncHandler(async (req, res) => {
   const totalDueInput = req.body.total_due;
   const finalName = name || `${fName} ${lName}`.trim();
 
-  const client = db.prepare(`SELECT amount_paid, total_due, created_at FROM clients WHERE id = ?`).get(id);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
+  await db.schemaReady;
+  const clientResult = await db.query('SELECT amount_paid, total_due, created_at FROM clients WHERE id = $1', [id]);
+  const clientRow = clientResult.rows[0];
+  if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
   const newTotal = typeof totalDueInput !== 'undefined'
-    ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: client.total_due })
-    : client.total_due;
-  const newBalance = (newTotal || 0) - (client.amount_paid || 0);
+    ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: Number(clientRow.total_due || 0) })
+    : Number(clientRow.total_due || 0);
+  const newBalance = (newTotal || 0) - Number(clientRow.amount_paid || 0);
 
-  db.prepare(`
+  await db.query(`
     UPDATE clients
-    SET name = ?, phone = ?, email = ?, address = ?, status = ?, total_due = ?, balance = ?
-    WHERE id = ?
-  `).run(finalName, phone, email, address, status, newTotal || 0, newBalance, id);
+    SET name = $1, phone = $2, email = $3, address = $4, status = $5, total_due = $6, balance = $7
+    WHERE id = $8
+  `, [finalName, phone, email, address, status, newTotal || 0, newBalance, id]);
 
-  // Update finance totals for this client’s year
-  const year = new Date(client.created_at).getFullYear();
-  updateFinanceTotals(year);
+  const year = new Date(clientRow.created_at).getFullYear();
+  await updateFinanceTotals(year);
 
-  res.json({ success: true, financeUpdated: true });
+  return res.json({ success: true, financeUpdated: true });
 }));
 
 // ======================================================
@@ -150,16 +181,19 @@ router.post('/update-project', asyncHandler(async (req, res) => {
 router.post('/delete-client', asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.body.id, 'id', { min: 1 });
-  const client = db.prepare(`SELECT created_at FROM clients WHERE id = ?`).get(id);
 
-  db.prepare(`DELETE FROM clients WHERE id = ?`).run(id);
+  await db.schemaReady;
+  const clientResult = await db.query('SELECT created_at FROM clients WHERE id = $1', [id]);
+  const clientRow = clientResult.rows[0];
 
-  if (client) {
-    const year = new Date(client.created_at).getFullYear();
-    updateFinanceTotals(year);
+  await db.query('DELETE FROM clients WHERE id = $1', [id]);
+
+  if (clientRow) {
+    const year = new Date(clientRow.created_at).getFullYear();
+    await updateFinanceTotals(year);
   }
 
-  res.json({ success: true, financeUpdated: true });
+  return res.json({ success: true, financeUpdated: true });
 }));
 
 // ======================================================
@@ -170,17 +204,19 @@ router.put('/clients/:id/total', asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total = parseNumberField(req.body.total_due, 'total_due', { required: false, defaultValue: 0 });
 
-  const client = db.prepare(`SELECT amount_paid, created_at FROM clients WHERE id = ?`).get(id);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
+  await db.schemaReady;
+  const clientResult = await db.query('SELECT amount_paid, created_at FROM clients WHERE id = $1', [id]);
+  const clientRow = clientResult.rows[0];
+  if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const newBalance = total - (client.amount_paid || 0);
+  const newBalance = total - Number(clientRow.amount_paid || 0);
 
-  db.prepare(`UPDATE clients SET total_due = ?, balance = ? WHERE id = ?`).run(total, newBalance, id);
+  await db.query('UPDATE clients SET total_due = $1, balance = $2 WHERE id = $3', [total, newBalance, id]);
 
-  const year = new Date(client.created_at).getFullYear();
-  updateFinanceTotals(year);
+  const year = new Date(clientRow.created_at).getFullYear();
+  await updateFinanceTotals(year);
 
-  res.json({ success: true, financeUpdated: true });
+  return res.json({ success: true, financeUpdated: true });
 }));
 
 // ======================================================
@@ -192,22 +228,37 @@ router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
   const amount = parseNumberField(req.body.payment ?? 0, 'payment', { required: false, defaultValue: 0 });
   if (amount <= 0) return res.status(400).json({ error: 'Invalid payment amount' });
 
-  const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
+  await db.schemaReady;
+  const clientResult = await db.query('SELECT total_due, amount_paid, created_at FROM clients WHERE id = $1', [id]);
+  const clientRow = clientResult.rows[0];
+  if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const newPaid = (client.amount_paid || 0) + amount;
-  const newBalance = (client.total_due || 0) - newPaid;
+  const newPaid = Number(clientRow.amount_paid || 0) + amount;
+  const newBalance = Number(clientRow.total_due || 0) - newPaid;
 
-  const transaction = db.transaction(() => {
-    db.prepare(`INSERT INTO payments (client_id, amount, payment_date) VALUES (?, ?, datetime('now'))`).run(id, amount);
-    db.prepare(`UPDATE clients SET amount_paid = ?, balance = ? WHERE id = ?`).run(newPaid, newBalance, id);
-  });
-  transaction();
+  const conn = await db.pool.connect();
+  try {
+    await conn.query('BEGIN');
+    await conn.query(
+      'INSERT INTO payments (client_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
+      [id, amount]
+    );
+    await conn.query(
+      'UPDATE clients SET amount_paid = $1, balance = $2 WHERE id = $3',
+      [newPaid, newBalance, id]
+    );
+    await conn.query('COMMIT');
+  } catch (err) {
+    await conn.query('ROLLBACK');
+    throw err;
+  } finally {
+    conn.release();
+  }
 
   const year = new Date().getFullYear();
-  updateFinanceTotals(year);
+  await updateFinanceTotals(year);
 
-  res.json({ success: true, financeUpdated: true });
+  return res.json({ success: true, financeUpdated: true });
 }));
 
 // ======================================================
@@ -215,25 +266,38 @@ router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
 // ======================================================
 router.put('/clients/:id/reset-paid', asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
-  const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
 
-  const alreadyPaid = client.amount_paid || 0;
+  await db.schemaReady;
+  const clientResult = await db.query('SELECT total_due, amount_paid, created_at FROM clients WHERE id = $1', [id]);
+  const clientRow = clientResult.rows[0];
+  if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const transaction = db.transaction(() => {
+  const alreadyPaid = Number(clientRow.amount_paid || 0);
+
+  const conn = await db.pool.connect();
+  try {
+    await conn.query('BEGIN');
     if (alreadyPaid > 0) {
-      db.prepare(`INSERT INTO payments (client_id, amount, payment_date) VALUES (?, ?, datetime('now'))`).run(id, -alreadyPaid);
+      await conn.query(
+        'INSERT INTO payments (client_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
+        [id, -alreadyPaid]
+      );
     }
-    const newBalance = client.total_due;
-    db.prepare(`UPDATE clients SET amount_paid = 0, balance = ? WHERE id = ?`).run(newBalance, id);
-  });
-  transaction();
+    const newBalance = Number(clientRow.total_due || 0);
+    await conn.query('UPDATE clients SET amount_paid = 0, balance = $1 WHERE id = $2', [newBalance, id]);
+    await conn.query('COMMIT');
+  } catch (err) {
+    await conn.query('ROLLBACK');
+    throw err;
+  } finally {
+    conn.release();
+  }
 
-  const year = new Date(client.created_at).getFullYear();
-  updateFinanceTotals(year);
+  const year = new Date(clientRow.created_at).getFullYear();
+  await updateFinanceTotals(year);
 
-  const updatedClient = db.prepare(`SELECT total_due, amount_paid, balance FROM clients WHERE id = ?`).get(id);
-  res.json({ success: true, client: updatedClient, financeUpdated: true });
+  const updatedClientResult = await db.query('SELECT total_due, amount_paid, balance FROM clients WHERE id = $1', [id]);
+  return res.json({ success: true, client: updatedClientResult.rows[0], financeUpdated: true });
 }));
 
 // ======================================================
@@ -245,28 +309,42 @@ router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
   const total_due = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0 });
   const amount_paid = parseNumberField(req.body.amount_paid ?? 0, 'amount_paid', { required: false, defaultValue: 0 });
 
-  const client = db.prepare(`SELECT total_due, amount_paid, created_at FROM clients WHERE id = ?`).get(id);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
+  await db.schemaReady;
+  const clientResult = await db.query('SELECT total_due, amount_paid, created_at FROM clients WHERE id = $1', [id]);
+  const clientRow = clientResult.rows[0];
+  if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
   const nextTotal = total_due;
   const nextPaid = amount_paid;
   const nextBalance = nextTotal - nextPaid;
-  const deltaPaid = nextPaid - (client.amount_paid || 0);
+  const deltaPaid = nextPaid - Number(clientRow.amount_paid || 0);
 
-  const transaction = db.transaction(() => {
+  const conn = await db.pool.connect();
+  try {
+    await conn.query('BEGIN');
     if (deltaPaid !== 0) {
-      db.prepare(`INSERT INTO payments (client_id, amount, payment_date) VALUES (?, ?, datetime('now'))`).run(id, deltaPaid);
+      await conn.query(
+        'INSERT INTO payments (client_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
+        [id, deltaPaid]
+      );
     }
-    db.prepare(`UPDATE clients SET total_due = ?, amount_paid = ?, balance = ? WHERE id = ?`)
-      .run(nextTotal, nextPaid, nextBalance, id);
-  });
-  transaction();
+    await conn.query(
+      'UPDATE clients SET total_due = $1, amount_paid = $2, balance = $3 WHERE id = $4',
+      [nextTotal, nextPaid, nextBalance, id]
+    );
+    await conn.query('COMMIT');
+  } catch (err) {
+    await conn.query('ROLLBACK');
+    throw err;
+  } finally {
+    conn.release();
+  }
 
-  const year = new Date(client.created_at).getFullYear();
-  updateFinanceTotals(year);
+  const year = new Date(clientRow.created_at).getFullYear();
+  await updateFinanceTotals(year);
 
-  const updatedClient = db.prepare(`SELECT total_due, amount_paid, balance FROM clients WHERE id = ?`).get(id);
-  res.json({ success: true, client: updatedClient, financeUpdated: true });
+  const updatedClientResult = await db.query('SELECT total_due, amount_paid, balance FROM clients WHERE id = $1', [id]);
+  return res.json({ success: true, client: updatedClientResult.rows[0], financeUpdated: true });
 }));
 
 // ======================================================
@@ -276,21 +354,27 @@ router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
 // Available Years
 router.get('/finance/years', asyncHandler(async (req, res) => {
   try {
-    const clientYears = db.prepare(`SELECT DISTINCT strftime('%Y', created_at) AS year FROM clients`).all().map(r => parseInt(r.year));
-    const paymentYears = db.prepare(`SELECT DISTINCT strftime('%Y', payment_date) AS year FROM payments`).all().map(r => parseInt(r.year));
-    const overrideYears = db.prepare(`SELECT year FROM finance_overrides`).all().map(r => parseInt(r.year));
+    await db.schemaReady;
+
+    const clientYearsResult = await db.query('SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int AS year FROM clients');
+    const paymentYearsResult = await db.query('SELECT DISTINCT EXTRACT(YEAR FROM payment_date)::int AS year FROM payments');
+    const overrideYearsResult = await db.query('SELECT year FROM finance_overrides WHERE year IS NOT NULL');
+
+    const clientYears = clientYearsResult.rows.map((r) => Number(r.year));
+    const paymentYears = paymentYearsResult.rows.map((r) => Number(r.year));
+    const overrideYears = overrideYearsResult.rows.map((r) => Number(r.year));
 
     const allYears = [...clientYears, ...paymentYears, ...overrideYears];
-    const uniqueYears = [...new Set(allYears.filter(Boolean))];
+    const uniqueYears = [...new Set(allYears.filter((y) => Number.isInteger(y) && y > 0))];
 
     const currentYear = new Date().getFullYear();
     if (!uniqueYears.includes(currentYear)) uniqueYears.push(currentYear);
 
     uniqueYears.sort((a, b) => b - a);
-    res.json(uniqueYears);
+    return res.json(uniqueYears);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch years' });
+    return res.status(500).json({ error: 'Failed to fetch years' });
   }
 }));
 
@@ -304,20 +388,22 @@ router.post('/finance/save', asyncHandler(async (req, res) => {
   const totalClients = parseIntField(req.body.totalClients ?? 0, 'totalClients', { required: false, min: 0 });
 
   try {
-    db.prepare(`
+    await db.schemaReady;
+    await db.query(`
       INSERT INTO finance_overrides (year, total_expected, total_received, total_remaining, total_clients)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT(year) DO UPDATE SET
-        total_expected=excluded.total_expected,
-        total_received=excluded.total_received,
-        total_remaining=excluded.total_remaining,
-        total_clients=excluded.total_clients
-    `).run(year, totalExpected, totalReceived, totalRemaining, totalClients);
+        total_expected = EXCLUDED.total_expected,
+        total_received = EXCLUDED.total_received,
+        total_remaining = EXCLUDED.total_remaining,
+        total_clients = EXCLUDED.total_clients,
+        updated_at = CURRENT_TIMESTAMP
+    `, [year, totalExpected, totalReceived, totalRemaining, totalClients]);
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    console.error("Finance save error:", err);
-    res.status(500).json({ error: 'Failed to save finance data' });
+    console.error('Finance save error:', err);
+    return res.status(500).json({ error: 'Failed to save finance data' });
   }
 }));
 
@@ -328,44 +414,46 @@ router.get('/finance/summary', asyncHandler(async (req, res) => {
   const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
 
   try {
-    // Totals from ALL clients
-    const clientSummary = db.prepare(`
+    await db.schemaReady;
+
+    const clientSummaryResult = await db.query(`
       SELECT
-        COUNT(*) AS totalClients,
-        COALESCE(SUM(total_due), 0) AS totalExpected,
-        COALESCE(SUM(balance), 0) AS totalRemaining
+        COUNT(*)::int AS total_clients,
+        COALESCE(SUM(total_due), 0) AS total_expected,
+        COALESCE(SUM(balance), 0) AS total_remaining
       FROM clients
-    `).get();
+    `);
 
-    // Total received from payments in this year
-    const paymentSummary = db.prepare(`
-      SELECT COALESCE(SUM(amount), 0) AS totalReceived
+    const paymentSummaryResult = await db.query(`
+      SELECT COALESCE(SUM(amount), 0) AS total_received
       FROM payments
-      WHERE strftime('%Y', payment_date) = ?
-    `).get(year.toString());
+      WHERE EXTRACT(YEAR FROM payment_date)::int = $1
+    `, [year]);
 
-    // Use override if exists
-    const override = db.prepare(`SELECT * FROM finance_overrides WHERE year = ?`).get(year);
+    const overrideResult = await db.query('SELECT * FROM finance_overrides WHERE year = $1', [year]);
+
+    const clientSummary = clientSummaryResult.rows[0] || {};
+    const paymentSummary = paymentSummaryResult.rows[0] || {};
+    const override = overrideResult.rows[0];
 
     const finalSummary = override || {
-      totalClients: clientSummary.totalClients,
-      totalExpected: clientSummary.totalExpected,
-      totalReceived: paymentSummary.totalReceived,
-      totalRemaining: clientSummary.totalRemaining
+      total_clients: Number(clientSummary.total_clients || 0),
+      total_expected: Number(clientSummary.total_expected || 0),
+      total_received: Number(paymentSummary.total_received || 0),
+      total_remaining: Number(clientSummary.total_remaining || 0)
     };
 
-    res.json({
+    return res.json({
       mode: 'project',
       year,
-      totalClients: finalSummary.total_clients ?? finalSummary.totalClients ?? 0,
-      totalExpected: finalSummary.total_expected ?? finalSummary.totalExpected ?? 0,
-      totalReceived: finalSummary.total_received ?? finalSummary.totalReceived ?? 0,
-      totalRemaining: finalSummary.total_remaining ?? finalSummary.totalRemaining ?? 0
+      totalClients: Number(finalSummary.total_clients || finalSummary.totalClients || 0),
+      totalExpected: Number(finalSummary.total_expected || finalSummary.totalExpected || 0),
+      totalReceived: Number(finalSummary.total_received || finalSummary.totalReceived || 0),
+      totalRemaining: Number(finalSummary.total_remaining || finalSummary.totalRemaining || 0)
     });
-
   } catch (err) {
-    console.error("Finance summary error:", err);
-    res.status(500).json({ error: 'Failed to fetch project summary' });
+    console.error('Finance summary error:', err);
+    return res.status(500).json({ error: 'Failed to fetch project summary' });
   }
 }));
 
@@ -375,23 +463,26 @@ router.get('/finance/summary', asyncHandler(async (req, res) => {
 router.get('/finance/cash-summary', asyncHandler(async (req, res) => {
   const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
   try {
-    const summary = db.prepare(`
+    await db.schemaReady;
+    const summaryResult = await db.query(`
       SELECT
-        COUNT(DISTINCT client_id) AS payingClients,
-        COALESCE(SUM(amount), 0) AS totalCashReceived
+        COUNT(DISTINCT client_id)::int AS paying_clients,
+        COALESCE(SUM(amount), 0) AS total_cash_received
       FROM payments
-      WHERE strftime('%Y', payment_date) = ?
-    `).get(year.toString());
+      WHERE EXTRACT(YEAR FROM payment_date)::int = $1
+    `, [year]);
 
-    res.json({
+    const summary = summaryResult.rows[0] || {};
+
+    return res.json({
       mode: 'cash',
       year,
-      payingClients: summary.payingClients || 0,
-      totalCashReceived: summary.totalCashReceived || 0
+      payingClients: Number(summary.paying_clients || 0),
+      totalCashReceived: Number(summary.total_cash_received || 0)
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch cash summary' });
+    return res.status(500).json({ error: 'Failed to fetch cash summary' });
   }
 }));
 
@@ -400,7 +491,12 @@ router.get('/finance/cash-summary', asyncHandler(async (req, res) => {
 // ======================================================
 router.get('/clients/:id/notes', asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
-  res.json(db.prepare(`SELECT id, content, created_at FROM notes WHERE client_id = ? ORDER BY created_at DESC`).all(id));
+  await db.schemaReady;
+  const { rows } = await db.query(
+    'SELECT id, content, created_at FROM notes WHERE client_id = $1 ORDER BY created_at DESC',
+    [id]
+  );
+  return res.json(rows);
 }));
 
 router.post('/clients/:id/notes', asyncHandler(async (req, res) => {
@@ -408,8 +504,9 @@ router.post('/clients/:id/notes', asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const content = parseStringField(req.body.content, 'content', { minLength: 1, maxLength: 10000 });
 
-  db.prepare(`INSERT INTO notes (client_id, content) VALUES (?, ?)`).run(id, content);
-  res.json({ success: true });
+  await db.schemaReady;
+  await db.query('INSERT INTO notes (client_id, content) VALUES ($1, $2)', [id, content]);
+  return res.json({ success: true });
 }));
 
 router.put('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
@@ -418,17 +515,20 @@ router.put('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
   const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
   const content = parseStringField(req.body.content, 'content', { minLength: 1, maxLength: 10000 });
 
-  const result = db.prepare(`UPDATE notes SET content = ? WHERE id = ? AND client_id = ?`).run(content, noteId, id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Note not found' });
-  res.json({ success: true });
+  await db.schemaReady;
+  const result = await db.query('UPDATE notes SET content = $1 WHERE id = $2 AND client_id = $3', [content, noteId, id]);
+  if (result.rowCount === 0) return res.status(404).json({ error: 'Note not found' });
+  return res.json({ success: true });
 }));
 
 router.delete('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
-  const result = db.prepare(`DELETE FROM notes WHERE id = ? AND client_id = ?`).run(noteId, id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Note not found' });
-  res.json({ success: true });
+
+  await db.schemaReady;
+  const result = await db.query('DELETE FROM notes WHERE id = $1 AND client_id = $2', [noteId, id]);
+  if (result.rowCount === 0) return res.status(404).json({ error: 'Note not found' });
+  return res.json({ success: true });
 }));
 
 module.exports = router;

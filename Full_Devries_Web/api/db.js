@@ -1,126 +1,135 @@
-const path = require('path');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 
-const configuredDbPath = process.env.DB_PATH;
-const dbPath = configuredDbPath
-  ? (path.isAbsolute(configuredDbPath)
-      ? configuredDbPath
-      : path.resolve(__dirname, '..', configuredDbPath))
-  : path.join(__dirname, '..', 'crm.db');
-const db = new Database(dbPath);
+const connectionString = process.env.DATABASE_URL;
+const slowQueryMs = Number(process.env.DB_SLOW_QUERY_MS || 250);
 
-// Keep database durability/safety defaults explicit.
-db.pragma('foreign_keys = ON');
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
+function envInt(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
-function ensureColumn(tableName, columnName, columnDef) {
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all().map((col) => col.name);
-  if (!columns.includes(columnName)) {
-    db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`).run();
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
+
+const pool = new Pool({
+  connectionString,
+  ssl: { rejectUnauthorized: false },
+  max: envInt('DB_POOL_MAX', 20),
+  idleTimeoutMillis: envInt('DB_IDLE_TIMEOUT_MS', 30000),
+  connectionTimeoutMillis: envInt('DB_CONNECT_TIMEOUT_MS', 10000),
+  keepAlive: true,
+  statement_timeout: envInt('DB_STATEMENT_TIMEOUT_MS', 15000),
+  query_timeout: envInt('DB_QUERY_TIMEOUT_MS', 15000),
+});
+
+async function query(text, params) {
+  const start = Date.now();
+  try {
+    const result = await pool.query(text, params);
+    const duration = Date.now() - start;
+    if (duration >= slowQueryMs) {
+      const compactSql = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+      console.warn(`[DB][slow ${duration}ms] ${compactSql}`);
+    }
+    return result;
+  } catch (err) {
+    const duration = Date.now() - start;
+    const compactSql = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+    console.error(`[DB][error ${duration}ms] ${compactSql}`);
+    throw err;
   }
 }
 
-// =========================
-// SETTINGS TABLE
-// =========================
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  )
-`).run();
+async function initSchema() {
+  // SETTINGS
+  await query(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+  `);
 
-// =========================
-// CLIENTS TABLE
-// =========================
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    phone TEXT,
-    email TEXT,
-    address TEXT,
-    status TEXT DEFAULT 'Lead',
-    total_due REAL DEFAULT 0,
-    amount_paid REAL DEFAULT 0,
-    balance REAL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`).run();
+  // CLIENTS
+  await query(`
+    CREATE TABLE IF NOT EXISTS clients (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      address TEXT,
+      status TEXT DEFAULT 'Lead',
+      total_due DOUBLE PRECISION DEFAULT 0,
+      amount_paid DOUBLE PRECISION DEFAULT 0,
+      balance DOUBLE PRECISION DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
-db.prepare(`
-  CREATE INDEX IF NOT EXISTS idx_clients_created_at
-  ON clients(created_at)
-`).run();
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_clients_created_at
+    ON clients(created_at);
+  `);
 
-// =========================
-// PAYMENTS TABLE
-// =========================
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
-  )
-`).run();
+  // PAYMENTS
+  await query(`
+    CREATE TABLE IF NOT EXISTS payments (
+      id BIGSERIAL PRIMARY KEY,
+      client_id BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      amount DOUBLE PRECISION NOT NULL,
+      payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
-db.prepare(`
-  CREATE INDEX IF NOT EXISTS idx_payments_client
-  ON payments(client_id)
-`).run();
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_payments_client
+    ON payments(client_id);
+  `);
 
-db.prepare(`
-  CREATE INDEX IF NOT EXISTS idx_payments_date
-  ON payments(payment_date)
-`).run();
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_payments_date
+    ON payments(payment_date);
+  `);
 
-// =========================
-// NOTES TABLE
-// =========================
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
-  )
-`).run();
+  // NOTES
+  await query(`
+    CREATE TABLE IF NOT EXISTS notes (
+      id BIGSERIAL PRIMARY KEY,
+      client_id BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
-db.prepare(`
-  CREATE INDEX IF NOT EXISTS idx_notes_client
-  ON notes(client_id)
-`).run();
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_notes_client
+    ON notes(client_id);
+  `);
 
-// =========================
-// FINANCE OVERRIDES TABLE
-// =========================
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS finance_overrides (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    year INTEGER UNIQUE,
-    total_expected REAL DEFAULT 0,
-    total_received REAL DEFAULT 0,
-    total_remaining REAL DEFAULT 0,
-    total_clients INTEGER DEFAULT 0,
-    notes TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`).run();
+  // FINANCE OVERRIDES
+  await query(`
+    CREATE TABLE IF NOT EXISTS finance_overrides (
+      id BIGSERIAL PRIMARY KEY,
+      year INTEGER UNIQUE,
+      total_expected DOUBLE PRECISION DEFAULT 0,
+      total_received DOUBLE PRECISION DEFAULT 0,
+      total_remaining DOUBLE PRECISION DEFAULT 0,
+      total_clients INTEGER DEFAULT 0,
+      notes TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
 
-ensureColumn('finance_overrides', 'year', 'INTEGER UNIQUE');
-ensureColumn('finance_overrides', 'total_expected', 'REAL DEFAULT 0');
-ensureColumn('finance_overrides', 'total_received', 'REAL DEFAULT 0');
-ensureColumn('finance_overrides', 'total_remaining', 'REAL DEFAULT 0');
-ensureColumn('finance_overrides', 'total_clients', 'INTEGER DEFAULT 0');
-ensureColumn('finance_overrides', 'notes', 'TEXT');
-ensureColumn('finance_overrides', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+const schemaReady = initSchema().catch((err) => {
+  console.error('Failed to initialize database schema:', err);
+  throw err;
+});
 
-db.createBackup = async function createBackup(destinationPath) {
-  return db.backup(destinationPath);
+module.exports = {
+  pool,
+  query,
+  schemaReady,
 };
-
-module.exports = db;

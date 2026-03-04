@@ -111,8 +111,9 @@ const STATUS_COLORS = {
 // API WRAPPER
 // ======================================================
 window.api = {
-  async searchClients(term = '') {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
+  async searchClients(term = '', options = {}) {
+    const { signal } = options;
+    const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`, { signal });
     if (!res.ok) throw new Error("Search failed");
     return res.json();
   },
@@ -281,6 +282,7 @@ const overlay = document.getElementById("projectOverlay");
 
 let activeId = null;
 let searchTimeout = null;
+let searchRequestController = null;
 let isSaving = false;
 let queuedSave = false;
 let lastSearchTerm = "";
@@ -289,6 +291,7 @@ let sidebarAllClients = [];
 let sidebarSearchTerm = "";
 let sidebarRenderCount = 0;
 const sidebarChunkSize = 60;
+const SEARCH_DEBOUNCE_MS = 300;
 let sidebarListContainer = null;
 let newNoteSaving = false;
 
@@ -312,13 +315,18 @@ if (searchInput) {
     clearTimeout(searchTimeout);
 
     searchTimeout = setTimeout(async () => {
+      if (searchRequestController) {
+        searchRequestController.abort();
+      }
+      searchRequestController = new AbortController();
+
       try {
-        const allClients = await window.api.searchClients("");
         const matchedStatus = STATUS_ORDER.find(
           s => s.toLowerCase() === term
         );
 
         if (matchedStatus) {
+          const allClients = await window.api.searchClients("", { signal: searchRequestController.signal });
           renderSidebar(
             allClients.filter(c =>
               (c.status || "Lead").toLowerCase() === term
@@ -328,13 +336,14 @@ if (searchInput) {
           return;
         }
 
-        const filtered = await window.api.searchClients(term);
+        const filtered = await window.api.searchClients(term, { signal: searchRequestController.signal });
         renderSidebar(filtered, term);
 
       } catch (err) {
+        if (err && err.name === "AbortError") return;
         console.error(err);
       }
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
   });
 
   searchInput.addEventListener("keydown", (e) => {
