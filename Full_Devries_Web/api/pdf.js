@@ -3,101 +3,114 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { asyncHandler, parseStringField } = require('./request-utils');
-const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
-
-function isValidUploadKey(key) {
-  return typeof key === 'string' && /^[a-zA-Z0-9_-]+$/.test(key);
-}
-
-function safeUploadDir(key) {
-  if (!isValidUploadKey(key)) return null;
-  const resolved = path.resolve(uploadsRoot, key);
-  if (!resolved.startsWith(uploadsRoot + path.sep)) return null;
-  return resolved;
-}
-
-function safeFilePath(key, fileName) {
-  const dir = safeUploadDir(key);
-  if (!dir || !fileName) return null;
-  const baseName = path.basename(fileName);
-  if (baseName !== fileName) return null;
-  const resolved = path.resolve(dir, baseName);
-  if (!resolved.startsWith(dir + path.sep)) return null;
-  return resolved;
-}
+const {
+  asyncHandler,
+  parseStringField
+} = require('./request-utils');
+const {
+  isRemoteStorageEnabled,
+  ensureRemoteBucket,
+  remoteUploadFile,
+  remoteListFiles,
+  remoteDeleteFile,
+  localListFiles,
+  localDeleteFile,
+  safeLocalUploadDir
+} = require('../services/storage');
 
 // ======================================================
 // STORAGE CONFIG
 // ======================================================
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const key = req.params.key;
-    if (!isValidUploadKey(key)) return cb(new Error('Invalid upload key'));
+const upload = multer(
+  isRemoteStorageEnabled()
+    ? {
+        storage: multer.memoryStorage(),
+        limits: {
+          fileSize: 25 * 1024 * 1024,
+          files: 20
+        }
+      }
+    : {
+        storage: multer.diskStorage({
+          destination: (req, file, cb) => {
+            const key = req.params.key;
+            const dir = safeLocalUploadDir(key);
+            if (!dir) return cb(new Error('Invalid upload path'));
 
-    const dir = safeUploadDir(key);
-    if (!dir) return cb(new Error('Invalid upload path'));
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const cleanName = path.basename(file.originalname || 'file');
-    cb(null, Date.now() + '-' + cleanName);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: 25 * 1024 * 1024,
-    files: 20
-  }
-});
+            cb(null, dir);
+          },
+          filename: (req, file, cb) => {
+            const cleanName = path.basename(file.originalname || 'file');
+            cb(null, `${Date.now()}-${cleanName}`);
+          }
+        }),
+        limits: {
+          fileSize: 25 * 1024 * 1024,
+          files: 20
+        }
+      }
+);
 
 // ======================================================
 // UPLOAD FILE(S) BY KEY (clientId or groupKey)
 // ======================================================
-router.post('/upload/:key', upload.any(), (req, res) => {
+router.post('/upload/:key', upload.any(), asyncHandler(async (req, res) => {
   const files = req.files || [];
   const key = req.params.key;
-  if (!isValidUploadKey(key)) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
     return res.status(400).json({ success: false, error: 'Invalid upload key.' });
   }
   if (!files.length) {
     return res.status(400).json({ success: false, error: 'No files uploaded.' });
   }
 
+  if (isRemoteStorageEnabled()) {
+    await ensureRemoteBucket();
+  }
+
+  const saved = [];
+  for (const file of files) {
+    if (isRemoteStorageEnabled()) {
+      const cleanName = path.basename(file.originalname || 'file');
+      const objectPath = `${key}/${Date.now()}-${cleanName}`;
+      await remoteUploadFile(file, objectPath);
+      saved.push({
+        name: path.basename(objectPath),
+        path: objectPath,
+        url: '',
+        ext: path.extname(objectPath).toLowerCase()
+      });
+    } else {
+      const fileName = path.basename(file.filename || file.originalname || 'file');
+      saved.push({
+        name: fileName,
+        path: `${key}/${fileName}`,
+        url: `/uploads/${key}/${encodeURIComponent(fileName)}`
+      });
+    }
+  }
+
   res.json({
     success: true,
-    files: files.map(f => ({
-      fileName: f.filename,
-      url: `/uploads/${key}/${f.filename}`
-    }))
+    files: saved
   });
-});
+}));
 
 // ======================================================
 // LIST FILES BY KEY (clientId or groupKey)
 // ======================================================
 router.get('/list/:key', asyncHandler(async (req, res) => {
   const key = parseStringField(req.params.key, 'key', { minLength: 1, maxLength: 128 });
-  const dir = safeUploadDir(key);
-  if (!dir) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
     return res.status(400).json({ success: false, error: 'Invalid list key.' });
   }
 
-  if (!fs.existsSync(dir)) return res.json({ success: true, files: [] });
-
   const isClientId = /^\d+$/.test(key);
-  const files = fs.readdirSync(dir)
-    .filter(f => (isClientId ? true : f.toLowerCase().endsWith('.pdf')))
-    .map(f => ({
-      name: f,
-      url: `/uploads/${key}/${encodeURIComponent(f)}`,
-      ext: path.extname(f).toLowerCase()
-    }));
+  const files = isRemoteStorageEnabled()
+    ? (await remoteListFiles(key)).filter((file) => (isClientId ? true : file.ext === '.pdf'))
+    : localListFiles(key).filter((file) => (isClientId ? true : file.ext === '.pdf'));
 
   res.json({ success: true, files });
 }));
@@ -113,17 +126,19 @@ router.delete('/delete/:clientId/:fileName', asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Missing clientId or fileName' });
   }
 
-  const filePath = safeFilePath(clientId, fileName);
-  if (!filePath) {
-    return res.status(400).json({ success: false, error: 'Invalid path input' });
-  }
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ success: false, error: 'File not found' });
-  }
-
   try {
-    fs.unlinkSync(filePath);
+    if (isRemoteStorageEnabled()) {
+      const deleted = await remoteDeleteFile(clientId, fileName);
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+    } else {
+      const deleted = localDeleteFile(clientId, fileName);
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+    }
+
     res.json({ success: true, message: 'File deleted' });
   } catch (err) {
     console.error(err);
@@ -143,17 +158,15 @@ router.delete('/delete/:groupKey', asyncHandler(async (req, res) => {
   }
 
   const decodedFile = decodeURIComponent(fileName);
-  const filePath = safeFilePath(groupKey, decodedFile);
-  if (!filePath) {
-    return res.status(400).json({ error: 'Invalid path input' });
-  }
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found' });
-  }
-
   try {
-    fs.unlinkSync(filePath);
+    if (isRemoteStorageEnabled()) {
+      const deleted = await remoteDeleteFile(groupKey, decodedFile);
+      if (!deleted) return res.status(404).json({ error: 'File not found' });
+    } else {
+      const deleted = localDeleteFile(groupKey, decodedFile);
+      if (!deleted) return res.status(404).json({ error: 'File not found' });
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('Finance delete error:', err);

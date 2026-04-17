@@ -32,6 +32,7 @@ const { AppError } = require('./api/request-utils');
 const { startBackupScheduler } = require('./services/db-backup');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ===== BODY PARSING =====
 app.use(express.json({ limit: '1mb' }));
@@ -43,12 +44,13 @@ app.use(
   session({
     name: 'devries.sid',
     secret: sessionSecret,
+    proxy: true,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: 'lax',
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: 1000 * 60 * 60 * 12
     }
   })
@@ -205,8 +207,8 @@ app.use((err, req, res, next) => {
 // ===== ENSURE UPLOADS FOLDER EXISTS =====
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-console.log("✅ Uploads folder is ready");
-if (process.env.ENABLE_DB_BACKUPS !== 'false') {
+console.log('Uploads folder is ready');
+if (process.env.ENABLE_DB_BACKUPS === 'true') {
   startBackupScheduler();
 }
 

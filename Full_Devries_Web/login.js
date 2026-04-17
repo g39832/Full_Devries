@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
 
       if (data.success) {
-        window.location.href = "/main";
+        window.location.href = "main.html";
       } else {
         alert(data.message || "Incorrect password.");
         passwordInput.value = "";
