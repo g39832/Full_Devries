@@ -78,17 +78,20 @@ body.dashboard-body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  width: 100%;
 }
 
 /* =========================
    SIDEBAR
 ========================= */
 .sidebar {
-  width: 320px;
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
   background: rgba(255,255,255,0.06);
   backdrop-filter: blur(10px);
   border-right: 1px solid rgba(255,255,255,0.08);
   padding: 20px;
+  margin: 0 auto;
 
   display: flex;
   flex-direction: column;
@@ -243,6 +246,31 @@ button.btn-primary:hover {
   flex: 1;
 }
 
+.sidebar {
+  align-items: center;
+}
+
+.sidebar h2,
+.sidebar form,
+.search-bar,
+.client-list {
+  width: min(680px, 100%);
+}
+
+.sidebar h2 {
+  text-align: center;
+}
+
+#clientIntakeForm {
+  margin: 0 auto 20px;
+  align-self: center;
+}
+
+.sidebar .search-bar,
+.sidebar .client-list {
+  margin-inline: auto;
+}
+
 .client-item {
   padding: 12px 14px;
   border-radius: 8px;
@@ -329,11 +357,7 @@ button.btn-primary:hover {
    MAIN PANEL
 ========================= */
 .main-content {
-  flex: 1;
-  background: rgba(255,255,255,0.04);
-  padding: 20px;
-  overflow-y: auto;
-  backdrop-filter: blur(8px);
+  display: none;
 }
 
 
@@ -772,6 +796,87 @@ button.btn-primary:hover {
 
 }
 
+/* =========================
+   DESKTOP CENTERED WORKSPACE
+========================= */
+@media (min-width: 769px) {
+  .crm-dashboard {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 16px 32px;
+  }
+
+  .sidebar,
+  .main-content {
+    width: min(760px, calc(100vw - 32px));
+    max-width: 760px;
+  }
+
+  .main-content {
+    display: none;
+  }
+}
+
+/* =========================
+   CENTER CLIENT WORKSPACE
+========================= */
+@media (min-width: 769px) {
+  .crm-dashboard {
+    justify-content: center !important;
+  }
+
+  .sidebar {
+    align-items: center !important;
+    justify-content: flex-start !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    border-right: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 18px !important;
+  }
+
+  .clients-workspace {
+    width: min(760px, calc(100vw - 32px)) !important;
+    max-width: 760px !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  .clients-workspace h2,
+  .clients-workspace form,
+  .clients-workspace .search-bar,
+  .clients-workspace .client-list {
+    width: min(680px, calc(100vw - 48px)) !important;
+    max-width: 680px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .clients-workspace h2 {
+    text-align: center !important;
+  }
+
+  .clients-workspace form {
+    align-self: center !important;
+  }
+
+  .clients-workspace .input-row {
+    width: 100%;
+  }
+
+  #clientIntakeForm {
+    width: min(680px, calc(100vw - 48px)) !important;
+    max-width: 680px !important;
+  }
+
+  .clients-workspace .search-bar {
+    position: sticky;
+  }
+}
+
 
 
 /* =========================
@@ -792,25 +897,6 @@ button.btn-primary:hover {
 }
 
 
-
-/* =========================
-   DESKTOP: CENTER STACKED
-========================= */
-@media (min-width: 769px) {
-
-  .crm-dashboard {
-    flex-direction: column;   /* stack instead of side-by-side */
-    align-items: center;      /* center horizontally */
-    justify-content: flex-start;
-  }
-
-  .sidebar,
-  .main-content {
-    width: 700px;
-    max-width: 95%;
-  }
-
-}
 
 /* =========================
    CLIENT MODAL PANEL

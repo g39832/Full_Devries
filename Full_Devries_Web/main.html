@@ -212,33 +212,35 @@
   <div class="crm-dashboard">
     <!-- Sidebar: Lead & Client Management -->
     <aside class="sidebar">
-      <h2>Add New Lead</h2>
-      <form id="clientIntakeForm">
-        <div class="input-row">
-          <input type="text" id="fName" placeholder="First Name" required>
-          <input type="text" id="lName" placeholder="Last Name" required>
-          <input type="text" id="address" placeholder="Job Address">
+      <div class="clients-workspace">
+        <h2>Add New Lead</h2>
+        <form id="clientIntakeForm">
+          <div class="input-row">
+            <input type="text" id="fName" placeholder="First Name" required>
+            <input type="text" id="lName" placeholder="Last Name" required>
+            <input type="text" id="address" placeholder="Job Address">
+          </div>
+          <input type="email" id="email" placeholder="Email Address" required>
+          <input type="tel" id="phone" placeholder="Phone Number" required>
+          <button type="submit" class="btn-primary">Add Client</button>
+        </form>
+
+        <div class="search-bar">
+          <input type="text" id="searchClients" placeholder="Search name, phone, or email...">
         </div>
-        <input type="email" id="email" placeholder="Email Address" required>
-        <input type="tel" id="phone" placeholder="Phone Number" required>
-        <button type="submit" class="btn-primary">Add Client</button>
-      </form>
 
-      <div class="search-bar">
-        <input type="text" id="searchClients" placeholder="Search name, phone, or email...">
+        <!-- Scrollable List of Clients -->
+        <ul id="clientList" class="client-list"></ul>
       </div>
-
-      <!-- Scrollable List of Clients -->
-      <ul id="clientList" class="client-list"></ul>
     </aside>
 
-    <div class="main-content">
-      <div id="projectPanel"></div>
-    </div>
+    <div class="main-content"></div>
 
     <!-- Right panel: Interactive Project Details & PDF Drop Zone -->
     
   </div>
+
+  <div id="projectPanel"></div>
 
   <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
