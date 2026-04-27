@@ -1,6 +1,8 @@
 const { Pool } = require('pg');
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.NODE_ENV === 'test' && process.env.TEST_DATABASE_URL
+  ? process.env.TEST_DATABASE_URL
+  : process.env.DATABASE_URL;
 const slowQueryMs = Number(process.env.DB_SLOW_QUERY_MS || 250);
 
 function envInt(name, fallback) {

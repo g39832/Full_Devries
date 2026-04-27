@@ -1,7 +1,4 @@
 const assert = require('assert');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 
 const baseUrl = 'http://127.0.0.1:3000';
 
@@ -38,14 +35,16 @@ function extractCookie(setCookieHeader) {
 }
 
 async function main() {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'devries-smoke-'));
-  const dbPath = path.join(tempDir, 'smoke.db');
   const password = 'SmokePass123!';
-  process.env.DB_PATH = dbPath;
   process.env.DEFAULT_ADMIN_PASSWORD = password;
   process.env.NODE_ENV = 'test';
   process.env.ENABLE_DB_BACKUPS = 'false';
   process.env.PORT = '3000';
+  if (process.env.TEST_DATABASE_URL) {
+    console.log('Using TEST_DATABASE_URL for smoke test.');
+  } else {
+    console.warn('TEST_DATABASE_URL is not set; smoke test will use DATABASE_URL.');
+  }
 
   const { startServer } = require('../server');
   const server = startServer(3000);
@@ -136,9 +135,6 @@ async function main() {
     console.log('Smoke test passed.');
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch (_) {}
   }
 }
 

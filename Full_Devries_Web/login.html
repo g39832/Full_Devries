@@ -8,15 +8,24 @@
 </head>
 <body>
 
-  <div class="container">
-    
-    <img id="logo_login" src="assets/devries_pic.png" alt="Logo">
-    
-    <h2>Login</h2>
+  <div class="login-shell">
+    <div class="login-orb orb-one"></div>
+    <div class="login-orb orb-two"></div>
+
+    <div class="container">
+      <div class="brand-block">
+        <img id="logo_login" src="assets/devries_pic.png" alt="DeVries Roofing logo">
+        <div class="brand-copy">
+          <div class="brand-kicker">Roofing CRM</div>
+          <h1>Welcome back</h1>
+          <p>Sign in to manage clients, finance, and project details.</p>
+        </div>
+      </div>
 
     <!-- LOGIN FORM -->
     <form id="loginForm">
-      <input type="password" id="password" placeholder="Enter Password" required>
+      <label class="sr-only" for="password">Password</label>
+      <input type="password" id="password" placeholder="Enter Password" autocomplete="current-password" required>
       
       <div class="buttons">
         <button type="submit" id="login-btn">Login</button>
@@ -27,13 +36,16 @@
     <!-- RESET PASSWORD SECTION -->
     <div id="resetSection">
       <h3>Change Password</h3>
+      <p class="section-copy">Use this if you need to update the current admin password.</p>
       
-      <input type="password" id="currentPassword" placeholder="Current Password" required>
-      <input type="password" id="newPassword" placeholder="New Password" required>
+      <label class="sr-only" for="currentPassword">Current Password</label>
+      <input type="password" id="currentPassword" placeholder="Current Password" autocomplete="current-password" required>
+      <label class="sr-only" for="newPassword">New Password</label>
+      <input type="password" id="newPassword" placeholder="New Password" autocomplete="new-password" required>
       
       <button id="changePasswordBtn">Change Password</button>
     </div>
-
+    </div>
   </div>
 
   <script src="login.js"></script>

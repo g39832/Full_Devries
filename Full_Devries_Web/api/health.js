@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const { asyncHandler } = require('./request-utils');
+const { isRemoteStorageEnabled } = require('../services/storage');
 
 const router = express.Router();
 
@@ -55,6 +56,9 @@ router.get('/', requireHealthSecret, asyncHandler(async (req, res) => {
   res.json({
     status: 'ok',
     timestamp,
+    environment: process.env.NODE_ENV || 'development',
+    storageMode: isRemoteStorageEnabled() ? 'supabase' : 'local',
+    databaseConfigured: Boolean(process.env.DATABASE_URL || process.env.TEST_DATABASE_URL),
     metrics: {
       totalClients: Number(clients.total_clients || 0),
       overdueClients: Number(overdue.overdue_clients || 0),

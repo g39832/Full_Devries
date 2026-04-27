@@ -21,12 +21,7 @@ function parseOptionalPagination(value, max) {
   return Math.min(parsed, max);
 }
 
-// ======================================================
-// HELPER: UPDATE FINANCE TOTALS FOR A YEAR
-// ======================================================
-async function updateFinanceTotals(year) {
-  year = getValidYear(year);
-
+async function getFinanceTotalsForYear(year) {
   const clientSummaryResult = await db.query(`
     SELECT
       COUNT(*)::int AS total_clients,
@@ -45,6 +40,21 @@ async function updateFinanceTotals(year) {
   const clientSummary = clientSummaryResult.rows[0] || {};
   const paymentSummary = paymentSummaryResult.rows[0] || {};
 
+  return {
+    total_clients: Number(clientSummary.total_clients || 0),
+    total_expected: Number(clientSummary.total_expected || 0),
+    total_received: Number(paymentSummary.total_received || 0),
+    total_remaining: Number(clientSummary.total_remaining || 0)
+  };
+}
+
+// ======================================================
+// HELPER: UPDATE FINANCE TOTALS FOR A YEAR
+// ======================================================
+async function updateFinanceTotals(year) {
+  year = getValidYear(year);
+  const totals = await getFinanceTotalsForYear(year);
+
   await db.query(`
     INSERT INTO finance_overrides (year, total_expected, total_received, total_remaining, total_clients)
     VALUES ($1, $2, $3, $4, $5)
@@ -56,10 +66,10 @@ async function updateFinanceTotals(year) {
       updated_at = CURRENT_TIMESTAMP
   `, [
     year,
-    Number(clientSummary.total_expected || 0),
-    Number(paymentSummary.total_received || 0),
-    Number(clientSummary.total_remaining || 0),
-    Number(clientSummary.total_clients || 0)
+    totals.total_expected,
+    totals.total_received,
+    totals.total_remaining,
+    totals.total_clients
   ]);
 }
 
@@ -415,32 +425,17 @@ router.get('/finance/summary', asyncHandler(async (req, res) => {
 
   try {
     await db.schemaReady;
-
-    const clientSummaryResult = await db.query(`
-      SELECT
-        COUNT(*)::int AS total_clients,
-        COALESCE(SUM(total_due), 0) AS total_expected,
-        COALESCE(SUM(balance), 0) AS total_remaining
-      FROM clients
-    `);
-
-    const paymentSummaryResult = await db.query(`
-      SELECT COALESCE(SUM(amount), 0) AS total_received
-      FROM payments
-      WHERE EXTRACT(YEAR FROM payment_date)::int = $1
-    `, [year]);
+    const yearSummary = await getFinanceTotalsForYear(year);
 
     const overrideResult = await db.query('SELECT * FROM finance_overrides WHERE year = $1', [year]);
 
-    const clientSummary = clientSummaryResult.rows[0] || {};
-    const paymentSummary = paymentSummaryResult.rows[0] || {};
     const override = overrideResult.rows[0];
 
     const finalSummary = override || {
-      total_clients: Number(clientSummary.total_clients || 0),
-      total_expected: Number(clientSummary.total_expected || 0),
-      total_received: Number(paymentSummary.total_received || 0),
-      total_remaining: Number(clientSummary.total_remaining || 0)
+      total_clients: yearSummary.total_clients,
+      total_expected: yearSummary.total_expected,
+      total_received: yearSummary.total_received,
+      total_remaining: yearSummary.total_remaining
     };
 
     return res.json({

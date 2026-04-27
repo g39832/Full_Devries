@@ -528,19 +528,23 @@ async function openClient(id) {
       : "";
 
     projectPanel.innerHTML = `
-      <div class="detail-card animate-panel" style="opacity:0; transform:translateY(-20px); transition:0.25s ease;">
+      <div class="detail-card animate-panel panel-shell" style="opacity:0; transform:translateY(-20px); transition:0.25s ease;">
         <button id="closeBtn" class="close-x">&times;</button>
-        <header class="detail-header">
-          <h2>${fName || ""} ${lName || ""}</h2>
-          <div class="contact-quick-links">
-            <span>📞 <a href="tel:${client.phone || ""}">${client.phone || ""}</a></span>
-            <span style="margin-left:20px;">✉️ <a href="mailto:${client.email || ""}">${client.email || ""}</a></span>
+        <header class="detail-header panel-header">
+          <div class="panel-title-block">
+            <div class="panel-kicker">Client Workspace</div>
+            <h2>${fName || ""} ${lName || ""}</h2>
+            <div class="panel-subtitle">Core contact, financial, and document details stay in one place.</div>
           </div>
-          <span id="saveStatus" style="margin-left:auto; font-size:12px; color:#9ad0ff;">Saved</span>
+          <div class="contact-quick-links panel-contact-links">
+            <span>📞 <a href="tel:${client.phone || ""}">${client.phone || ""}</a></span>
+            <span>✉️ <a href="mailto:${client.email || ""}">${client.email || ""}</a></span>
+          </div>
+          <span id="saveStatus" class="save-status-chip">Saved</span>
         </header>
 
-        <div class="roofing-grid">
-          <div style="grid-column: span 2;">
+        <div class="roofing-grid panel-grid">
+          <div class="panel-full-span">
             <label>Job Status</label>
             <select id="p-status">
               ${STATUS_ORDER.map(s =>
@@ -550,10 +554,10 @@ async function openClient(id) {
           </div>
 
           <label>Job Address</label>
-          <div style="display:flex; flex-direction:column; gap:6px;">
+          <div class="field-stack">
             <input type="text" id="p-address" value="${client.address || ""}">
             ${client.address
-              ? `<a href="${mapsLink}" target="_blank" style="color:#007bff; font-size:0.9rem;">📍 Open in Google Maps</a>`
+              ? `<a href="${mapsLink}" target="_blank" class="maps-link">📍 Open in Google Maps</a>`
               : ""}
           </div>
 
@@ -563,27 +567,32 @@ async function openClient(id) {
           <label>Email Address</label>
           <input type="email" id="p-email" value="${client.email || ""}">
 
-          <div style="grid-column: span 2; border-top:1px solid #ddd; padding-top:15px; margin-top:10px;">
-            <h3 style="margin-bottom:10px;">Financial Overview</h3>
+          <div class="panel-section panel-full-span">
+            <div class="panel-section-header">
+              <h3>Financial Overview</h3>
+              <span class="panel-section-note">Track totals, payments, and remaining balance.</span>
+            </div>
 
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <div class="panel-inline-row">
               <input type="text" id="totalDueInput" placeholder="Total Due"
-                inputmode="decimal" style="flex:1;" value="${formatMoney(client.total_due || 0)}">
+                inputmode="decimal" class="panel-money-input" value="${formatMoney(client.total_due || 0)}">
               <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
             </div>
 
-            <div style="display:flex; justify-content:space-between; font-size:14px;">
-              <div>Amount Paid:
+            <div class="panel-balance-row">
+              <div class="panel-metric">
+                <span>Amount Paid</span>
                 <strong id="amountPaidDisplay">$${formatMoney(client.amount_paid || 0)}</strong>
               </div>
-              <div>Balance:
+              <div class="panel-metric">
+                <span>Balance</span>
                 <strong id="balanceDisplay">$${formatMoney(client.balance || 0)}</strong>
               </div>
             </div>
 
-            <div style="display:flex; gap:10px; margin-top:10px;">
+            <div class="panel-inline-row">
               <input type="text" id="paymentInput" placeholder="Add Payment"
-                inputmode="decimal" style="flex:1;">
+                inputmode="decimal" class="panel-money-input">
               <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
               <button id="undoFinanceBtn" class="btn-primary" style="background:#dc3545;">Undo Payment</button>
             </div>
@@ -593,6 +602,7 @@ async function openClient(id) {
             style="grid-column: span 2;">📄 Drop Client PDFs Here</div>
 
           <button id="pdf-upload-btn"
+            class="panel-secondary-btn"
             style="grid-column: span 2; margin-top:8px; background:#2c3e50; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">
             Upload PDF</button>
 
@@ -603,10 +613,13 @@ async function openClient(id) {
             hidden />
 
           <div id="pdf-list"
-            style="grid-column: span 2; margin-top:10px;"></div>
+            class="panel-full-span panel-list"></div>
 
-          <div id="notes-section" class="notes-section" style="grid-column: span 2;">
-            <h3>Client Notes</h3>
+          <div id="notes-section" class="notes-section panel-full-span">
+            <div class="panel-section-header">
+              <h3>Client Notes</h3>
+              <span class="panel-section-note">Use notes for site visits, follow-ups, and reminders.</span>
+            </div>
             <div id="notes-list" class="notes-list"></div>
             <div class="notes-actions">
               <textarea id="new-note-input" placeholder="Add a note..." rows="6"></textarea>
@@ -614,7 +627,7 @@ async function openClient(id) {
             </div>
           </div>
 
-          <div style="grid-column: span 2; display:flex; gap:10px; margin-top:10px;">
+          <div class="panel-actions panel-full-span">
             <button id="reviewBtn" class="btn-primary" style="background:#d32323; flex:2;">Send Google Review</button>
             <button id="saveBtn" class="btn-primary" style="background:#28a745; flex:2;">Save Changes</button>
             <button id="delBtn" class="btn-primary" style="background:#dc3545; flex:1;">Delete</button>

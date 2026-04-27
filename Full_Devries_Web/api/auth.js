@@ -5,6 +5,7 @@ const db = require('./db');
 const { asyncHandler, assertObject, parseStringField, AppError } = require('./request-utils');
 
 const router = express.Router();
+let passwordInitPromise = null;
 
 // ===== ENSURE DEFAULT PASSWORD EXISTS =====
 async function initializePassword() {
@@ -15,7 +16,10 @@ async function initializePassword() {
   const configuredPassword = process.env.DEFAULT_ADMIN_PASSWORD;
   if (configuredPassword && configuredPassword.trim()) {
     const defaultHash = bcrypt.hashSync(configuredPassword.trim(), 10);
-    await db.query('INSERT INTO settings (key, value) VALUES ($1, $2)', ['admin_password', defaultHash]);
+    await db.query(
+      'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING',
+      ['admin_password', defaultHash]
+    );
     console.log('Admin password initialized from DEFAULT_ADMIN_PASSWORD.');
     return;
   }
@@ -31,15 +35,22 @@ async function initializePassword() {
   console.warn('Admin password is not initialized. Set DEFAULT_ADMIN_PASSWORD or create it via migration/setup.');
 }
 
-initializePassword().catch((err) => {
-  console.error('Password initialization failed:', err);
-});
+async function ensurePasswordInitialized() {
+  if (!passwordInitPromise) {
+    passwordInitPromise = initializePassword().catch((err) => {
+      passwordInitPromise = null;
+      throw err;
+    });
+  }
+  return passwordInitPromise;
+}
 
 // ===== LOGIN ROUTE =====
 router.post('/login', asyncHandler(async (req, res) => {
   assertObject(req.body);
   const password = parseStringField(req.body.password, 'password', { minLength: 1, maxLength: 256 });
 
+  await ensurePasswordInitialized();
   await db.schemaReady;
   const { rows } = await db.query("SELECT value FROM settings WHERE key = 'admin_password'");
   const row = rows[0];
@@ -60,6 +71,7 @@ router.post('/change-password', asyncHandler(async (req, res) => {
   const currentPassword = parseStringField(req.body.currentPassword, 'currentPassword', { minLength: 1, maxLength: 256 });
   const newPassword = parseStringField(req.body.newPassword, 'newPassword', { minLength: 4, maxLength: 256 });
 
+  await ensurePasswordInitialized();
   await db.schemaReady;
   const { rows } = await db.query("SELECT value FROM settings WHERE key = 'admin_password'");
   const row = rows[0];

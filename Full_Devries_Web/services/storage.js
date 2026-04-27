@@ -5,11 +5,14 @@ const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'crm-files';
+const STORAGE_BACKEND = (process.env.STORAGE_BACKEND || 'auto').toLowerCase();
 
 let remoteBucketReady = false;
 let remoteBucketPromise = null;
 
 function isRemoteStorageEnabled() {
+  if (STORAGE_BACKEND === 'local') return false;
+  if (STORAGE_BACKEND === 'supabase') return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 }
 
