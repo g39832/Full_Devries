@@ -107,6 +107,21 @@ const STATUS_COLORS = {
       font-weight: 500 !important;
     }
 
+    #projectPanel .panel-contact-links {
+      gap: 10px !important;
+      line-height: 1.45 !important;
+    }
+
+    #projectPanel .panel-contact-links a,
+    #projectPanel .maps-link,
+    #projectPanel .field-stack a {
+      color: #111 !important;
+      -webkit-text-fill-color: #111 !important;
+      text-decoration: underline !important;
+      text-underline-offset: 2px;
+      font-weight: 600 !important;
+    }
+
     #projectPanel label {
       color: #111 !important;
       font-weight: 600 !important;
@@ -133,6 +148,30 @@ const STATUS_COLORS = {
     #projectPanel a {
       color: #111 !important;
       -webkit-text-fill-color: #111 !important;
+    }
+
+    #projectPanel input,
+    #projectPanel select,
+    #projectPanel textarea {
+      background: #fff !important;
+      border: 1px solid #555 !important;
+      color: #111 !important;
+      -webkit-text-fill-color: #111 !important;
+      font-weight: 600 !important;
+    }
+
+    #projectPanel input::placeholder,
+    #projectPanel textarea::placeholder {
+      color: #666 !important;
+      opacity: 1 !important;
+    }
+
+    #projectPanel .field-stack {
+      gap: 10px !important;
+    }
+
+    #projectPanel .field-stack input {
+      margin-bottom: 0 !important;
     }
 
     .notes-list {
