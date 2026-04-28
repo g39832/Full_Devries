@@ -886,7 +886,7 @@ button.btn-primary:hover {
 
   #projectPanel .detail-card {
     height: 100%;
-    width: min(100%, 820px);
+    width: min(100%, 920px);
     margin: 0 auto;
     padding-inline: clamp(16px, 5vw, 30px);
     box-sizing: border-box;
@@ -927,21 +927,51 @@ button.btn-primary:hover {
   }
 
   #projectPanel .roofing-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 14px;
+    align-items: stretch;
   }
 
   #projectPanel .roofing-grid > * {
-    grid-column: 1 / -1 !important;
     width: 100%;
   }
 
   #projectPanel .panel-full-span {
-    grid-column: span 1;
+    grid-column: auto;
   }
 
   #projectPanel .field-stack {
     width: 100%;
+  }
+
+  #projectPanel .roofing-grid > label {
+    display: block;
+    margin-top: 6px;
+    margin-bottom: -6px;
+    color: rgba(241, 243, 255, 0.92);
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  #projectPanel .roofing-grid > input,
+  #projectPanel .roofing-grid > select,
+  #projectPanel .roofing-grid > textarea,
+  #projectPanel .roofing-grid > .field-stack {
+    min-width: 0;
+  }
+
+  #projectPanel .roofing-grid > input,
+  #projectPanel .roofing-grid > select,
+  #projectPanel .roofing-grid > textarea,
+  #projectPanel .field-stack input,
+  #projectPanel .field-stack select,
+  #projectPanel .field-stack textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 48px;
+    font-size: 16px;
   }
 
   #projectPanel .panel-inline-row {
@@ -968,7 +998,7 @@ button.btn-primary:hover {
   }
 
   #projectPanel .panel-actions .btn-primary {
-    width: min(100%, 360px);
+    width: min(100%, 420px);
   }
 
   #projectPanel .panel-section-header {
@@ -982,7 +1012,8 @@ button.btn-primary:hover {
   }
 
   #projectPanel .notes-actions textarea {
-    min-height: 120px;
+    min-height: 180px;
+    line-height: 1.45;
   }
 
   #projectPanel .notes-list > div,
@@ -1002,9 +1033,35 @@ button.btn-primary:hover {
     width: 100%;
   }
 
+  #projectPanel .notes-section,
+  #projectPanel .panel-list {
+    margin-top: 8px;
+    padding-top: 18px;
+  }
+
+  #projectPanel .notes-list {
+    max-height: 32dvh;
+    gap: 12px;
+    padding-right: 2px;
+  }
+
+  #projectPanel .notes-list > div {
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+
+  #projectPanel #pdf-list {
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  #projectPanel #pdf-list > div {
+    padding: 12px 14px 14px;
+    border-radius: 14px;
+  }
+
   #projectPanel #pdf-drop-zone,
   #projectPanel #pdf-upload-btn {
-    grid-column: 1 / -1 !important;
     width: 100%;
   }
 
@@ -1149,6 +1206,11 @@ button.btn-primary:hover {
   #projectPanel .panel-balance-row,
   #projectPanel .panel-actions {
     width: 100%;
+  }
+
+  #projectPanel .panel-section {
+    padding-top: 18px;
+    margin-top: 12px;
   }
 
   #projectPanel .panel-actions .btn-primary {
