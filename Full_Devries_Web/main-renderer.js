@@ -73,6 +73,8 @@ const STATUS_COLORS = {
       --tw-bg-opacity: 1 !important;
       --tw-border-opacity: 1 !important;
       --tw-ring-opacity: 1 !important;
+      -webkit-text-stroke: 0.25px #000 !important;
+      text-rendering: geometricPrecision !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -105,6 +107,7 @@ const STATUS_COLORS = {
       opacity: 1 !important;
       filter: none !important;
       background: #fff !important;
+      -webkit-text-stroke: 0.25px #000 !important;
     }
 
     [class*="text-"],
@@ -216,6 +219,7 @@ const STATUS_COLORS = {
       --tw-bg-opacity: 1 !important;
       --tw-border-opacity: 1 !important;
       --tw-ring-opacity: 1 !important;
+      -webkit-text-stroke: 0.35px #000 !important;
     }
 
     #projectPanel .panel-contact-links,
@@ -306,6 +310,7 @@ const STATUS_COLORS = {
       --tw-bg-opacity: 1 !important;
       --tw-border-opacity: 1 !important;
       --tw-ring-opacity: 1 !important;
+      -webkit-text-stroke: 0.35px #000 !important;
     }
 
     #projectPanel input::placeholder,
