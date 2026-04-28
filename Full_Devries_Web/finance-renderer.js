@@ -158,15 +158,15 @@ async function updateFinanceMetrics() {
     const clients = summary?.totalClients || 0;
 
     financeTableBody.innerHTML = `
-      <tr>
-        <td>${activeYear}</td>
-        <td><input type="text" id="input-expected" inputmode="decimal" value="${formatCurrencyValue(expected)}" /></td>
-        <td><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
-        <td><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
-        <td><input type="number" id="input-clients" value="${clients}" /></td>
+      <tr class="metrics-values-row">
+        <td data-label="Year">${activeYear}</td>
+        <td data-label="Expected Earnings"><input type="text" id="input-expected" inputmode="decimal" value="${formatCurrencyValue(expected)}" /></td>
+        <td data-label="Received"><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
+        <td data-label="Remaining"><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
+        <td data-label="Clients"><input type="number" id="input-clients" value="${clients}" /></td>
       </tr>
-      <tr>
-        <td colspan="5" style="text-align:right;">
+      <tr class="metrics-actions-row">
+        <td colspan="5" class="metrics-actions-cell" style="text-align:right;">
         <button id="saveFinanceBtn">Save Year Data</button>
           <button id="undoFinanceYearBtn"
           style="margin-left:10px; background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">

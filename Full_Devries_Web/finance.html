@@ -55,9 +55,10 @@
     body.dashboard-body {
       margin: 0;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-     background: linear-gradient(135deg, #162447, #162447);
+      background: linear-gradient(135deg, #162447, #162447);
       display: flex;
       flex-direction: column;
+      overflow-x: hidden;
     }
 
     /* ================= HEADER ================= */
@@ -277,51 +278,182 @@
     }
 
     @media (max-width: 768px) {
-      header#Main_header {
+      .page-header {
         flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 14px 16px;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px 14px;
       }
 
-      #toggleClientsBtn {
+      .page-title {
+        font-size: 1.25rem;
+      }
+
+      .page-subtitle {
+        max-width: none;
+        font-size: 0.88rem;
+        line-height: 1.4;
+      }
+
+      .page-header-actions {
         width: 100%;
       }
 
+      .page-header-actions button {
+        width: 100%;
+      }
+
+      header#Main_header {
+        padding: 12px 14px;
+      }
+
       .finance-container {
-        padding: 16px;
-        gap: 20px;
+        padding: 12px;
+        gap: 14px;
       }
 
       .section {
-        padding: 16px;
+        padding: 14px;
+        border-radius: 14px;
       }
 
-      .metrics-table {
+      .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      #finance-year {
+        width: 100%;
+        min-height: 46px;
+      }
+
+      .metrics-table,
+      .metrics-table tbody,
+      .metrics-table tr {
         display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        width: 100%;
       }
 
-      .metrics-table thead,
+      .metrics-table thead {
+        display: none;
+      }
+
       .metrics-table tbody {
-        display: table;
-        width: max-content;
-        min-width: 680px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
 
-      .metrics-table th,
-      .metrics-table td {
+      .metrics-table tr {
+        border: none;
+      }
+
+      .metrics-table tr:first-child {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .metrics-table tr:first-child td {
+        display: grid;
+        gap: 6px;
         padding: 12px;
+        border-radius: 12px;
+        background: #f9fbfd;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+        border-bottom: none;
+      }
+
+      .metrics-table tr:first-child td::before {
+        content: attr(data-label);
+        color: #5e6f85;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .metrics-table input {
+        min-height: 44px;
+        font-size: 16px;
+      }
+
+      .metrics-table tr:first-child td:first-child {
+        grid-column: 1 / -1;
+      }
+
+      .metrics-table tr:last-child td {
+        padding: 0;
+        background: transparent;
+        border-bottom: none;
+      }
+
+      .metrics-actions-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .metrics-table tr:last-child td button {
+        width: 100%;
+        min-height: 44px;
+        margin-left: 0 !important;
       }
 
       .tax-groups {
         grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 14px;
       }
 
       .drop-zone {
-        padding: 20px;
+        min-height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+      }
+    }
+
+    @media (max-width: 768px) and (orientation: landscape) {
+      .page-header {
+        flex-direction: row;
+        align-items: center;
+        padding: 10px 14px;
+      }
+
+      .page-title {
+        font-size: 1.1rem;
+      }
+
+      .page-subtitle {
+        display: none;
+      }
+
+      .page-header-actions {
+        width: auto;
+      }
+
+      .page-header-actions button {
+        width: auto;
+      }
+
+      .finance-container {
+        padding: 10px 12px 12px;
+        gap: 12px;
+      }
+
+      .metrics-table tr:first-child {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metrics-table tr:first-child td:first-child {
+        grid-column: 1 / -1;
+      }
+
+      .metrics-actions-cell {
+        flex-direction: row;
       }
     }
   </style>

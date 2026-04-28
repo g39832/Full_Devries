@@ -52,6 +52,66 @@
       gap: 10px;
     }
 
+    body.dashboard-body {
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    @media (max-width: 768px) {
+      .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px 14px;
+      }
+
+      .page-title {
+        font-size: 1.25rem;
+      }
+
+      .page-subtitle {
+        max-width: none;
+        font-size: 0.88rem;
+        line-height: 1.4;
+      }
+
+      .page-header-actions {
+        width: 100%;
+      }
+
+      .page-header-actions button {
+        width: 100%;
+      }
+
+      .page-header-copy {
+        gap: 6px;
+      }
+    }
+
+    @media (max-width: 768px) and (orientation: landscape) {
+      .page-header {
+        flex-direction: row;
+        align-items: center;
+        padding: 10px 14px;
+      }
+
+      .page-title {
+        font-size: 1.1rem;
+      }
+
+      .page-subtitle {
+        display: none;
+      }
+
+      .page-header-actions {
+        width: auto;
+      }
+
+      .page-header-actions button {
+        width: auto;
+      }
+    }
+
     .input-row {
       display: flex;
       gap: 10px;
@@ -189,6 +249,28 @@
 
     header#Main_header button:hover {
       transform: translateY(-1px);
+    }
+
+    @media (max-width: 768px) {
+      .input-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .sidebar {
+        padding: 16px;
+      }
+
+      .sidebar h2 {
+        font-size: 1.05rem;
+      }
+    }
+
+    @media (max-width: 768px) and (orientation: landscape) {
+      .input-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
   </style>
 
