@@ -33,6 +33,7 @@ const STATUS_COLORS = {
       padding: 0 !important;
       background: #fff !important;
       color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       min-height: auto !important;
     }
 
@@ -54,9 +55,47 @@ const STATUS_COLORS = {
       overflow: visible !important;
     }
 
-    * {
+    *,
+    *::before,
+    *::after {
+      background: transparent !important;
+      box-shadow: none !important;
+      filter: none !important;
+      opacity: 1 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+    }
+
+    .workspace,
+    .client-content,
+    .client-workspace,
+    .clients-workspace,
+    .detail-card,
+    .panel-shell,
+    .panel-grid,
+    .panel-section,
+    .panel-actions,
+    .panel-contact-links,
+    .notes-section,
+    .notes-list,
+    .notes-actions,
+    .roofing-grid,
+    .field-stack,
+    form,
+    input,
+    select,
+    textarea,
+    button,
+    label,
+    h1, h2, h3, h4, h5, h6,
+    p, span, a, strong, div {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      background: #fff !important;
     }
 
     #projectPanel {
@@ -73,24 +112,29 @@ const STATUS_COLORS = {
       box-shadow: none !important;
       background: white !important;
       color: black !important;
+      -webkit-text-fill-color: #000 !important;
     }
 
     #projectPanel .detail-card {
       box-shadow: none !important;
       background: white !important;
       color: black !important;
+      -webkit-text-fill-color: #000 !important;
       opacity: 1 !important;
       transform: none !important;
     }
 
     #projectPanel,
-    #projectPanel * {
+    #projectPanel *,
+    #projectPanel *::before,
+    #projectPanel *::after {
       color: #000 !important;
       -webkit-text-fill-color: #000 !important;
       text-shadow: none !important;
       opacity: 1 !important;
       filter: none !important;
       font-weight: 600 !important;
+      background: #fff !important;
     }
 
     #projectPanel .panel-contact-links,
@@ -153,6 +197,7 @@ const STATUS_COLORS = {
     #projectPanel textarea::placeholder,
     #projectPanel ::placeholder {
       color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       opacity: 1 !important;
     }
 
