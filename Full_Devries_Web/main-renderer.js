@@ -59,11 +59,16 @@ const STATUS_COLORS = {
     *::before,
     *::after {
       background: transparent !important;
+      background-image: none !important;
       box-shadow: none !important;
       filter: none !important;
+      -webkit-filter: none !important;
       opacity: 1 !important;
       color: #000 !important;
       -webkit-text-fill-color: #000 !important;
+      text-shadow: none !important;
+      mix-blend-mode: normal !important;
+      isolation: auto !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -133,6 +138,9 @@ const STATUS_COLORS = {
       text-shadow: none !important;
       opacity: 1 !important;
       filter: none !important;
+      -webkit-filter: none !important;
+      mix-blend-mode: normal !important;
+      background-image: none !important;
       font-weight: 600 !important;
       background: #fff !important;
     }
@@ -191,6 +199,12 @@ const STATUS_COLORS = {
       color: #000 !important;
       -webkit-text-fill-color: #000 !important;
       font-weight: 600 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      -webkit-filter: none !important;
+      mix-blend-mode: normal !important;
+      appearance: none !important;
+      -webkit-appearance: none !important;
     }
 
     #projectPanel input::placeholder,
