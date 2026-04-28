@@ -17,6 +17,198 @@ const STATUS_COLORS = {
   Closed: "#aa1b1b"
 };
 
+function buildClientPrintStyle() {
+  return `
+    @page { margin: 0.5in; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      min-height: auto !important;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      background: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      filter: none !important;
+      -webkit-filter: none !important;
+      opacity: 1 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      text-shadow: none !important;
+      mix-blend-mode: normal !important;
+      --tw-text-opacity: 1 !important;
+      --tw-bg-opacity: 1 !important;
+      --tw-border-opacity: 1 !important;
+      --tw-ring-opacity: 1 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      -webkit-text-stroke: 0.25px #000 !important;
+      text-rendering: geometricPrecision !important;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif !important;
+      padding: 0 !important;
+    }
+
+    .print-shell {
+      width: 100%;
+      max-width: none;
+      padding: 0;
+    }
+
+    .print-shell .detail-card,
+    .print-shell .panel-shell {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+      color: #000 !important;
+      opacity: 1 !important;
+      -webkit-text-fill-color: #000 !important;
+      -webkit-text-stroke: 0.35px #000 !important;
+    }
+
+    .print-shell .panel-header,
+    .print-shell .panel-section,
+    .print-shell .notes-section,
+    .print-shell .panel-actions,
+    .print-shell .panel-contact-links,
+    .print-shell .panel-grid,
+    .print-shell .field-stack,
+    .print-shell .notes-list,
+    .print-shell .notes-actions,
+    .print-shell .roofing-grid {
+      color: #000 !important;
+      opacity: 1 !important;
+      -webkit-text-fill-color: #000 !important;
+      background: #fff !important;
+    }
+
+    .print-shell .panel-contact-links,
+    .print-shell .panel-contact-links a,
+    .print-shell .maps-link,
+    .print-shell .field-stack a {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      text-decoration: underline !important;
+      font-weight: 700 !important;
+    }
+
+    .print-shell label,
+    .print-shell small,
+    .print-shell p,
+    .print-shell span,
+    .print-shell div,
+    .print-shell li,
+    .print-shell td,
+    .print-shell th,
+    .print-shell h1,
+    .print-shell h2,
+    .print-shell h3,
+    .print-shell h4,
+    .print-shell h5,
+    .print-shell h6 {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    .print-shell input,
+    .print-shell select,
+    .print-shell textarea {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      background: #fff !important;
+      border: 1px solid #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      padding: 8px 10px !important;
+      min-height: 40px !important;
+    }
+
+    .print-shell button {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      background: #fff !important;
+      border: 1px solid #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    .print-shell .panel-actions {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+
+    .print-shell .panel-actions .btn-primary {
+      width: auto !important;
+      min-width: 140px !important;
+    }
+  `;
+}
+
+function printClientWorkspace() {
+  const source = projectPanel?.querySelector(".detail-card") || projectPanel;
+  if (!source) return;
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.setAttribute("aria-hidden", "true");
+  document.body.appendChild(iframe);
+
+  const cleanup = () => {
+    window.removeEventListener("afterprint", cleanup);
+    iframe.remove();
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) {
+    cleanup();
+    return;
+  }
+
+  const clone = source.cloneNode(true);
+  clone.classList.add("print-shell");
+  clone.style.display = "block";
+  clone.style.opacity = "1";
+  clone.style.transform = "none";
+
+  doc.open();
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>${buildClientPrintStyle()}</style></head><body></body></html>`);
+  doc.close();
+  doc.body.appendChild(clone);
+
+  const trigger = () => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+  };
+
+  if (doc.fonts && doc.fonts.ready) {
+    doc.fonts.ready.then(() => setTimeout(trigger, 50));
+  } else {
+    setTimeout(trigger, 100);
+  }
+}
+
 // ======================================================
 // PRINT STYLE
 // ======================================================
@@ -1401,7 +1593,7 @@ if (target.id === "undoFinanceBtn") {
   return;
 }
 
-    if (target.id === "printBtn") window.print();
+    if (target.id === "printBtn") printClientWorkspace();
 
     if (target.id === "reviewBtn") {
       const googleLink = "https://www.google.com/maps/place/DeVries+Brothers+Roofing+and+Construction/@36.9772676,-86.4834052,12z/data=!4m8!3m7!1s0xa03088fa81602de1:0x9f671e0d27f600cb!8m2!3d36.977159!4d-86.4008325!9m1!1b1!16s%2Fg%2F11x90mpwmq?entry=ttu&g_ep=EgoyMDI2MDIxOC4wIKXMDSoASAFQAw%3D%3D";
