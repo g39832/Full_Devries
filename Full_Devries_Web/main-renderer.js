@@ -90,11 +90,32 @@ const STATUS_COLORS = {
       opacity: 1 !important;
     }
 
+    #projectPanel .panel-kicker,
+    #projectPanel .panel-subtitle,
+    #projectPanel .panel-section-note,
+    #projectPanel .save-status-chip,
+    #projectPanel .notes-actions textarea,
+    #projectPanel .notes-list,
+    #projectPanel .pdf-list {
+      color: #444 !important;
+    }
+
+    #projectPanel .panel-contact-links,
+    #projectPanel .panel-contact-links a {
+      color: #4f4f4f !important;
+      -webkit-text-fill-color: #4f4f4f !important;
+      font-weight: 500 !important;
+    }
+
+    #projectPanel label {
+      color: #555 !important;
+      font-weight: 600 !important;
+    }
+
     #projectPanel input,
     #projectPanel select,
     #projectPanel textarea,
     #projectPanel button,
-    #projectPanel label,
     #projectPanel h1,
     #projectPanel h2,
     #projectPanel h3,
@@ -102,11 +123,23 @@ const STATUS_COLORS = {
     #projectPanel h5,
     #projectPanel h6,
     #projectPanel p,
-    #projectPanel span,
-    #projectPanel a,
     #projectPanel strong {
       color: #000 !important;
       -webkit-text-fill-color: #000 !important;
+    }
+
+    #projectPanel label,
+    #projectPanel span,
+    #projectPanel a {
+      color: #555 !important;
+      -webkit-text-fill-color: #555 !important;
+    }
+
+    #projectPanel .panel-contact-links,
+    #projectPanel .panel-contact-links a {
+      color: #4f4f4f !important;
+      -webkit-text-fill-color: #4f4f4f !important;
+      font-weight: 500 !important;
     }
 
     .notes-list {
