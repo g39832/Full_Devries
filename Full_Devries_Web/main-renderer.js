@@ -85,25 +85,16 @@ const STATUS_COLORS = {
 
     #projectPanel,
     #projectPanel * {
-      color: #111 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       text-shadow: none !important;
       opacity: 1 !important;
     }
 
-    #projectPanel .panel-kicker,
-    #projectPanel .panel-subtitle,
-    #projectPanel .panel-section-note,
-    #projectPanel .save-status-chip,
-    #projectPanel .notes-actions textarea,
-    #projectPanel .notes-list,
-    #projectPanel .pdf-list {
-      color: #222 !important;
-    }
-
     #projectPanel .panel-contact-links,
     #projectPanel .panel-contact-links a {
-      color: #111 !important;
-      -webkit-text-fill-color: #111 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       font-weight: 500 !important;
     }
 
@@ -115,15 +106,15 @@ const STATUS_COLORS = {
     #projectPanel .panel-contact-links a,
     #projectPanel .maps-link,
     #projectPanel .field-stack a {
-      color: #111 !important;
-      -webkit-text-fill-color: #111 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       text-decoration: underline !important;
       text-underline-offset: 2px;
       font-weight: 600 !important;
     }
 
     #projectPanel label {
-      color: #111 !important;
+      color: #000 !important;
       font-weight: 600 !important;
     }
 
@@ -138,16 +129,12 @@ const STATUS_COLORS = {
     #projectPanel h5,
     #projectPanel h6,
     #projectPanel p,
-    #projectPanel strong {
-      color: #111 !important;
-      -webkit-text-fill-color: #111 !important;
-    }
-
-    #projectPanel label,
+    #projectPanel strong,
     #projectPanel span,
-    #projectPanel a {
-      color: #111 !important;
-      -webkit-text-fill-color: #111 !important;
+    #projectPanel a,
+    #projectPanel div {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
     }
 
     #projectPanel input,
@@ -155,14 +142,14 @@ const STATUS_COLORS = {
     #projectPanel textarea {
       background: #fff !important;
       border: 1px solid #555 !important;
-      color: #111 !important;
-      -webkit-text-fill-color: #111 !important;
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
       font-weight: 600 !important;
     }
 
     #projectPanel input::placeholder,
     #projectPanel textarea::placeholder {
-      color: #666 !important;
+      color: #000 !important;
       opacity: 1 !important;
     }
 
@@ -191,7 +178,7 @@ const STATUS_COLORS = {
     }
 
     a {
-      color: #111 !important;
+      color: #000 !important;
       text-decoration: none !important;
     }
   }`;
