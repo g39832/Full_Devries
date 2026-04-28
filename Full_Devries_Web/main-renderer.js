@@ -85,7 +85,7 @@ const STATUS_COLORS = {
 
     #projectPanel,
     #projectPanel * {
-      color: #000 !important;
+      color: #333 !important;
       text-shadow: none !important;
       opacity: 1 !important;
     }
@@ -97,18 +97,18 @@ const STATUS_COLORS = {
     #projectPanel .notes-actions textarea,
     #projectPanel .notes-list,
     #projectPanel .pdf-list {
-      color: #444 !important;
+      color: #666 !important;
     }
 
     #projectPanel .panel-contact-links,
     #projectPanel .panel-contact-links a {
-      color: #4f4f4f !important;
-      -webkit-text-fill-color: #4f4f4f !important;
+      color: #666 !important;
+      -webkit-text-fill-color: #666 !important;
       font-weight: 500 !important;
     }
 
     #projectPanel label {
-      color: #555 !important;
+      color: #666 !important;
       font-weight: 600 !important;
     }
 
@@ -124,22 +124,15 @@ const STATUS_COLORS = {
     #projectPanel h6,
     #projectPanel p,
     #projectPanel strong {
-      color: #000 !important;
-      -webkit-text-fill-color: #000 !important;
+      color: #333 !important;
+      -webkit-text-fill-color: #333 !important;
     }
 
     #projectPanel label,
     #projectPanel span,
     #projectPanel a {
-      color: #555 !important;
-      -webkit-text-fill-color: #555 !important;
-    }
-
-    #projectPanel .panel-contact-links,
-    #projectPanel .panel-contact-links a {
-      color: #4f4f4f !important;
-      -webkit-text-fill-color: #4f4f4f !important;
-      font-weight: 500 !important;
+      color: #666 !important;
+      -webkit-text-fill-color: #666 !important;
     }
 
     .notes-list {
@@ -159,7 +152,7 @@ const STATUS_COLORS = {
     }
 
     a {
-      color: black !important;
+      color: #666 !important;
       text-decoration: none !important;
     }
   }`;
