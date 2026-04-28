@@ -64,11 +64,15 @@ const STATUS_COLORS = {
       filter: none !important;
       -webkit-filter: none !important;
       opacity: 1 !important;
-      color: #000 !important;
-      -webkit-text-fill-color: #000 !important;
+      color: rgb(0 0 0 / 1) !important;
+      -webkit-text-fill-color: rgb(0 0 0 / 1) !important;
       text-shadow: none !important;
       mix-blend-mode: normal !important;
       isolation: auto !important;
+      --tw-text-opacity: 1 !important;
+      --tw-bg-opacity: 1 !important;
+      --tw-border-opacity: 1 !important;
+      --tw-ring-opacity: 1 !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -125,6 +129,10 @@ const STATUS_COLORS = {
       filter: none !important;
       text-shadow: none !important;
       mix-blend-mode: normal !important;
+      --tw-text-opacity: 1 !important;
+      --tw-bg-opacity: 1 !important;
+      --tw-border-opacity: 1 !important;
+      --tw-ring-opacity: 1 !important;
     }
 
     small,
@@ -204,6 +212,10 @@ const STATUS_COLORS = {
       background-image: none !important;
       font-weight: 600 !important;
       background: #fff !important;
+      --tw-text-opacity: 1 !important;
+      --tw-bg-opacity: 1 !important;
+      --tw-border-opacity: 1 !important;
+      --tw-ring-opacity: 1 !important;
     }
 
     #projectPanel .panel-contact-links,
@@ -290,6 +302,10 @@ const STATUS_COLORS = {
       mix-blend-mode: normal !important;
       appearance: none !important;
       -webkit-appearance: none !important;
+      --tw-text-opacity: 1 !important;
+      --tw-bg-opacity: 1 !important;
+      --tw-border-opacity: 1 !important;
+      --tw-ring-opacity: 1 !important;
     }
 
     #projectPanel input::placeholder,
