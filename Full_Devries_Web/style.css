@@ -1058,6 +1058,8 @@ button.btn-primary:hover {
 
   .clients-workspace {
     align-items: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
   }
 
   .clients-workspace h2,
@@ -1068,6 +1070,39 @@ button.btn-primary:hover {
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
+  }
+
+  .clients-workspace form,
+  .clients-workspace .input-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+
+  .clients-workspace input,
+  .clients-workspace select,
+  .clients-workspace textarea,
+  .clients-workspace button,
+  .clients-workspace .btn-primary,
+  .clients-workspace .search-bar input,
+  .clients-workspace .client-list,
+  .clients-workspace .client-item,
+  .clients-workspace .client-card {
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box;
+  }
+
+  #clientIntakeForm {
+    width: 100% !important;
+    max-width: none !important;
+    align-self: stretch !important;
+    margin: 0 0 14px !important;
+  }
+
+  .clients-workspace .input-row {
+    gap: 10px;
   }
 
   .sidebar .search-bar,
@@ -1084,7 +1119,8 @@ button.btn-primary:hover {
   .sidebar #address,
   input[type="email"],
   input[type="tel"],
-  .search-bar input {
+  .search-bar input,
+  .sidebar button.btn-primary {
     width: 100%;
   }
 
