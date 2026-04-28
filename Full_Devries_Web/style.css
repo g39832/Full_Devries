@@ -962,6 +962,47 @@ button.btn-primary:hover {
     width: 100%;
   }
 }
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .crm-dashboard {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .sidebar {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .sidebar .search-bar {
+    padding: 8px 0 4px;
+  }
+
+  .client-list {
+    margin-top: 10px;
+  }
+
+  .client-item,
+  .client-card {
+    padding: 12px 14px 14px;
+    margin-bottom: 10px;
+  }
+
+  .client-item::after,
+  .client-card::after {
+    left: 8px;
+    right: 8px;
+  }
+
+  .sidebar h2,
+  .sidebar form,
+  .search-bar,
+  .client-list,
+  .clients-workspace {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
 /* ===== MOBILE CLIENT VIEW SWITCH ===== */
 @media (max-width: 768px) {
 
