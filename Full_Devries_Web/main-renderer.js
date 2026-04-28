@@ -83,6 +83,32 @@ const STATUS_COLORS = {
       transform: none !important;
     }
 
+    #projectPanel,
+    #projectPanel * {
+      color: #000 !important;
+      text-shadow: none !important;
+      opacity: 1 !important;
+    }
+
+    #projectPanel input,
+    #projectPanel select,
+    #projectPanel textarea,
+    #projectPanel button,
+    #projectPanel label,
+    #projectPanel h1,
+    #projectPanel h2,
+    #projectPanel h3,
+    #projectPanel h4,
+    #projectPanel h5,
+    #projectPanel h6,
+    #projectPanel p,
+    #projectPanel span,
+    #projectPanel a,
+    #projectPanel strong {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+    }
+
     .notes-list {
       max-height: none !important;
       overflow: visible !important;
