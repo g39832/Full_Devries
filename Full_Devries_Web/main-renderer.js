@@ -103,6 +103,67 @@ const STATUS_COLORS = {
       background: #fff !important;
     }
 
+    [class*="text-"],
+    [class*="muted"],
+    [class*="secondary"],
+    [class*="gray"],
+    [class*="grey"],
+    .text-muted,
+    .text-secondary,
+    .text-gray-100,
+    .text-gray-200,
+    .text-gray-300,
+    .text-gray-400,
+    .text-gray-500,
+    .text-gray-600,
+    .text-gray-700,
+    .text-gray-800,
+    .text-gray-900 {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      text-shadow: none !important;
+      mix-blend-mode: normal !important;
+    }
+
+    small,
+    label,
+    legend,
+    caption,
+    figcaption,
+    p,
+    span,
+    div,
+    li,
+    td,
+    th {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      text-shadow: none !important;
+    }
+
+    .client-workspace,
+    .workspace,
+    .container,
+    .detail-card,
+    .panel-shell,
+    .panel-grid,
+    .panel-section,
+    .panel-actions,
+    .panel-contact-links,
+    .notes-section,
+    .notes-list,
+    .notes-actions {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      background: #fff !important;
+    }
+
     #projectPanel {
       display: block !important;
       position: static;
@@ -189,6 +250,30 @@ const STATUS_COLORS = {
     #projectPanel div {
       color: #000 !important;
       -webkit-text-fill-color: #000 !important;
+    }
+
+    #projectPanel [class*="text-"],
+    #projectPanel [class*="muted"],
+    #projectPanel [class*="secondary"],
+    #projectPanel [class*="gray"],
+    #projectPanel [class*="grey"],
+    #projectPanel .text-muted,
+    #projectPanel .text-secondary,
+    #projectPanel .text-gray-100,
+    #projectPanel .text-gray-200,
+    #projectPanel .text-gray-300,
+    #projectPanel .text-gray-400,
+    #projectPanel .text-gray-500,
+    #projectPanel .text-gray-600,
+    #projectPanel .text-gray-700,
+    #projectPanel .text-gray-800,
+    #projectPanel .text-gray-900 {
+      color: #000 !important;
+      -webkit-text-fill-color: #000 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      text-shadow: none !important;
+      mix-blend-mode: normal !important;
     }
 
     #projectPanel input,
