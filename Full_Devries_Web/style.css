@@ -881,10 +881,14 @@ button.btn-primary:hover {
     max-height: 100dvh;
     border-radius: 0;
     padding: 10px;
+    box-sizing: border-box;
   }
 
   #projectPanel .detail-card {
     height: 100%;
+    width: min(100%, 980px);
+    margin: 0 auto;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -924,6 +928,11 @@ button.btn-primary:hover {
   #projectPanel .roofing-grid {
     grid-template-columns: 1fr;
     gap: 14px;
+  }
+
+  #projectPanel .roofing-grid > * {
+    grid-column: 1 / -1 !important;
+    width: 100%;
   }
 
   #projectPanel .panel-full-span {
@@ -986,6 +995,12 @@ button.btn-primary:hover {
   #projectPanel .notes-list > div button,
   #projectPanel #pdf-list > div button,
   #projectPanel #pdf-list > div a {
+    width: 100%;
+  }
+
+  #projectPanel #pdf-drop-zone,
+  #projectPanel #pdf-upload-btn {
+    grid-column: 1 / -1 !important;
     width: 100%;
   }
 
@@ -1058,6 +1073,8 @@ button.btn-primary:hover {
   #projectPanel .detail-card {
     padding: 14px 12px;
     border-radius: 18px;
+    width: min(100%, 980px);
+    margin: 0 auto;
   }
 
   #projectPanel .panel-header {
