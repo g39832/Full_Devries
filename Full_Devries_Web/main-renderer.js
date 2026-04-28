@@ -89,13 +89,15 @@ const STATUS_COLORS = {
       -webkit-text-fill-color: #000 !important;
       text-shadow: none !important;
       opacity: 1 !important;
+      filter: none !important;
+      font-weight: 600 !important;
     }
 
     #projectPanel .panel-contact-links,
     #projectPanel .panel-contact-links a {
       color: #000 !important;
       -webkit-text-fill-color: #000 !important;
-      font-weight: 500 !important;
+      font-weight: 700 !important;
     }
 
     #projectPanel .panel-contact-links {
@@ -148,7 +150,8 @@ const STATUS_COLORS = {
     }
 
     #projectPanel input::placeholder,
-    #projectPanel textarea::placeholder {
+    #projectPanel textarea::placeholder,
+    #projectPanel ::placeholder {
       color: #000 !important;
       opacity: 1 !important;
     }
