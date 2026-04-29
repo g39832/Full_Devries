@@ -1040,13 +1040,14 @@ async function openClient(id) {
             style="grid-column: span 2;">📄 Drop Client PDFs Here</div>
 
           <button id="pdf-upload-btn"
+            type="button"
             class="panel-secondary-btn"
             style="grid-column: span 2; margin-top:8px; background:#2c3e50; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">
             Upload PDF</button>
 
           <input type="file"
             id="pdf-file-input"
-            accept="application/pdf"
+            accept=".pdf,application/pdf"
             multiple
             hidden />
 
@@ -1403,7 +1404,18 @@ function setupPDFUploadButton() {
   const fileInput = document.getElementById("pdf-file-input");
   if (!uploadBtn || !fileInput) return;
 
-  uploadBtn.addEventListener("click", () => fileInput.click());
+  uploadBtn.addEventListener("click", async () => {
+    if (typeof fileInput.showPicker === "function") {
+      try {
+        fileInput.showPicker();
+        return;
+      } catch (err) {
+        // Some browsers only allow showPicker on visible inputs; fall back to click.
+      }
+    }
+
+    fileInput.click();
+  });
 
   fileInput.addEventListener("change", async (e) => {
     const files = Array.from(e.target.files);

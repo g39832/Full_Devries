@@ -163,7 +163,7 @@ async function updateFinanceMetrics() {
         <td data-label="Expected Earnings"><input type="text" id="input-expected" inputmode="decimal" value="${formatCurrencyValue(expected)}" /></td>
         <td data-label="Received"><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
         <td data-label="Remaining"><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
-        <td data-label="Clients"><input type="number" id="input-clients" value="${clients}" /></td>
+        <td data-label="Clients"><input type="number" id="input-clients" inputmode="numeric" pattern="[0-9]*" step="1" value="${clients}" /></td>
       </tr>
       <tr class="metrics-actions-row">
         <td colspan="5" class="metrics-actions-cell" style="text-align:right;">
@@ -286,6 +286,7 @@ function addUploadButtons() {
 
     const btn = document.createElement("button");
     btn.innerText = "Upload PDF";
+    btn.type = "button";
     btn.setAttribute("data-upload", group);
 
     btn.style.marginTop = "10px";
@@ -301,24 +302,53 @@ function addUploadButtons() {
     btn.onclick = () => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = "application/pdf";
+      input.accept = ".pdf,application/pdf";
       input.multiple = true;
-      input.style.display = "none";
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      input.style.top = "0";
+      input.setAttribute("aria-hidden", "true");
+      let cleanedUp = false;
+
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        input.remove();
+        window.removeEventListener("focus", handleWindowFocus);
+      };
+
+      const handleWindowFocus = () => {
+        // If the dialog was dismissed without choosing a file, remove the temp input.
+        if (!input.files || input.files.length === 0) cleanup();
+      };
 
       input.addEventListener("change", async (e) => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
 
-        await uploadPDFs(files, `${group}-${activeYear}`);
-        loadPDFs(group);
+        try {
+          await uploadPDFs(files, `${group}-${activeYear}`);
+          loadPDFs(group);
 
-        // Update metrics after PDF upload
-        document.dispatchEvent(new Event("financeUpdated"));
+          // Update metrics after PDF upload
+          document.dispatchEvent(new Event("financeUpdated"));
+        } finally {
+          cleanup();
+        }
       });
 
       document.body.appendChild(input);
+      window.addEventListener("focus", handleWindowFocus, { once: true });
+      if (typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+          return;
+        } catch (err) {
+          // Fall through to click for browsers that disallow showPicker on hidden inputs.
+        }
+      }
+
       input.click();
-      document.body.removeChild(input);
     };
 
     container.appendChild(btn);
@@ -332,17 +362,17 @@ async function uploadPDFs(files, groupKey) {
   const formData = new FormData();
   files.forEach(file => formData.append("files", file));
 
-  try {
-    const res = await fetch(`/api/pdf/upload/${groupKey}`, {
-      method: "POST",
-      body: formData,
-    });
+  const res = await fetch(`/api/pdf/upload/${groupKey}`, {
+    method: "POST",
+    body: formData,
+  });
 
-    if (!res.ok) throw new Error("Upload failed");
-    return await res.json();
-  } catch (err) {
-    console.error("Upload error:", err);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Upload failed${detail ? `: ${detail}` : ""}`);
   }
+
+  return await res.json();
 }
 
 // ======================================================
