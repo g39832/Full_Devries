@@ -163,7 +163,7 @@ async function updateFinanceMetrics() {
         <td data-label="Expected Earnings"><input type="text" id="input-expected" inputmode="decimal" value="${formatCurrencyValue(expected)}" /></td>
         <td data-label="Received"><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
         <td data-label="Remaining"><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
-        <td data-label="Clients"><input type="number" id="input-clients" inputmode="numeric" pattern="[0-9]*" step="1" value="${clients}" /></td>
+        <td data-label="Clients"><input type="number" id="input-clients" inputmode="numeric" enterkeyhint="done" pattern="[0-9]*" step="1" value="${clients}" /></td>
       </tr>
       <tr class="metrics-actions-row">
         <td colspan="5" class="metrics-actions-cell" style="text-align:right;">

@@ -171,6 +171,23 @@
       line-height: 1.4;
     }
 
+    #input-clients {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    #input-clients::-webkit-outer-spin-button,
+    #input-clients::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    #input-clients:focus {
+      outline: none;
+      border-color: #2a5298;
+      box-shadow: 0 0 0 3px rgba(42,82,152,0.18);
+    }
+
     .metrics-table input:focus {
       outline: none;
       border-color: #2a5298;
