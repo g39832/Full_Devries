@@ -1013,7 +1013,7 @@ async function openClient(id) {
 
             <div class="panel-inline-row">
               <input type="text" id="totalDueInput" placeholder="Total Due"
-                inputmode="decimal" class="panel-money-input" value="">
+                inputmode="decimal" class="panel-money-input">
               <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
             </div>
 
