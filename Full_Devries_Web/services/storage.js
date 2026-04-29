@@ -1,11 +1,14 @@
-const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
-const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'crm-files';
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'client-files';
 const STORAGE_BACKEND = (process.env.STORAGE_BACKEND || 'auto').toLowerCase();
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false }
+});
 
 let remoteBucketReady = false;
 let remoteBucketPromise = null;
@@ -14,34 +17,6 @@ function isRemoteStorageEnabled() {
   if (STORAGE_BACKEND === 'local') return false;
   if (STORAGE_BACKEND === 'supabase') return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
-}
-
-function isValidUploadKey(key) {
-  return typeof key === 'string' && /^[a-zA-Z0-9_-]+$/.test(key);
-}
-
-function safeLocalUploadDir(key) {
-  if (!isValidUploadKey(key)) return null;
-  const resolved = path.resolve(uploadsRoot, key);
-  if (!resolved.startsWith(uploadsRoot + path.sep)) return null;
-  return resolved;
-}
-
-function safeLocalFilePath(key, fileName) {
-  const dir = safeLocalUploadDir(key);
-  if (!dir || !fileName) return null;
-  const baseName = path.basename(fileName);
-  if (baseName !== fileName) return null;
-  const resolved = path.resolve(dir, baseName);
-  if (!resolved.startsWith(dir + path.sep)) return null;
-  return resolved;
-}
-
-function encodeStoragePath(storagePath) {
-  return storagePath
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
 }
 
 function storageHeaders(extra = {}) {
@@ -57,20 +32,12 @@ async function ensureRemoteBucket() {
   if (remoteBucketReady) return;
   if (!remoteBucketPromise) {
     remoteBucketPromise = (async () => {
-      const response = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
-        method: 'POST',
-        headers: storageHeaders({ 'content-type': 'application/json' }),
-        body: JSON.stringify({
-          name: SUPABASE_STORAGE_BUCKET,
-          public: false
-        })
+      const { error } = await supabase.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
+        public: false
       });
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        if (response.status !== 409 && !/already exists/i.test(text)) {
-          throw new Error(`Failed to ensure storage bucket: ${response.status} ${text}`);
-        }
+      if (error && !/already exists/i.test(error.message || '')) {
+        throw new Error(`Failed to ensure storage bucket: ${error.message}`);
       }
 
       remoteBucketReady = true;
@@ -83,24 +50,25 @@ async function ensureRemoteBucket() {
 }
 
 async function remoteUploadFile(file, objectPath) {
+  console.log('remoteUploadFile called');
+  console.log('Supabase bucket:', SUPABASE_STORAGE_BUCKET);
   await ensureRemoteBucket();
 
-  const body = file.buffer || fs.readFileSync(file.path);
-  const response = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${encodeStoragePath(objectPath)}`,
-    {
-      method: 'POST',
-      headers: storageHeaders({
-        'content-type': file.mimetype || 'application/octet-stream',
-        'x-upsert': 'true'
-      }),
-      body
-    }
-  );
+  const body = file.buffer;
+  if (!body) {
+    throw new Error('Missing upload buffer for remote upload');
+  }
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Remote upload failed: ${response.status} ${text}`);
+  const { error } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .upload(objectPath, body, {
+      upsert: true,
+      contentType: file.mimetype || 'application/octet-stream'
+    });
+
+  if (error) {
+    console.error('Supabase upload error:', error);
+    throw new Error(`Remote upload failed: ${error.message}`);
   }
 
   return objectPath;
@@ -109,56 +77,35 @@ async function remoteUploadFile(file, objectPath) {
 async function remoteListFiles(prefix) {
   await ensureRemoteBucket();
 
-  const response = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/list/${SUPABASE_STORAGE_BUCKET}`,
-    {
-      method: 'POST',
-      headers: storageHeaders({ 'content-type': 'application/json' }),
-      body: JSON.stringify({
-        prefix,
-        limit: 1000,
-        offset: 0,
-        sortBy: { column: 'name', order: 'asc' }
-      })
-    }
-  );
+  const { data: items, error } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .list(prefix, {
+      limit: 1000,
+      offset: 0,
+      sortBy: { column: 'name', order: 'asc' }
+    });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Remote list failed: ${response.status} ${text}`);
+  if (error) {
+    throw new Error(`Remote list failed: ${error.message}`);
   }
 
-  const rows = await response.json();
-  const files = Array.isArray(rows) ? rows.filter((row) => row && row.name) : [];
+  const files = Array.isArray(items) ? items.filter((row) => row && row.name) : [];
 
   return Promise.all(
     files.map(async (row) => {
-      const objectPath = row.name;
-      const signedResponse = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/sign/${SUPABASE_STORAGE_BUCKET}`,
-        {
-          method: 'POST',
-          headers: storageHeaders({ 'content-type': 'application/json' }),
-          body: JSON.stringify({
-            expiresIn: 60 * 60,
-            paths: [objectPath]
-          })
-        }
-      );
+      const objectPath = row.name.startsWith(`${prefix}/`) ? row.name : `${prefix}/${row.name}`;
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .createSignedUrl(objectPath, 60 * 60);
 
-      if (!signedResponse.ok) {
-        const text = await signedResponse.text().catch(() => '');
-        throw new Error(`Remote signed URL failed: ${signedResponse.status} ${text}`);
+      if (signedError) {
+        throw new Error(`Remote signed URL failed: ${signedError.message}`);
       }
-
-      const signedJson = await signedResponse.json();
-      const signedRow = Array.isArray(signedJson) ? signedJson[0] : signedJson;
-      const signedUrl = signedRow?.signedURL || signedRow?.signedUrl || signedRow?.signed_url || '';
 
       return {
         name: path.basename(objectPath),
         path: objectPath,
-        url: signedUrl ? `${SUPABASE_URL}${signedUrl}` : '',
+        url: signedData?.signedUrl || '',
         ext: path.extname(objectPath).toLowerCase()
       };
     })
@@ -168,64 +115,33 @@ async function remoteListFiles(prefix) {
 async function remoteDeleteFile(prefix, fileName) {
   await ensureRemoteBucket();
 
-  const files = await remoteListFiles(prefix);
-  const match = files.find((file) => file.name === path.basename(fileName));
-  if (!match) return false;
+  const { data: items, error } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .list(prefix, {
+      limit: 1000,
+      offset: 0,
+      sortBy: { column: 'name', order: 'asc' }
+    });
 
-  const response = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}`,
-    {
-      method: 'DELETE',
-      headers: storageHeaders({ 'content-type': 'application/json' }),
-      body: JSON.stringify({
-        prefixes: [match.path]
-      })
-    }
-  );
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Remote delete failed: ${response.status} ${text}`);
+  if (error) {
+    throw new Error(`Remote delete lookup failed: ${error.message}`);
   }
 
-  return true;
-}
+  const match = Array.isArray(items)
+    ? items.find((item) => item.name === path.basename(fileName))
+    : null;
 
-function localListFiles(key) {
-  const dir = safeLocalUploadDir(key);
-  if (!dir) return [];
-  if (!fs.existsSync(dir)) return [];
+  if (!match) return false;
 
-  return fs.readdirSync(dir).map((fileName) => ({
-    name: fileName,
-    path: `${key}/${fileName}`,
-    url: `/uploads/${key}/${encodeURIComponent(fileName)}`,
-    ext: path.extname(fileName).toLowerCase()
-  }));
-}
+  const objectPath = match.name.startsWith(`${prefix}/`) ? match.name : `${prefix}/${match.name}`;
+  const { error: deleteError } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .remove([objectPath]);
 
-function localSaveFile(file, key) {
-  const dir = safeLocalUploadDir(key);
-  if (!dir) throw new Error('Invalid upload path');
+  if (deleteError) {
+    throw new Error(`Remote delete failed: ${deleteError.message}`);
+  }
 
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const cleanName = path.basename(file.originalname || 'file');
-  const fileName = `${Date.now()}-${cleanName}`;
-  const destination = path.join(dir, fileName);
-  fs.writeFileSync(destination, file.buffer || fs.readFileSync(file.path));
-
-  return {
-    name: fileName,
-    path: `${key}/${fileName}`,
-    url: `/uploads/${key}/${encodeURIComponent(fileName)}`,
-    ext: path.extname(fileName).toLowerCase()
-  };
-}
-
-function localDeleteFile(key, fileName) {
-  const filePath = safeLocalFilePath(key, fileName);
-  if (!filePath || !fs.existsSync(filePath)) return false;
-  fs.unlinkSync(filePath);
   return true;
 }
 
@@ -234,10 +150,5 @@ module.exports = {
   ensureRemoteBucket,
   remoteUploadFile,
   remoteListFiles,
-  remoteDeleteFile,
-  localListFiles,
-  localSaveFile,
-  localDeleteFile,
-  safeLocalUploadDir,
-  safeLocalFilePath
+  remoteDeleteFile
 };

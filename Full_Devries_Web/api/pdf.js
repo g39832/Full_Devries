@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const {
   asyncHandler,
   parseStringField
@@ -12,51 +11,29 @@ const {
   ensureRemoteBucket,
   remoteUploadFile,
   remoteListFiles,
-  remoteDeleteFile,
-  localListFiles,
-  localDeleteFile,
-  safeLocalUploadDir
+  remoteDeleteFile
 } = require('../services/storage');
 
 // ======================================================
 // STORAGE CONFIG
 // ======================================================
-const upload = multer(
-  isRemoteStorageEnabled()
-    ? {
-        storage: multer.memoryStorage(),
-        limits: {
-          fileSize: 25 * 1024 * 1024,
-          files: 20
-        }
-      }
-    : {
-        storage: multer.diskStorage({
-          destination: (req, file, cb) => {
-            const key = req.params.key;
-            const dir = safeLocalUploadDir(key);
-            if (!dir) return cb(new Error('Invalid upload path'));
-
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-            cb(null, dir);
-          },
-          filename: (req, file, cb) => {
-            const cleanName = path.basename(file.originalname || 'file');
-            cb(null, `${Date.now()}-${cleanName}`);
-          }
-        }),
-        limits: {
-          fileSize: 25 * 1024 * 1024,
-          files: 20
-        }
-      }
-);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+    files: 20
+  }
+});
 
 // ======================================================
 // UPLOAD FILE(S) BY KEY (clientId or groupKey)
 // ======================================================
 router.post('/upload/:key', upload.any(), asyncHandler(async (req, res) => {
+  console.log('UPLOAD ROUTE HIT');
+  console.log('upload route files count:', (req.files || []).length);
+  console.log('SUPABASE_URL defined:', Boolean(process.env.SUPABASE_URL));
+  console.log('SUPABASE_SERVICE_ROLE_KEY defined:', Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY));
+
   const files = req.files || [];
   const key = req.params.key;
   if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
@@ -66,30 +43,32 @@ router.post('/upload/:key', upload.any(), asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: 'No files uploaded.' });
   }
 
-  if (isRemoteStorageEnabled()) {
-    await ensureRemoteBucket();
+  const remoteEnabled = isRemoteStorageEnabled();
+  console.log('isRemoteStorageEnabled:', remoteEnabled);
+  if (!remoteEnabled) {
+    return res.status(500).json({ success: false, error: 'Remote storage is not configured.' });
   }
+
+  await ensureRemoteBucket();
 
   const saved = [];
   for (const file of files) {
-    if (isRemoteStorageEnabled()) {
-      const cleanName = path.basename(file.originalname || 'file');
-      const objectPath = `${key}/${Date.now()}-${cleanName}`;
+    const cleanName = path.basename(file.originalname || 'file');
+    const objectPath = `${key}/${Date.now()}-${cleanName}`;
+    console.log('Uploading to Supabase:', objectPath);
+    try {
       await remoteUploadFile(file, objectPath);
-      saved.push({
-        name: path.basename(objectPath),
-        path: objectPath,
-        url: '',
-        ext: path.extname(objectPath).toLowerCase()
-      });
-    } else {
-      const fileName = path.basename(file.filename || file.originalname || 'file');
-      saved.push({
-        name: fileName,
-        path: `${key}/${fileName}`,
-        url: `/uploads/${key}/${encodeURIComponent(fileName)}`
-      });
+      console.log('Upload succeeded for:', objectPath);
+    } catch (err) {
+      console.error('Upload failed for:', objectPath, 'error:', err);
+      throw err;
     }
+    saved.push({
+      name: path.basename(objectPath),
+      path: objectPath,
+      url: '',
+      ext: path.extname(objectPath).toLowerCase()
+    });
   }
 
   res.json({
@@ -107,10 +86,12 @@ router.get('/list/:key', asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid list key.' });
   }
 
+  if (!isRemoteStorageEnabled()) {
+    return res.status(500).json({ success: false, error: 'Remote storage is not configured.' });
+  }
+
   const isClientId = /^\d+$/.test(key);
-  const files = isRemoteStorageEnabled()
-    ? (await remoteListFiles(key)).filter((file) => (isClientId ? true : file.ext === '.pdf'))
-    : localListFiles(key).filter((file) => (isClientId ? true : file.ext === '.pdf'));
+  const files = (await remoteListFiles(key)).filter((file) => (isClientId ? true : file.ext === '.pdf'));
 
   res.json({ success: true, files });
 }));
@@ -127,16 +108,13 @@ router.delete('/delete/:clientId/:fileName', asyncHandler(async (req, res) => {
   }
 
   try {
-    if (isRemoteStorageEnabled()) {
-      const deleted = await remoteDeleteFile(clientId, fileName);
-      if (!deleted) {
-        return res.status(404).json({ success: false, error: 'File not found' });
-      }
-    } else {
-      const deleted = localDeleteFile(clientId, fileName);
-      if (!deleted) {
-        return res.status(404).json({ success: false, error: 'File not found' });
-      }
+    if (!isRemoteStorageEnabled()) {
+      return res.status(500).json({ success: false, error: 'Remote storage is not configured.' });
+    }
+
+    const deleted = await remoteDeleteFile(clientId, fileName);
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'File not found' });
     }
 
     res.json({ success: true, message: 'File deleted' });
@@ -159,13 +137,12 @@ router.delete('/delete/:groupKey', asyncHandler(async (req, res) => {
 
   const decodedFile = decodeURIComponent(fileName);
   try {
-    if (isRemoteStorageEnabled()) {
-      const deleted = await remoteDeleteFile(groupKey, decodedFile);
-      if (!deleted) return res.status(404).json({ error: 'File not found' });
-    } else {
-      const deleted = localDeleteFile(groupKey, decodedFile);
-      if (!deleted) return res.status(404).json({ error: 'File not found' });
+    if (!isRemoteStorageEnabled()) {
+      return res.status(500).json({ error: 'Remote storage is not configured.' });
     }
+
+    const deleted = await remoteDeleteFile(groupKey, decodedFile);
+    if (!deleted) return res.status(404).json({ error: 'File not found' });
 
     res.json({ success: true });
   } catch (err) {

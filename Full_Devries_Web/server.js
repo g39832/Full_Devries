@@ -140,11 +140,6 @@ app.use('/assets', express.static(path.join(__dirname, 'assets'), {
   etag: true,
   lastModified: true
 }));
-app.use('/uploads', requirePageAuth, express.static(path.join(__dirname, 'uploads'), {
-  maxAge: '5m',
-  etag: true,
-  lastModified: true
-}));
 app.use(express.static(path.join(__dirname), {
   etag: true,
   lastModified: true,

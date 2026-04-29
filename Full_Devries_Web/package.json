@@ -22,7 +22,8 @@
     "path": "^0.12.7",
     "pdfjs-dist": "^5.4.624",
     "pg": "^8.19.0",
-    "sqlite3": "^5.0.2"
+    "sqlite3": "^5.0.2",
+    "@supabase/supabase-js": "^2.39.0"
   },
   "engines": {
     "node": "22.x"
