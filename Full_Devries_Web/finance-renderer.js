@@ -326,14 +326,20 @@ function addUploadButtons() {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
 
+        const originalText = btn.textContent;
+        btn.textContent = "Uploading...";
+        btn.disabled = true;
+
         try {
-          await uploadPDFs(files, `${group}-${activeYear}`);
+          await uploadPDFsWithFallback(files, `${group}-${activeYear}`);
           loadPDFs(group);
 
           // Update metrics after PDF upload
           document.dispatchEvent(new Event("financeUpdated"));
         } finally {
           cleanup();
+          btn.textContent = originalText;
+          btn.disabled = false;
         }
       });
 
@@ -358,6 +364,67 @@ function addUploadButtons() {
 // ======================================================
 // UPLOAD
 // ======================================================
+async function getSupabaseConfig() {
+  if (window._supabaseConfig) return window._supabaseConfig;
+  const res = await fetch('/api/supabase-config');
+  if (!res.ok) {
+    throw new Error('Failed to load Supabase config');
+  }
+  window._supabaseConfig = await res.json();
+  return window._supabaseConfig;
+}
+
+async function getSupabaseClient() {
+  if (window._supabaseClient) return window._supabaseClient;
+  const config = await getSupabaseConfig();
+  if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    throw new Error('Supabase direct upload is not configured');
+  }
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    throw new Error('Supabase client library is not available');
+  }
+  window._supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  return window._supabaseClient;
+}
+
+async function uploadPDFToSupabaseDirect(files, groupKey) {
+  const supabaseClient = await getSupabaseClient();
+  const uploaded = [];
+
+  for (const file of files) {
+    const cleanName = String(file.name || 'file').split('/').pop().split('\\').pop();
+    const objectPath = `${groupKey}/${Date.now()}-${cleanName}`;
+    const { error } = await supabaseClient.storage
+      .from('client-files')
+      .upload(objectPath, file, {
+        upsert: true,
+        contentType: file.type || 'application/pdf'
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    uploaded.push({
+      name: cleanName,
+      path: objectPath,
+      url: '',
+      ext: `.${cleanName.split('.').pop()}`
+    });
+  }
+
+  return { success: true, files: uploaded };
+}
+
+async function uploadPDFsWithFallback(files, groupKey) {
+  try {
+    return await uploadPDFToSupabaseDirect(files, groupKey);
+  } catch (err) {
+    console.warn('Direct supabase upload failed, falling back to backend upload:', err);
+    return await uploadPDFs(files, groupKey);
+  }
+}
+
 async function uploadPDFs(files, groupKey) {
   const formData = new FormData();
   files.forEach(file => formData.append("files", file));
