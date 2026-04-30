@@ -167,9 +167,9 @@ async function updateFinanceMetrics() {
       </tr>
       <tr class="metrics-actions-row">
         <td colspan="5" class="metrics-actions-cell" style="text-align:right;">
-        <button id="saveFinanceBtn">Save Year Data</button>
+        <button id="saveFinanceBtn" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer; font-weight:600;">Save Year Data</button>
           <button id="undoFinanceYearBtn"
-          style="margin-left:10px; background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">
+          style="margin-left:10px; background:#4a5568; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">
             Undo
            </button>
 </td>
@@ -290,7 +290,7 @@ function addUploadButtons() {
     btn.setAttribute("data-upload", group);
 
     btn.style.marginTop = "10px";
-    btn.style.background = "#0d6efd";
+    btn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
     btn.style.color = "#fff";
     btn.style.border = "none";
     btn.style.padding = "8px 14px";
@@ -496,7 +496,7 @@ async function loadPDFs(group) {
       const viewBtn = document.createElement("button");
       viewBtn.innerText = "View";
       viewBtn.style.marginTop = "8px";
-      viewBtn.style.background = "#198754";
+      viewBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
       viewBtn.style.color = "#fff";
       viewBtn.style.border = "none";
       viewBtn.style.padding = "6px 12px";
@@ -509,7 +509,7 @@ async function loadPDFs(group) {
       const delBtn = document.createElement("button");
       delBtn.innerText = "Delete";
       delBtn.style.marginTop = "6px";
-      delBtn.style.background = "#dc3545";
+      delBtn.style.background = "#4a5568";
       delBtn.style.color = "#fff";
       delBtn.style.border = "none";
       delBtn.style.padding = "6px 12px";

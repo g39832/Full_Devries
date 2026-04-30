@@ -207,7 +207,7 @@ button.btn-primary {
   padding: 12px;
   border: none;
   border-radius: 6px;
-  background-color: #52a7ce;
+  background: linear-gradient(135deg, #2f80ed, #4f8dfd);
   color: white;
   font-weight: 600;
   cursor: pointer;
@@ -215,7 +215,7 @@ button.btn-primary {
 }
 
 button.btn-primary:hover {
-  background-color: #9bd6fe;
+  background: #2569c7;
 }
 
 .search-bar input {

@@ -1073,7 +1073,7 @@ async function openClient(id) {
             <div class="panel-inline-row">
               <input type="text" id="totalDueInput" placeholder="Total Due"
                 inputmode="decimal" class="panel-money-input" ${client.total_due ? `value="${formatMoney(client.total_due)}"` : ''}>
-              <button id="saveTotalBtn" class="btn-primary" style="background:#17a2b8;">Save</button>
+              <button id="saveTotalBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Save</button>
             </div>
 
             <div class="panel-balance-row">
@@ -1090,8 +1090,8 @@ async function openClient(id) {
             <div class="panel-inline-row">
               <input type="text" id="paymentInput" placeholder="Add Payment"
                 inputmode="decimal" class="panel-money-input">
-              <button id="addPaymentBtn" class="btn-primary" style="background:#28a745;">Add Payment</button>
-              <button id="undoFinanceBtn" class="btn-primary" style="background:#dc3545;">Undo Payment</button>
+              <button id="addPaymentBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Add Payment</button>
+              <button id="undoFinanceBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white;">Undo Payment</button>
             </div>
           </div>
 
@@ -1101,7 +1101,7 @@ async function openClient(id) {
           <button id="pdf-upload-btn"
             type="button"
             class="panel-secondary-btn"
-            style="grid-column: span 2; margin-top:8px; background:#2c3e50; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">
+            style="grid-column: span 2; margin-top:8px; background:rgba(255,255,255,0.14); color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">
             Upload PDF</button>
 
           <input type="file"
@@ -1121,15 +1121,15 @@ async function openClient(id) {
             <div id="notes-list" class="notes-list"></div>
             <div class="notes-actions">
               <textarea id="new-note-input" placeholder="Add a note..." rows="6"></textarea>
-              <button id="add-note-btn" class="btn-primary add-note-btn" style="background:#007bff;">Add Note</button>
+              <button id="add-note-btn" class="btn-primary add-note-btn" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Add Note</button>
             </div>
           </div>
 
           <div class="panel-actions panel-full-span">
-            <button id="reviewBtn" class="btn-primary" style="background:#d32323; flex:2;">Send Google Review</button>
-            <button id="saveBtn" class="btn-primary" style="background:#28a745; flex:2;">Save Changes</button>
-            <button id="delBtn" class="btn-primary" style="background:#dc3545; flex:1;">Delete</button>
-            <button id="printBtn" class="btn-primary" style="background:#343a40; flex:1;">Print</button>
+            <button id="reviewBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; flex:2;">Send Google Review</button>
+            <button id="saveBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); flex:2;">Save Changes</button>
+            <button id="delBtn" class="btn-primary" style="background:#4a5568; flex:1;">Delete</button>
+            <button id="printBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; flex:1;">Print</button>
           </div>
 
         </div>
@@ -1336,7 +1336,7 @@ async function setupNotesSection(clientId) {
 
         const editBtn = document.createElement("button");
         editBtn.innerText = "Edit";
-        editBtn.style.background = "#ffc107";
+        editBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
         editBtn.style.border = "none";
         editBtn.style.padding = "4px 8px";
         editBtn.style.borderRadius = "4px";
@@ -1344,7 +1344,7 @@ async function setupNotesSection(clientId) {
 
         const deleteBtn = document.createElement("button");
         deleteBtn.innerText = "Delete";
-        deleteBtn.style.background = "#dc3545";
+        deleteBtn.style.background = "#4a5568";
         deleteBtn.style.border = "none";
         deleteBtn.style.padding = "4px 8px";
         deleteBtn.style.borderRadius = "4px";
@@ -1364,7 +1364,7 @@ async function setupNotesSection(clientId) {
 
           const saveBtn = document.createElement("button");
           saveBtn.innerText = "Save";
-          saveBtn.style.background = "#28a745";
+          saveBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
           saveBtn.style.border = "none";
           saveBtn.style.padding = "4px 8px";
           saveBtn.style.borderRadius = "4px";
@@ -1373,7 +1373,7 @@ async function setupNotesSection(clientId) {
 
           const cancelBtn = document.createElement("button");
           cancelBtn.innerText = "Cancel";
-          cancelBtn.style.background = "#6c757d";
+          cancelBtn.style.background = "rgba(255,255,255,0.14)";
           cancelBtn.style.border = "none";
           cancelBtn.style.padding = "4px 8px";
           cancelBtn.style.borderRadius = "4px";
@@ -1550,7 +1550,7 @@ async function loadPDFs(clientId) {
       openBtn.href = file.url;
       openBtn.target = "_blank";
       openBtn.innerText = "Open";
-      openBtn.style.background = "#007bff";
+      openBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
       openBtn.style.color = "white";
       openBtn.style.padding = "5px 12px";
       openBtn.style.borderRadius = "6px";
@@ -1559,7 +1559,7 @@ async function loadPDFs(clientId) {
 
       const deleteBtn = document.createElement("button");
       deleteBtn.innerText = "Delete";
-      deleteBtn.style.background = "#dc3545";
+      deleteBtn.style.background = "#4a5568";
       deleteBtn.style.color = "white";
       deleteBtn.style.border = "none";
       deleteBtn.style.padding = "5px 12px";
