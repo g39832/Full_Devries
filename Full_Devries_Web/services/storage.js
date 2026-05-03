@@ -6,17 +6,29 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'client-files';
 const STORAGE_BACKEND = (process.env.STORAGE_BACKEND || 'auto').toLowerCase();
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false }
-});
+let supabase = null;
+
+function hasSupabaseConfig() {
+  return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function getSupabaseClient() {
+  if (!hasSupabaseConfig()) return null;
+  if (!supabase) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false }
+    });
+  }
+  return supabase;
+}
 
 let remoteBucketReady = false;
 let remoteBucketPromise = null;
 
 function isRemoteStorageEnabled() {
   if (STORAGE_BACKEND === 'local') return false;
-  if (STORAGE_BACKEND === 'supabase') return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
-  return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+  if (STORAGE_BACKEND === 'supabase') return hasSupabaseConfig();
+  return hasSupabaseConfig();
 }
 
 function storageHeaders(extra = {}) {
@@ -32,7 +44,12 @@ async function ensureRemoteBucket() {
   if (remoteBucketReady) return;
   if (!remoteBucketPromise) {
     remoteBucketPromise = (async () => {
-      const { error } = await supabase.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
+      const client = getSupabaseClient();
+      if (!client) {
+        throw new Error('Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or use STORAGE_BACKEND=local.');
+      }
+
+      const { error } = await client.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
         public: false
       });
 
@@ -53,13 +70,17 @@ async function remoteUploadFile(file, objectPath) {
   console.log('remoteUploadFile called');
   console.log('Supabase bucket:', SUPABASE_STORAGE_BUCKET);
   await ensureRemoteBucket();
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error('Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or use STORAGE_BACKEND=local.');
+  }
 
   const body = file.buffer;
   if (!body) {
     throw new Error('Missing upload buffer for remote upload');
   }
 
-  const { error } = await supabase.storage
+  const { error } = await client.storage
     .from(SUPABASE_STORAGE_BUCKET)
     .upload(objectPath, body, {
       upsert: true,
@@ -76,8 +97,12 @@ async function remoteUploadFile(file, objectPath) {
 
 async function remoteListFiles(prefix) {
   await ensureRemoteBucket();
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error('Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or use STORAGE_BACKEND=local.');
+  }
 
-  const { data: items, error } = await supabase.storage
+  const { data: items, error } = await client.storage
     .from(SUPABASE_STORAGE_BUCKET)
     .list(prefix, {
       limit: 1000,
@@ -94,7 +119,7 @@ async function remoteListFiles(prefix) {
   return Promise.all(
     files.map(async (row) => {
       const objectPath = row.name.startsWith(`${prefix}/`) ? row.name : `${prefix}/${row.name}`;
-      const { data: signedData, error: signedError } = await supabase.storage
+      const { data: signedData, error: signedError } = await client.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .createSignedUrl(objectPath, 60 * 60);
 
@@ -114,8 +139,12 @@ async function remoteListFiles(prefix) {
 
 async function remoteDeleteFile(prefix, fileName) {
   await ensureRemoteBucket();
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error('Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or use STORAGE_BACKEND=local.');
+  }
 
-  const { data: items, error } = await supabase.storage
+  const { data: items, error } = await client.storage
     .from(SUPABASE_STORAGE_BUCKET)
     .list(prefix, {
       limit: 1000,
@@ -134,7 +163,7 @@ async function remoteDeleteFile(prefix, fileName) {
   if (!match) return false;
 
   const objectPath = match.name.startsWith(`${prefix}/`) ? match.name : `${prefix}/${match.name}`;
-  const { error: deleteError } = await supabase.storage
+  const { error: deleteError } = await client.storage
     .from(SUPABASE_STORAGE_BUCKET)
     .remove([objectPath]);
 
