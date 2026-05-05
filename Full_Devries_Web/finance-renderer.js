@@ -491,6 +491,7 @@ async function loadPDFs(group) {
       name.style.fontSize = "12px";
       name.style.marginTop = isMobile ? "2px" : "6px";
       name.style.textAlign = "center";
+      name.style.color = "#1a202c";
       card.appendChild(name);
 
       const viewBtn = document.createElement("button");
