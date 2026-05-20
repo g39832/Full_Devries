@@ -28,6 +28,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const session = require('express-session');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { AppError } = require('./api/request-utils');
 const { startBackupScheduler } = require('./services/db-backup');
 
@@ -35,8 +36,18 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ===== BODY PARSING =====
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// ===== RATE LIMITING =====
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many login attempts. Try again in 15 minutes.' }
+});
+app.use('/api/login', loginLimiter);
 
 // ===== SESSION =====
 const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
@@ -107,16 +118,22 @@ app.use('/api', (req, res, next) => {
 // ===== API ROUTES =====
 const authRoutes = require('./api/auth');
 const clientsRoutes = require('./api/clients');
+const companyProfileRoutes = require('./api/company-profile');
+const emailSettingsRoutes = require('./api/email-settings');
+const invoiceRoutes = require('./api/invoice');
 const pdfRoutes = require('./api/pdf');
 const notesRoutes = require('./api/notes');
 const supabaseConfigRoutes = require('./api/supabase-config');
 
 // Mount routers under /api
-app.use('/api', authRoutes);       // /api/login, /api/change-password
-app.use('/api', clientsRoutes);    // /api/clients/...
-app.use('/api/pdf', pdfRoutes);    // /api/pdf/*
-app.use('/api/supabase-config', supabaseConfigRoutes); // /api/supabase-config
-app.use('/api/notes', notesRoutes); // /api/notes/*
+app.use('/api', authRoutes);
+app.use('/api', clientsRoutes);
+app.use('/api/company-profile', companyProfileRoutes);
+app.use('/api/email-settings', emailSettingsRoutes);
+app.use('/api', invoiceRoutes);
+app.use('/api/pdf', pdfRoutes);
+app.use('/api/supabase-config', supabaseConfigRoutes);
+app.use('/api/notes', notesRoutes);
 
 // ===== BLOCK SENSITIVE FILES FROM STATIC ACCESS =====
 const blockedStaticPaths = [

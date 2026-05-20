@@ -288,6 +288,8 @@
       <p class="page-subtitle">Track leads, notes, files, and project details from one workspace.</p>
     </div>
     <div class="page-header-actions">
+      <button id="emailSettingsBtn" style="background:rgba(255,255,255,0.14); box-shadow:none;">Email Setup</button>
+      <button id="companyProfileBtn" style="background:rgba(255,255,255,0.14); box-shadow:none;">Company Profile</button>
       <button id="toggleFinance">Finance Dashboard</button>
     </div>
   </header>
@@ -401,5 +403,156 @@
     });
   </script>
   <div id="projectOverlay"></div>
+
+  <!-- Email Settings Modal -->
+  <div id="emailSettingsModal" style="
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    padding:18px; background:rgba(0,0,0,0.6); z-index:10000;">
+    <div style="
+      position:relative; width:min(680px,100%); max-height:90vh; overflow:auto;
+      border-radius:14px; background:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.2);
+      color:#1e3c72; padding:24px;">
+      <button id="closeEmailSettings" style="
+        position:absolute; top:12px; right:14px; border:none; background:transparent;
+        font-size:1.5rem; cursor:pointer; color:#666;">&times;</button>
+      <h2 style="margin:0 0 6px; font-size:1.3rem; color:#1e3c72;">Email Setup</h2>
+      <p style="margin:0 0 18px; color:#53657d; font-size:0.92rem;">Connect the sender account used for invoices and estimates.</p>
+      <form id="emailSettingsForm">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Provider</label>
+            <select id="emailProvider" style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+              <option value="gmail">Gmail</option>
+              <option value="outlook">Outlook / Microsoft 365</option>
+              <option value="custom">Custom SMTP</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Sender Name</label>
+            <input id="emailFromName" type="text" placeholder="Your Business Name"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <div>
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Sender Email</label>
+            <input id="emailFromEmail" type="email" placeholder="sender@example.com"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <div>
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">SMTP Password</label>
+            <input id="emailSmtpPassword" type="password" placeholder="Leave blank to keep saved"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <details style="grid-column:1/-1; margin-top:4px;">
+            <summary style="cursor:pointer; color:#2f80ed; font-weight:700;">Advanced settings</summary>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+              <div>
+                <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Reply-To Email</label>
+                <input id="emailReplyTo" type="email" placeholder="reply@example.com"
+                  style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+              </div>
+              <div>
+                <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">SMTP Host</label>
+                <input id="emailSmtpHost" type="text" placeholder="Auto-filled for Gmail/Outlook"
+                  style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+              </div>
+              <div>
+                <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">SMTP Port</label>
+                <input id="emailSmtpPort" type="number" min="1" max="65535" placeholder="Auto-filled"
+                  style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; padding-top:24px;">
+                <input id="emailSmtpSecure" type="checkbox">
+                <label for="emailSmtpSecure" style="font-size:0.9rem; color:#53657d; font-weight:600;">Use secure SMTP / TLS</label>
+              </div>
+            </div>
+          </details>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+          <button type="button" id="cancelEmailSettings"
+            style="padding:10px 16px; border-radius:8px; border:1px solid #d0d7de; background:#f1f5fa; color:#53657d; cursor:pointer; font-weight:600;">
+            Cancel
+          </button>
+          <button type="submit" id="saveEmailSettings"
+            style="padding:10px 16px; border-radius:8px; border:none; background:linear-gradient(135deg,#2f80ed,#4f8dfd); color:white; cursor:pointer; font-weight:600;">
+            Save Email Setup
+          </button>
+        </div>
+      </form>
+      <p style="margin-top:12px; font-size:0.88rem; color:#53657d; line-height:1.5;">
+        Gmail and Outlook often require an app password. If a sender is already configured in the server environment, this will override it.
+      </p>
+    </div>
+  </div>
+
+  <!-- Company Profile Modal -->
+  <div id="companyProfileModal" style="
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    padding:18px; background:rgba(0,0,0,0.6); z-index:10000;">
+    <div style="
+      position:relative; width:min(600px,100%); max-height:90vh; overflow:auto;
+      border-radius:14px; background:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.2);
+      color:#1e3c72; padding:24px;">
+      <button id="closeCompanyProfile" style="
+        position:absolute; top:12px; right:14px; border:none; background:transparent;
+        font-size:1.5rem; cursor:pointer; color:#666;">&times;</button>
+      <h2 style="margin:0 0 6px; font-size:1.3rem; color:#1e3c72;">Company Profile</h2>
+      <p style="margin:0 0 18px; color:#53657d; font-size:0.92rem;">Set the company details that appear on every invoice and estimate.</p>
+      <form id="companyProfileForm">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div style="grid-column:1/-1;">
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Company Name</label>
+            <input id="companyName" type="text" placeholder="Your Company Name" required
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Company Address</label>
+            <input id="companyAddress" type="text" placeholder="123 Main St, City, State"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <div>
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Phone</label>
+            <input id="companyPhone" type="text" placeholder="(555) 123-4567"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <div>
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Email</label>
+            <input id="companyEmail" type="email" placeholder="billing@company.com"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Company Logo</label>
+            <input id="companyLogo" type="file" accept="image/png,image/jpeg,image/gif,image/webp"
+              style="width:100%; box-sizing:border-box; padding:8px; border-radius:8px; border:1px solid #d0d7de; font-size:0.9rem;">
+            <div id="companyLogoPreview" style="margin-top:8px; display:none; align-items:center; gap:10px;">
+              <img id="companyLogoImg" src="" alt="Logo preview"
+                style="max-height:60px; max-width:180px; border-radius:6px; border:1px solid #d0d7de;">
+              <button type="button" id="removeLogoBtn"
+                style="background:#f1f5fa; border:1px solid #d0d7de; color:#53657d; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:0.85rem;">
+                Remove
+              </button>
+            </div>
+          </div>
+
+          <div style="grid-column:1/-1;">
+            <label style="display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#53657d;">Default Scope of Work</label>
+            <textarea id="defaultScopeOfWork" rows="5"
+              style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem; font-family:inherit; resize:vertical;"
+              placeholder="Enter your standard scope of work. Pre-fills on every new client but can be edited per job."></textarea>
+            <small style="color:#53657d; font-size:0.82rem; margin-top:4px; display:block;">Pre-fills the Scope of Work on new clients. Each client keeps their own version.</small>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+          <button type="button" id="cancelCompanyProfile"
+            style="padding:10px 16px; border-radius:8px; border:1px solid #d0d7de; background:#f1f5fa; color:#53657d; cursor:pointer; font-weight:600;">
+            Cancel
+          </button>
+          <button type="submit" id="saveCompanyProfile"
+            style="padding:10px 16px; border-radius:8px; border:none; background:linear-gradient(135deg,#2f80ed,#4f8dfd); color:white; cursor:pointer; font-weight:600;">
+            Save Profile
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </body>
 </html>

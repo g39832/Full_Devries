@@ -156,6 +156,11 @@ async function updateFinanceMetrics() {
     const received = summary?.totalReceived || 0;
     const remaining = summary?.totalRemaining || 0;
     const clients = summary?.totalClients || 0;
+    const avgMargin = summary?.avgMarginPct;
+    const avgMarginDisplay = avgMargin !== null && avgMargin !== undefined ? `${avgMargin}%` : '—';
+    const avgMarginColor = avgMargin !== null && avgMargin !== undefined
+      ? (avgMargin >= 30 ? '#16a34a' : avgMargin >= 15 ? '#d97706' : '#dc2626')
+      : '#6c7a89';
 
     financeTableBody.innerHTML = `
       <tr class="metrics-values-row">
@@ -164,25 +169,18 @@ async function updateFinanceMetrics() {
         <td data-label="Received"><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
         <td data-label="Remaining"><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
         <td data-label="Clients"><input type="number" id="input-clients" inputmode="numeric" enterkeyhint="done" pattern="[0-9]*" step="1" value="${clients}" /></td>
+        <td data-label="Avg Margin" style="font-weight:700; color:${avgMarginColor};">${avgMarginDisplay}</td>
       </tr>
       <tr class="metrics-actions-row">
-        <td colspan="5" class="metrics-actions-cell" style="text-align:right;">
-        <button id="saveFinanceBtn" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer; font-weight:600;">Save Year Data</button>
-          <button id="undoFinanceYearBtn"
-          style="margin-left:10px; background:#4a5568; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">
-            Undo
-           </button>
-</td>
+        <td colspan="6" class="metrics-actions-cell" style="text-align:right;">
+          <button id="saveFinanceBtn" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer; font-weight:600;">Save Year Data</button>
+          <button id="undoFinanceYearBtn" style="margin-left:10px; background:#4a5568; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">Undo</button>
+        </td>
       </tr>
     `;
 
-    document
-      .getElementById("saveFinanceBtn")
-      .addEventListener("click", saveFinanceYear);
-
-    document
-    .getElementById("undoFinanceYearBtn")
-    .addEventListener("click", undoFinanceYear);
+    document.getElementById("saveFinanceBtn").addEventListener("click", saveFinanceYear);
+    document.getElementById("undoFinanceYearBtn").addEventListener("click", undoFinanceYear);
 
     ["input-expected", "input-received", "input-remaining"].forEach((id) => {
       const input = document.getElementById(id);

@@ -1,4 +1,16 @@
  // ======================================================
+// HTML ESCAPE UTILITY
+// ======================================================
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/`/g, '&#96;');
+}
+
+// ======================================================
 // STATUS CONFIG
 // ======================================================
 const STATUS_ORDER = [
@@ -752,6 +764,86 @@ window.api = {
     });
     if (!res.ok) throw new Error("Failed to delete note");
     return res.json();
+  },
+
+  async sendInvoice(clientId) {
+    return this._downloadDocument(clientId, 'invoice');
+  },
+
+  async sendEstimate(clientId) {
+    return this._downloadDocument(clientId, 'estimate');
+  },
+
+  async _downloadDocument(clientId, mode) {
+    const endpoint = mode === 'estimate'
+      ? `/api/send-estimate/${clientId}`
+      : `/api/send-invoice/${clientId}`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) {
+      let message = `Failed to generate ${mode}`;
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const match = cd.match(/filename="?([^"]+)"?/i);
+    const filename = match?.[1] || `${mode}-${clientId}.pdf`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = filename;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { success: true, filename };
+  },
+
+  async getCompanyProfile() {
+    if (this._companyProfile) return this._companyProfile;
+    const res = await fetch('/api/company-profile');
+    if (!res.ok) throw new Error('Failed to load company profile');
+    this._companyProfile = await res.json();
+    return this._companyProfile;
+  },
+
+  async saveCompanyProfile(payload) {
+    const res = await fetch('/api/company-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      let message = 'Failed to save company profile';
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    this._companyProfile = await res.json();
+    return this._companyProfile;
+  },
+
+  async getEmailSettings() {
+    if (this._emailSettings) return this._emailSettings;
+    const res = await fetch('/api/email-settings');
+    if (!res.ok) throw new Error('Failed to load email settings');
+    this._emailSettings = await res.json();
+    return this._emailSettings;
+  },
+
+  async saveEmailSettings(payload) {
+    const res = await fetch('/api/email-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      let message = 'Failed to save email settings';
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    this._emailSettings = await res.json();
+    return this._emailSettings;
   }
 };
 // ======================================================
@@ -778,6 +870,7 @@ const overlay = document.getElementById("projectOverlay");
 // Client panel should close via explicit actions (X button / Delete flow).
 
 let activeId = null;
+let activeClient = null;
 let searchTimeout = null;
 let searchRequestController = null;
 let isSaving = false;
@@ -1017,12 +1110,22 @@ async function openClient(id) {
     const clients = await window.api.searchClients("");
     const client = clients.find(c => c.id == id);
     if (!client) return;
+    activeClient = client;
 
     const [fName, ...rest] = (client.name || "").split(" ");
     const lName = rest.join(" ");
     const mapsLink = client.address
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(client.address)}`
       : "";
+
+    // Pre-fill scope from company default if client has none saved yet
+    let initialScope = client.scope_of_work || "";
+    if (!initialScope) {
+      try {
+        const profile = await window.api.getCompanyProfile();
+        initialScope = profile?.settings?.defaultScopeOfWork || "";
+      } catch (e) { /* silently skip */ }
+    }
 
     projectPanel.innerHTML = `
       <div class="detail-card animate-panel panel-shell" style="opacity:0; transform:translateY(-20px); transition:0.25s ease;">
@@ -1095,6 +1198,44 @@ async function openClient(id) {
             </div>
           </div>
 
+          <!-- ===== JOB COST & MARGIN ===== -->
+          <div class="panel-section panel-full-span">
+            <div class="panel-section-header">
+              <h3>Job Cost &amp; Margin</h3>
+              <span class="panel-section-note">Total price minus job cost equals your margin.</span>
+            </div>
+            <div class="panel-inline-row">
+              <input type="text" id="jobCostInput" placeholder="Job Cost"
+                inputmode="decimal" class="panel-money-input"
+                value="${client.job_cost ? formatMoney(client.job_cost) : ''}">
+            </div>
+            <div class="panel-balance-row">
+              <div class="panel-metric">
+                <span>Job Cost</span>
+                <strong id="jobCostDisplay">$${formatMoney(client.job_cost || 0)}</strong>
+              </div>
+              <div class="panel-metric">
+                <span>Margin $</span>
+                <strong id="marginDollarDisplay">$${formatMoney(Number(client.total_due || 0) - Number(client.job_cost || 0))}</strong>
+              </div>
+              <div class="panel-metric">
+                <span>Margin %</span>
+                <strong id="marginPctDisplay">${Number(client.total_due || 0) > 0 ? Math.round(((Number(client.total_due || 0) - Number(client.job_cost || 0)) / Number(client.total_due)) * 100) + '%' : '—'}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== SCOPE OF WORK ===== -->
+          <div class="panel-section panel-full-span">
+            <div class="panel-section-header">
+              <h3>Scope of Work</h3>
+              <span class="panel-section-note">Pulled onto invoices and estimates. Independent from notes.</span>
+            </div>
+            <textarea id="p-scope" rows="5"
+              style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem; resize:vertical; box-sizing:border-box; font-family:inherit;"
+              placeholder="Describe the work to be done...">${escapeHtml(initialScope)}</textarea>
+          </div>
+
           <div id="pdf-drop-zone" class="drop-zone"
             style="grid-column: span 2;">📄 Drop Client PDFs Here</div>
 
@@ -1126,6 +1267,8 @@ async function openClient(id) {
           </div>
 
           <div class="panel-actions panel-full-span">
+            <button id="estimateBtn" class="btn-primary" style="background:linear-gradient(135deg,#0f9b58,#27c97a); flex:2;">Download Estimate</button>
+            <button id="invoiceBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); flex:2;">Download Invoice</button>
             <button id="reviewBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; flex:2;">Send Google Review</button>
             <button id="saveBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); flex:2;">Save Changes</button>
             <button id="delBtn" class="btn-primary" style="background:#4a5568; flex:1;">Delete</button>
@@ -1288,12 +1431,32 @@ function setupDirtyTracking() {
   const emailEl = document.getElementById("p-email");
   const totalDueEl = document.getElementById("totalDueInput");
   const newNoteInput = document.getElementById("new-note-input");
+  const scopeEl = document.getElementById("p-scope");
+  const jobCostEl = document.getElementById("jobCostInput");
 
-  [statusEl, addrEl, phoneEl, emailEl, totalDueEl, newNoteInput].forEach(el => {
+  [statusEl, addrEl, phoneEl, emailEl, totalDueEl, newNoteInput, scopeEl, jobCostEl].forEach(el => {
     if (!el) return;
     el.addEventListener("input", markDirty);
     el.addEventListener("change", markDirty);
   });
+
+  // Live margin calculation
+  if (jobCostEl) {
+    const updateMargin = () => {
+      const total = parseMoney(totalDueEl?.value) || Number(activeClient?.total_due || 0);
+      const cost = parseMoney(jobCostEl.value) || 0;
+      const marginDollar = total - cost;
+      const marginPct = total > 0 ? Math.round((marginDollar / total) * 100) : null;
+      const dollarEl = document.getElementById("marginDollarDisplay");
+      const pctEl = document.getElementById("marginPctDisplay");
+      const costDisplay = document.getElementById("jobCostDisplay");
+      if (dollarEl) dollarEl.textContent = "$" + formatMoney(marginDollar);
+      if (pctEl) pctEl.textContent = marginPct !== null ? marginPct + "%" : "—";
+      if (costDisplay) costDisplay.textContent = "$" + formatMoney(cost);
+    };
+    jobCostEl.addEventListener("input", updateMargin);
+    if (totalDueEl) totalDueEl.addEventListener("input", updateMargin);
+  }
 }
 
 // ======================================================
@@ -1666,6 +1829,38 @@ if (target.id === "undoFinanceBtn") {
 
     if (target.id === "printBtn") printClientWorkspace();
 
+    if (target.id === "estimateBtn") {
+      if (!confirm("Download this client's estimate PDF?")) return;
+      try {
+        target.disabled = true;
+        target.textContent = "Downloading...";
+        await window.api.sendEstimate(activeId);
+        showToast("Estimate downloaded", "success");
+      } catch (err) {
+        console.error(err);
+        showToast(err.message || "Failed to generate estimate", "error");
+      } finally {
+        target.disabled = false;
+        target.textContent = "Download Estimate";
+      }
+    }
+
+    if (target.id === "invoiceBtn") {
+      if (!confirm("Download this client's invoice PDF?")) return;
+      try {
+        target.disabled = true;
+        target.textContent = "Downloading...";
+        await window.api.sendInvoice(activeId);
+        showToast("Invoice downloaded", "success");
+      } catch (err) {
+        console.error(err);
+        showToast(err.message || "Failed to generate invoice", "error");
+      } finally {
+        target.disabled = false;
+        target.textContent = "Download Invoice";
+      }
+    }
+
     if (target.id === "reviewBtn") {
       const googleLink = "https://www.google.com/maps/place/DeVries+Brothers+Roofing+and+Construction/@36.9772676,-86.4834052,12z/data=!4m8!3m7!1s0xa03088fa81602de1:0x9f671e0d27f600cb!8m2!3d36.977159!4d-86.4008325!9m1!1b1!16s%2Fg%2F11x90mpwmq?entry=ttu&g_ep=EgoyMDI2MDIxOC4wIKXMDSoASAFQAw%3D%3D";
       window.open(googleLink, "_blank");
@@ -1829,6 +2024,7 @@ async function savePendingNotes({ silent = false } = {}) {
 }
 
 function collectPanelData() {
+  const jobCost = parseMoney(document.getElementById("jobCostInput")?.value) || 0;
   return {
     id: activeId,
     fName: getPanelFName(),
@@ -1836,7 +2032,9 @@ function collectPanelData() {
     address: document.getElementById("p-address")?.value || "",
     status: document.getElementById("p-status")?.value || "",
     phone: document.getElementById("p-phone")?.value || "",
-    email: document.getElementById("p-email")?.value || ""
+    email: document.getElementById("p-email")?.value || "",
+    scope_of_work: document.getElementById("p-scope")?.value || "",
+    job_cost: jobCost
   };
 }
 
@@ -1946,3 +2144,203 @@ document.addEventListener("keydown", async (e) => {
 // Ensure latest edits are sent before leaving the page
 
 refreshList();
+
+// ======================================================
+// EMAIL SETTINGS MODAL
+// ======================================================
+let emailSettingsLoading = false;
+let currentEmailSettings = null;
+
+const emailSettingsBtn = document.getElementById('emailSettingsBtn');
+const emailSettingsModal = document.getElementById('emailSettingsModal');
+const emailSettingsForm = document.getElementById('emailSettingsForm');
+const closeEmailSettingsBtn = document.getElementById('closeEmailSettings');
+const cancelEmailSettingsBtn = document.getElementById('cancelEmailSettings');
+const saveEmailSettingsBtn = document.getElementById('saveEmailSettings');
+
+function getEmailProviderDefaults(provider) {
+  if (provider === 'outlook') return { smtpHost: 'smtp.office365.com', smtpPort: '587', smtpSecure: false };
+  if (provider === 'gmail') return { smtpHost: 'smtp.gmail.com', smtpPort: '587', smtpSecure: false };
+  return { smtpHost: '', smtpPort: '587', smtpSecure: false };
+}
+
+function setEmailSettingsFormValues(settings = {}) {
+  const get = (id) => document.getElementById(id);
+  if (get('emailProvider')) get('emailProvider').value = settings.provider || 'gmail';
+  if (get('emailFromName')) get('emailFromName').value = settings.fromName || '';
+  if (get('emailFromEmail')) get('emailFromEmail').value = settings.fromEmail || '';
+  if (get('emailReplyTo')) get('emailReplyTo').value = settings.replyToEmail || '';
+  if (get('emailSmtpHost')) get('emailSmtpHost').value = settings.smtpHost || '';
+  if (get('emailSmtpPort')) get('emailSmtpPort').value = settings.smtpPort || '587';
+  if (get('emailSmtpPassword')) get('emailSmtpPassword').value = '';
+  if (get('emailSmtpSecure')) get('emailSmtpSecure').checked = Boolean(settings.smtpSecure);
+}
+
+async function openEmailSettingsModal() {
+  if (!emailSettingsModal || emailSettingsLoading) return;
+  emailSettingsLoading = true;
+  try {
+    const response = await window.api.getEmailSettings();
+    currentEmailSettings = response?.settings || null;
+    setEmailSettingsFormValues(currentEmailSettings || {});
+    emailSettingsModal.style.display = 'flex';
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'Failed to load email settings', 'error');
+  } finally {
+    emailSettingsLoading = false;
+  }
+}
+
+function closeEmailSettingsModal() {
+  if (!emailSettingsModal) return;
+  emailSettingsModal.style.display = 'none';
+  if (emailSettingsForm) emailSettingsForm.reset();
+}
+
+if (emailSettingsBtn) emailSettingsBtn.addEventListener('click', openEmailSettingsModal);
+if (closeEmailSettingsBtn) closeEmailSettingsBtn.addEventListener('click', closeEmailSettingsModal);
+if (cancelEmailSettingsBtn) cancelEmailSettingsBtn.addEventListener('click', closeEmailSettingsModal);
+
+if (emailSettingsForm) {
+  emailSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const get = (id) => document.getElementById(id);
+    const payload = {
+      provider: get('emailProvider')?.value || 'gmail',
+      fromName: get('emailFromName')?.value || '',
+      fromEmail: get('emailFromEmail')?.value || '',
+      replyToEmail: get('emailReplyTo')?.value || '',
+      smtpHost: get('emailSmtpHost')?.value || '',
+      smtpPort: Number(get('emailSmtpPort')?.value || 587),
+      smtpUser: get('emailFromEmail')?.value || '',
+      smtpPassword: get('emailSmtpPassword')?.value || '',
+      smtpSecure: Boolean(get('emailSmtpSecure')?.checked)
+    };
+    try {
+      if (saveEmailSettingsBtn) { saveEmailSettingsBtn.disabled = true; saveEmailSettingsBtn.textContent = 'Saving...'; }
+      await window.api.saveEmailSettings(payload);
+      showToast('Email settings saved', 'success');
+      closeEmailSettingsModal();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Failed to save email settings', 'error');
+    } finally {
+      if (saveEmailSettingsBtn) { saveEmailSettingsBtn.disabled = false; saveEmailSettingsBtn.textContent = 'Save Email Setup'; }
+    }
+  });
+}
+
+// ======================================================
+// COMPANY PROFILE MODAL
+// ======================================================
+let currentCompanyProfile = null;
+let companyProfileLoading = false;
+
+const companyProfileBtn = document.getElementById('companyProfileBtn');
+const companyProfileModal = document.getElementById('companyProfileModal');
+const companyProfileForm = document.getElementById('companyProfileForm');
+const closeCompanyProfileBtn = document.getElementById('closeCompanyProfile');
+const cancelCompanyProfileBtn = document.getElementById('cancelCompanyProfile');
+const saveCompanyProfileBtn = document.getElementById('saveCompanyProfile');
+
+async function openCompanyProfileModal() {
+  if (!companyProfileModal || companyProfileLoading) return;
+  companyProfileLoading = true;
+  window._pendingLogoBase64 = undefined;
+  try {
+    const response = await window.api.getCompanyProfile();
+    currentCompanyProfile = response?.settings || null;
+    const p = currentCompanyProfile || {};
+    if (document.getElementById('companyName')) document.getElementById('companyName').value = p.businessName || '';
+    if (document.getElementById('companyAddress')) document.getElementById('companyAddress').value = p.businessAddress || '';
+    if (document.getElementById('companyPhone')) document.getElementById('companyPhone').value = p.businessPhone || '';
+    if (document.getElementById('companyEmail')) document.getElementById('companyEmail').value = p.businessEmail || '';
+    if (document.getElementById('defaultScopeOfWork')) document.getElementById('defaultScopeOfWork').value = p.defaultScopeOfWork || '';
+
+    const preview = document.getElementById('companyLogoPreview');
+    const img = document.getElementById('companyLogoImg');
+    if (preview && img) {
+      if (p.logoUrl) { img.src = p.logoUrl; preview.style.display = 'flex'; }
+      else { preview.style.display = 'none'; img.src = ''; }
+    }
+
+    companyProfileModal.style.display = 'flex';
+
+    // Wire logo input
+    const logoInput = document.getElementById('companyLogo');
+    if (logoInput) {
+      logoInput.value = '';
+      logoInput.onchange = () => {
+        const file = logoInput.files?.[0];
+        if (!file) return;
+        if (file.size > 3 * 1024 * 1024) {
+          showToast('Logo is too large. Please use an image under 3MB.', 'error');
+          logoInput.value = ''; return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          window._pendingLogoBase64 = e.target.result;
+          if (img) img.src = e.target.result;
+          if (preview) { preview.style.display = 'flex'; preview.style.alignItems = 'center'; }
+        };
+        reader.readAsDataURL(file);
+      };
+    }
+
+    const removeBtn = document.getElementById('removeLogoBtn');
+    if (removeBtn) {
+      removeBtn.onclick = () => {
+        window._pendingLogoBase64 = '';
+        if (img) img.src = '';
+        if (preview) preview.style.display = 'none';
+        if (logoInput) logoInput.value = '';
+      };
+    }
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'Failed to load company profile', 'error');
+  } finally {
+    companyProfileLoading = false;
+  }
+}
+
+function closeCompanyProfileModal() {
+  if (!companyProfileModal) return;
+  companyProfileModal.style.display = 'none';
+  if (companyProfileForm) companyProfileForm.reset();
+  window._pendingLogoBase64 = undefined;
+}
+
+if (companyProfileBtn) companyProfileBtn.addEventListener('click', openCompanyProfileModal);
+if (closeCompanyProfileBtn) closeCompanyProfileBtn.addEventListener('click', closeCompanyProfileModal);
+if (cancelCompanyProfileBtn) cancelCompanyProfileBtn.addEventListener('click', closeCompanyProfileModal);
+
+if (companyProfileForm) {
+  companyProfileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      businessName: document.getElementById('companyName')?.value || '',
+      businessAddress: document.getElementById('companyAddress')?.value || '',
+      businessPhone: document.getElementById('companyPhone')?.value || '',
+      businessEmail: document.getElementById('companyEmail')?.value || '',
+      defaultScopeOfWork: document.getElementById('defaultScopeOfWork')?.value || '',
+      logoUrl: window._pendingLogoBase64 !== undefined
+        ? window._pendingLogoBase64
+        : (currentCompanyProfile?.logoUrl || '')
+    };
+    if (!payload.businessName.trim()) { showToast('Company name is required', 'error'); return; }
+    try {
+      if (saveCompanyProfileBtn) { saveCompanyProfileBtn.disabled = true; saveCompanyProfileBtn.textContent = 'Saving...'; }
+      const result = await window.api.saveCompanyProfile(payload);
+      currentCompanyProfile = result?.settings || null;
+      showToast('Company profile saved', 'success');
+      closeCompanyProfileModal();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Failed to save company profile', 'error');
+    } finally {
+      if (saveCompanyProfileBtn) { saveCompanyProfileBtn.disabled = false; saveCompanyProfileBtn.textContent = 'Save Profile'; }
+    }
+  });
+}
