@@ -1,10 +1,30 @@
+const fs = require('fs');
+const path = require('path');
 const PDFDocument = require('pdfkit');
 const { normalizeCompanyProfile } = require('./company-profile');
+
+const DEFAULT_LOGO_PATH = path.join(__dirname, '..', 'assets', 'devries_pic.png');
 
 function formatMoney(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '0.00';
   return num.toFixed(2);
+}
+
+function resolveLogoBuffer(data) {
+  if (data.logoBase64) {
+    try {
+      return Buffer.from(data.logoBase64, 'base64');
+    } catch {
+      // Fall through to the default brand asset if the stored logo is invalid.
+    }
+  }
+
+  try {
+    return fs.readFileSync(DEFAULT_LOGO_PATH);
+  } catch {
+    return null;
+  }
 }
 
 // ======================================================
@@ -27,13 +47,13 @@ function generateInvoicePDF(data, mode = 'invoice') {
 
     // ---- Logo ----
     let logoDrawn = false;
-    if (data.logoBase64) {
+    const logoBuffer = resolveLogoBuffer(data);
+    if (logoBuffer) {
       try {
-        const logoBuffer = Buffer.from(data.logoBase64, 'base64');
         doc.image(logoBuffer, 48, 48, { width: 100, height: 60, fit: [100, 60] });
         logoDrawn = true;
       } catch (e) {
-        // Logo failed to render — skip it
+        // Logo failed to render - skip it
       }
     }
 
@@ -92,7 +112,7 @@ function generateInvoicePDF(data, mode = 'invoice') {
 }
 
 function buildInvoiceData({ client, latestNote = null, companyProfile = {}, mode = 'invoice' }) {
-  // Only use the client's scope_of_work — notes never appear on invoices/estimates
+  // Only use the client's scope_of_work - notes never appear on invoices/estimates
   const workDescription = client.scope_of_work || 'No scope of work provided.';
 
   const company = normalizeCompanyProfile(companyProfile, process.env);
