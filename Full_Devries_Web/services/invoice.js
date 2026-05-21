@@ -30,6 +30,7 @@ function resolveLogoBuffer(data) {
 function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } = {}) {
   const content = String(text || '').trim();
   if (!content) return;
+  const M = doc.page.margins.left;
 
   const blocks = content.split(/\n\s*\n/);
   blocks.forEach((block, index) => {
@@ -40,14 +41,14 @@ function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } =
     if (bulletLines) {
       const items = lines.map((line) => line.replace(/^(\-|\*|\u2022|\d+\.)\s+/, '').trim()).filter(Boolean);
       if (items.length) {
-        doc.list(items, {
+        doc.list(items, M, doc.y, {
           bulletIndent: 12,
           textIndent: 18,
           width
         });
       }
     } else {
-      doc.text(lines.join('\n'), {
+      doc.text(lines.join('\n'), M, doc.y, {
         width,
         lineGap,
         paragraphGap
@@ -61,24 +62,31 @@ function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } =
 }
 
 function writeFieldRow(doc, label, value, options = {}) {
-  const { labelWidth = 120, width = 280 } = options;
+  const { labelWidth = 72, width = 280 } = options;
+  const M = doc.page.margins.left;
   const y = doc.y;
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#6b7280').text(`${label}:`, { continued: true, width: labelWidth });
-  doc.font('Helvetica').fontSize(10).fillColor('#111827').text(String(value || ''), {
-    width: Math.max(0, width - labelWidth),
-    lineGap: 1.5
-  });
-  if (doc.y <= y) doc.y = y + 14;
+  // Label
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('#6b7280')
+    .text(`${label}:`, M, y, { width: labelWidth, continued: false });
+  // Value — same line, offset by labelWidth
+  doc.font('Helvetica').fontSize(10).fillColor('#111827')
+    .text(String(value || '—'), M + labelWidth, y, {
+      width: Math.max(0, width - labelWidth),
+      lineGap: 1.5
+    });
+  // Ensure we advance past the row
+  doc.y = Math.max(doc.y, y + 16);
 }
 
 // ======================================================
 // DRAW SECTION HEADING with divider line
 // ======================================================
 function drawSectionHeading(doc, title, contentWidth, sectionColor) {
-  doc.font('Helvetica-Bold').fontSize(13).fillColor('#111827').text(title);
+  const M = doc.page.margins.left;
+  doc.font('Helvetica-Bold').fontSize(13).fillColor('#111827').text(title, M, doc.y);
   const lineY = doc.y + 3;
-  doc.moveTo(doc.page.margins.left, lineY)
-    .lineTo(doc.page.margins.left + contentWidth, lineY)
+  doc.moveTo(M, lineY)
+    .lineTo(M + contentWidth, lineY)
     .lineWidth(0.8)
     .strokeColor(sectionColor)
     .stroke();
@@ -181,7 +189,6 @@ function generateInvoicePDF(data, mode = 'invoice') {
       paragraphGap: 7,
       lineGap: 3
     });
-
     // ================================================================
     // SUMMARY BOX
     // ================================================================
