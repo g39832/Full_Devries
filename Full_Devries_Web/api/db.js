@@ -1,8 +1,18 @@
+/**
+ * db.js — Supabase-backed database layer
+ *
+ * Replaces the local PostgreSQL pool with Supabase's postgres connection
+ * so all data is stored in the cloud and accessible from any device.
+ *
+ * The DATABASE_URL env var should point to your Supabase postgres connection
+ * string (found in Supabase → Settings → Database → Connection string → URI).
+ */
 const { Pool } = require('pg');
 
 const connectionString = process.env.NODE_ENV === 'test' && process.env.TEST_DATABASE_URL
   ? process.env.TEST_DATABASE_URL
   : process.env.DATABASE_URL;
+
 const slowQueryMs = Number(process.env.DB_SLOW_QUERY_MS || 250);
 
 function envInt(name, fallback) {
@@ -13,7 +23,7 @@ function envInt(name, fallback) {
 }
 
 if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is required');
+  throw new Error('DATABASE_URL environment variable is required. Set it to your Supabase postgres connection string.');
 }
 
 const pool = new Pool({
@@ -54,7 +64,7 @@ async function initSchema() {
     );
   `);
 
-  // CLIENTS
+  // CLIENTS — full schema including all fields
   await query(`
     CREATE TABLE IF NOT EXISTS clients (
       id BIGSERIAL PRIMARY KEY,
@@ -66,14 +76,25 @@ async function initSchema() {
       total_due DOUBLE PRECISION DEFAULT 0,
       amount_paid DOUBLE PRECISION DEFAULT 0,
       balance DOUBLE PRECISION DEFAULT 0,
+      scope_of_work TEXT DEFAULT '',
+      job_cost DOUBLE PRECISION DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
-  await query(`
-    CREATE INDEX IF NOT EXISTS idx_clients_created_at
-    ON clients(created_at);
-  `);
+  // Add columns if they don't exist yet (safe for existing DBs)
+  const alterColumns = [
+    `ALTER TABLE clients ADD COLUMN IF NOT EXISTS scope_of_work TEXT DEFAULT ''`,
+    `ALTER TABLE clients ADD COLUMN IF NOT EXISTS job_cost DOUBLE PRECISION DEFAULT 0`,
+    `ALTER TABLE clients ADD COLUMN IF NOT EXISTS amount_paid DOUBLE PRECISION DEFAULT 0`,
+    `ALTER TABLE clients ADD COLUMN IF NOT EXISTS balance DOUBLE PRECISION DEFAULT 0`,
+    `ALTER TABLE clients ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Lead'`,
+  ];
+  for (const sql of alterColumns) {
+    await query(sql).catch(() => {}); // ignore if already exists
+  }
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_clients_created_at ON clients(created_at);`);
 
   // PAYMENTS
   await query(`
@@ -84,16 +105,8 @@ async function initSchema() {
       payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
-
-  await query(`
-    CREATE INDEX IF NOT EXISTS idx_payments_client
-    ON payments(client_id);
-  `);
-
-  await query(`
-    CREATE INDEX IF NOT EXISTS idx_payments_date
-    ON payments(payment_date);
-  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_payments_client ON payments(client_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date);`);
 
   // NOTES
   await query(`
@@ -104,11 +117,7 @@ async function initSchema() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
-
-  await query(`
-    CREATE INDEX IF NOT EXISTS idx_notes_client
-    ON notes(client_id);
-  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_notes_client ON notes(client_id);`);
 
   // FINANCE OVERRIDES
   await query(`
@@ -120,6 +129,26 @@ async function initSchema() {
       total_remaining DOUBLE PRECISION DEFAULT 0,
       total_clients INTEGER DEFAULT 0,
       notes TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // MARGIN TRACKER
+  await query(`
+    CREATE TABLE IF NOT EXISTS finance_margin_entries (
+      id BIGSERIAL PRIMARY KEY,
+      client_id BIGINT REFERENCES clients(id) ON DELETE SET NULL,
+      client_name TEXT DEFAULT '',
+      category TEXT DEFAULT 'Misc',
+      project TEXT DEFAULT '',
+      invoice_status TEXT DEFAULT 'Pending',
+      amount DOUBLE PRECISION DEFAULT 0,
+      expense_type TEXT DEFAULT 'one-time',
+      recurring BOOLEAN DEFAULT false,
+      expense_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      notes TEXT DEFAULT '',
+      attachment_url TEXT DEFAULT '',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);

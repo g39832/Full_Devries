@@ -6,17 +6,6 @@ const { normalizeCompanyProfile } = require('../services/company-profile');
 
 const router = express.Router();
 
-let _supabase = null;
-function getSupabase() {
-  if (!_supabase) {
-    const { createClient } = require('@supabase/supabase-js');
-    _supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-  }
-  return _supabase;
-}
 const COMPANY_PROFILE_KEY = 'company_profile';
 
 async function readStoredCompanyProfile() {
@@ -32,42 +21,24 @@ async function readStoredCompanyProfile() {
 }
 
 async function fetchLatestNote(clientId) {
-  const { data, error } = await getSupabase()
-    .from('notes')
-    .select('id, content, created_at')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data || null;
+  await db.schemaReady;
+  const { rows } = await db.query(
+    'SELECT id, content, created_at FROM notes WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1',
+    [clientId]
+  );
+  return rows[0] || null;
 }
 
 async function handleDocumentGeneration(req, res, mode) {
   try {
-    const { clientId } = req.params;
+    const clientId = req.params.clientId;
 
-    const { data: client, error } = await getSupabase()
-      .from('clients')
-      .select('*')
-      .eq('id', clientId)
-      .single();
-
-    if (error || !client) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-
-    // scope_of_work is always authoritative in the local DB — always read it from there
     await db.schemaReady;
-    const { rows: localRows } = await db.query(
-      'SELECT scope_of_work, job_cost FROM clients WHERE id = $1',
-      [clientId]
-    );
-    if (localRows[0]) {
-      client.scope_of_work = localRows[0].scope_of_work || client.scope_of_work || '';
-      if (client.job_cost === undefined || client.job_cost === null) {
-        client.job_cost = localRows[0].job_cost;
-      }
+    const { rows } = await db.query('SELECT * FROM clients WHERE id = $1', [clientId]);
+    const client = rows[0];
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
     }
 
     const latestNote = await fetchLatestNote(clientId);
