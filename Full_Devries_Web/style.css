@@ -442,6 +442,25 @@ button.btn-primary:hover {
   text-decoration: none;
 }
 
+.panel-contact-links a[href^="mailto:"],
+.panel-contact-links a[href^="tel:"] {
+  color: #7fdbff;
+  -webkit-text-fill-color: #7fdbff;
+  word-break: break-word;
+}
+
+.panel-contact-links a[href^="mailto:"]:visited,
+.panel-contact-links a[href^="tel:"]:visited {
+  color: #b8e7ff;
+  -webkit-text-fill-color: #b8e7ff;
+}
+
+.panel-contact-links a[href^="mailto:"]:hover,
+.panel-contact-links a[href^="tel:"]:hover {
+  color: #e2f5ff;
+  -webkit-text-fill-color: #e2f5ff;
+}
+
 .panel-contact-links a:hover,
 .maps-link:hover {
   text-decoration: underline;
@@ -692,6 +711,28 @@ button.btn-primary:hover {
   background: rgba(255,255,255,0.08);
   color: #fff;
   border: 1px solid rgba(255,255,255,0.12);
+}
+
+.notes-list .note-edit-textarea {
+  width: 100%;
+  min-height: 120px;
+  flex: 1;
+  padding: 10px 12px;
+  resize: vertical;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: #fff;
+  color: #111827;
+  caret-color: #111827;
+  font-family: inherit;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
+.notes-list .note-edit-textarea:focus {
+  outline: none;
+  border-color: #7fdbff;
+  box-shadow: 0 0 0 3px rgba(127, 219, 255, 0.2);
 }
 
 .notes-actions .add-note-btn {
