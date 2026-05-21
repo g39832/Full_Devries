@@ -1500,6 +1500,7 @@ async function setupNotesSection(clientId) {
         const editBtn = document.createElement("button");
         editBtn.innerText = "Edit";
         editBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
+        editBtn.style.color = "#fff";
         editBtn.style.border = "none";
         editBtn.style.padding = "4px 8px";
         editBtn.style.borderRadius = "4px";
@@ -1508,6 +1509,7 @@ async function setupNotesSection(clientId) {
         const deleteBtn = document.createElement("button");
         deleteBtn.innerText = "Delete";
         deleteBtn.style.background = "#4a5568";
+        deleteBtn.style.color = "#fff";
         deleteBtn.style.border = "none";
         deleteBtn.style.padding = "4px 8px";
         deleteBtn.style.borderRadius = "4px";
@@ -1518,9 +1520,19 @@ async function setupNotesSection(clientId) {
           const textarea = document.createElement("textarea");
           textarea.value = current;
           textarea.rows = 4;
+          textarea.className = "note-edit-textarea";
           textarea.style.flex = "1";
-          textarea.style.padding = "6px 8px";
+          textarea.style.padding = "10px 12px";
           textarea.style.resize = "vertical";
+          textarea.style.minWidth = "0";
+          textarea.style.borderRadius = "6px";
+          textarea.style.border = "1px solid rgba(148, 163, 184, 0.6)";
+          textarea.style.background = "#fff";
+          textarea.style.color = "#111827";
+          textarea.style.caretColor = "#111827";
+          textarea.style.fontFamily = "inherit";
+          textarea.style.lineHeight = "1.45";
+          textarea.style.boxSizing = "border-box";
           textarea.dataset.noteId = note.id;
           textarea.dataset.clientId = clientId;
           textarea.dataset.original = current;
@@ -1528,6 +1540,7 @@ async function setupNotesSection(clientId) {
           const saveBtn = document.createElement("button");
           saveBtn.innerText = "Save";
           saveBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
+          saveBtn.style.color = "#fff";
           saveBtn.style.border = "none";
           saveBtn.style.padding = "4px 8px";
           saveBtn.style.borderRadius = "4px";
@@ -1537,6 +1550,7 @@ async function setupNotesSection(clientId) {
           const cancelBtn = document.createElement("button");
           cancelBtn.innerText = "Cancel";
           cancelBtn.style.background = "rgba(255,255,255,0.14)";
+          cancelBtn.style.color = "#1a202c";
           cancelBtn.style.border = "none";
           cancelBtn.style.padding = "4px 8px";
           cancelBtn.style.borderRadius = "4px";
@@ -1547,7 +1561,9 @@ async function setupNotesSection(clientId) {
           noteDiv.insertBefore(saveBtn, editBtn);
           noteDiv.insertBefore(cancelBtn, editBtn);
           editBtn.style.display = "none";
-        textarea.addEventListener("input", markDirty);
+          textarea.addEventListener("input", markDirty);
+          textarea.focus();
+          textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
           cancelBtn.onclick = () => loadNotes();
           saveBtn.onclick = async () => {
@@ -1834,6 +1850,7 @@ if (target.id === "undoFinanceBtn") {
       try {
         target.disabled = true;
         target.textContent = "Downloading...";
+        await savePanelChanges({ silent: true, force: true });
         await window.api.sendEstimate(activeId);
         showToast("Estimate downloaded", "success");
       } catch (err) {
@@ -1850,6 +1867,7 @@ if (target.id === "undoFinanceBtn") {
       try {
         target.disabled = true;
         target.textContent = "Downloading...";
+        await savePanelChanges({ silent: true, force: true });
         await window.api.sendInvoice(activeId);
         showToast("Invoice downloaded", "success");
       } catch (err) {

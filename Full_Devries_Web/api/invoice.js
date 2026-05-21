@@ -57,6 +57,18 @@ async function handleDocumentGeneration(req, res, mode) {
       return res.status(404).json({ error: 'Client not found' });
     }
 
+    // Scope of work is stored in the local DB — merge it in if Supabase record lacks it
+    if (!client.scope_of_work) {
+      await db.schemaReady;
+      const { rows } = await db.query(
+        'SELECT scope_of_work FROM clients WHERE id = $1',
+        [clientId]
+      );
+      if (rows[0]?.scope_of_work) {
+        client.scope_of_work = rows[0].scope_of_work;
+      }
+    }
+
     const latestNote = await fetchLatestNote(clientId);
     const storedCompanyProfile = await readStoredCompanyProfile();
     const normalizedProfile = normalizeCompanyProfile(storedCompanyProfile || {});
