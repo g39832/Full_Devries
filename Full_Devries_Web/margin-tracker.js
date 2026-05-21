@@ -27,6 +27,7 @@
   const invoiceStatuses = ['Pending', 'Billed', 'Partially Paid', 'Paid', 'Overdue'];
   const pageSize = 8;
   let svgUid = 0;
+  let refreshTimer = null;
 
   const state = {
     loading: true,
@@ -1980,8 +1981,21 @@
     }
   }
 
+  function queueDashboardRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      refreshDashboard();
+    }, 120);
+  }
+
   document.addEventListener('financeUpdated', () => {
-    refreshDashboard();
+    queueDashboardRefresh();
+  });
+
+  window.addEventListener('focus', queueDashboardRefresh);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) queueDashboardRefresh();
   });
 
   yearInput?.addEventListener('change', () => {

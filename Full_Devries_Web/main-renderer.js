@@ -576,7 +576,9 @@ window.api = {
       body: JSON.stringify({ ...client, name })
     });
     if (!res.ok) throw new Error("Save failed");
-    return res.json();
+    const data = await res.json();
+    triggerFinanceUpdate();
+    return data;
   },
 
   async updateProject(data) {
@@ -589,7 +591,9 @@ window.api = {
       body: JSON.stringify(data)
     });
     if (!res.ok) throw new Error("Update failed");
-    return res.json();
+    const response = await res.json();
+    triggerFinanceUpdate();
+    return response;
   },
 
   async deleteClient(id) {
@@ -599,7 +603,9 @@ window.api = {
       body: JSON.stringify({ id })
     });
     if (!res.ok) throw new Error("Delete failed");
-    return res.json();
+    const data = await res.json();
+    triggerFinanceUpdate();
+    return data;
   },
 
   async uploadPDFs(files, clientId) {
@@ -693,7 +699,9 @@ window.api = {
       body: JSON.stringify({ total_due })
     });
     if (!res.ok) throw new Error("Total update failed");
-    return res.json();
+    const data = await res.json();
+    triggerFinanceUpdate();
+    return data;
   },
 
   async addPayment(clientId, payment) {
@@ -703,7 +711,9 @@ window.api = {
       body: JSON.stringify({ payment })
     });
     if (!res.ok) throw new Error("Payment failed");
-    return res.json();
+    const data = await res.json();
+    triggerFinanceUpdate();
+    return data;
   },
 
   async resetAmountPaid(clientId) {
@@ -712,7 +722,9 @@ window.api = {
       headers: { "Content-Type": "application/json" }
     });
     if (!res.ok) throw new Error("Reset failed");
-    return res.json();
+    const data = await res.json();
+    triggerFinanceUpdate();
+    return data;
   },
 
   async restoreFinanceState(clientId, state) {
@@ -722,7 +734,9 @@ window.api = {
       body: JSON.stringify(state)
     });
     if (!res.ok) throw new Error("Restore failed");
-    return res.json();
+    const data = await res.json();
+    triggerFinanceUpdate();
+    return data;
   },
 
 

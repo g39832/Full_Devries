@@ -587,6 +587,17 @@ document.addEventListener("financeUpdated", () => {
   taxGroups.forEach((group) => loadPDFs(group));
 });
 
+window.addEventListener("focus", () => {
+  updateFinanceMetrics();
+  taxGroups.forEach((group) => loadPDFs(group));
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  updateFinanceMetrics();
+  taxGroups.forEach((group) => loadPDFs(group));
+});
+
 // ======================================================
 // AUTO REFRESH METRICS WHEN CLIENT DATA CHANGES
 // ======================================================

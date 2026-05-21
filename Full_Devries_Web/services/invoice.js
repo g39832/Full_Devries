@@ -5,10 +5,25 @@ const { normalizeCompanyProfile } = require('./company-profile');
 
 const DEFAULT_LOGO_PATH = path.join(__dirname, '..', 'assets', 'devries_pic.png');
 
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
 function formatMoney(value) {
   const num = Number(value);
-  if (!Number.isFinite(num)) return '0.00';
-  return num.toFixed(2);
+  if (!Number.isFinite(num)) return '$0.00';
+  return `$${currencyFormatter.format(num)}`;
+}
+
+function formatDisplayDate(date = new Date()) {
+  const resolved = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(resolved.getTime())) return '';
+  return resolved.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
 }
 
 function resolveLogoBuffer(data) {
@@ -30,7 +45,7 @@ function resolveLogoBuffer(data) {
 function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } = {}) {
   const content = String(text || '').trim();
   if (!content) return;
-  const M = doc.page.margins.left;
+  const x = doc.page.margins.left;
 
   const blocks = content.split(/\n\s*\n/);
   blocks.forEach((block, index) => {
@@ -41,14 +56,14 @@ function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } =
     if (bulletLines) {
       const items = lines.map((line) => line.replace(/^(\-|\*|\u2022|\d+\.)\s+/, '').trim()).filter(Boolean);
       if (items.length) {
-        doc.list(items, M, doc.y, {
+        doc.list(items, x + 12, doc.y, {
           bulletIndent: 12,
           textIndent: 18,
           width
         });
       }
     } else {
-      doc.text(lines.join('\n'), M, doc.y, {
+      doc.text(lines.join('\n'), x, doc.y, {
         width,
         lineGap,
         paragraphGap
@@ -61,50 +76,47 @@ function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } =
   });
 }
 
-function writeFieldRow(doc, label, value, options = {}) {
-  const { labelWidth = 72, width = 280 } = options;
-  const M = doc.page.margins.left;
+function drawHeading(doc, title) {
+  const x = doc.page.margins.left;
+  doc.moveDown(0.3);
+  doc.font('Helvetica-Bold').fontSize(13.5).fillColor('#1f2937').text(title, x, doc.y);
+  doc.moveDown(0.5);
+}
+
+function drawInlineField(doc, label, value, { width } = {}) {
+  const x = doc.page.margins.left;
   const y = doc.y;
-  // Label
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('#6b7280')
-    .text(`${label}:`, M, y, { width: labelWidth, continued: false });
-  // Value — same line, offset by labelWidth
-  doc.font('Helvetica').fontSize(10).fillColor('#111827')
-    .text(String(value || '—'), M + labelWidth, y, {
-      width: Math.max(0, width - labelWidth),
+  const availableWidth = typeof width === 'number' ? width : doc.page.width - doc.page.margins.left * 2;
+
+  doc.font('Helvetica').fontSize(11).fillColor('#222222')
+    .text(`${label}:`, x, y, { width: 74, continued: false });
+  doc.font('Helvetica').fontSize(11).fillColor('#222222')
+    .text(String(value || '—'), x + 74, y, {
+      width: Math.max(0, availableWidth - 74),
       lineGap: 1.5
     });
-  // Ensure we advance past the row
+
   doc.y = Math.max(doc.y, y + 16);
 }
 
-// ======================================================
-// DRAW SECTION HEADING with divider line
-// ======================================================
-function drawSectionHeading(doc, title, contentWidth, sectionColor) {
-  const M = doc.page.margins.left;
-  doc.font('Helvetica-Bold').fontSize(13).fillColor('#111827').text(title, M, doc.y);
-  const lineY = doc.y + 3;
-  doc.moveTo(M, lineY)
-    .lineTo(M + contentWidth, lineY)
-    .lineWidth(0.8)
-    .strokeColor(sectionColor)
-    .stroke();
-  doc.moveDown(0.7);
+function drawEmailLine(doc, value) {
+  const x = doc.page.margins.left;
+  const y = doc.y;
+  doc.font('Helvetica').fontSize(11).fillColor('#2563eb')
+    .text(value, x, y, {
+      link: value.startsWith('http') ? value : `mailto:${value}`,
+      underline: true,
+      width: doc.page.width - doc.page.margins.left * 2
+    });
 }
 
-// ======================================================
-// DRAW SUMMARY ROW (label left, value right, properly aligned)
-// ======================================================
-function drawSummaryRow(doc, label, value, { pageMarginLeft, contentWidth, labelColor = '#6b7280', valueColor = '#111827', valueFontSize = 13, labelFontSize = 10, bold = true } = {}) {
-  const rowY = doc.y;
-  // Label on the left
-  doc.font('Helvetica').fontSize(labelFontSize).fillColor(labelColor)
-    .text(label, pageMarginLeft + 14, rowY, { width: contentWidth / 2 - 14 });
-  // Value on the right, right-aligned
-  doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(valueFontSize).fillColor(valueColor)
-    .text(`$${value}`, pageMarginLeft, rowY, { width: contentWidth - 14, align: 'right' });
-  doc.y = rowY + valueFontSize + 8;
+function drawSummaryLine(doc, label, value, { gapAfter = 0 } = {}) {
+  const x = doc.page.margins.left;
+  doc.font('Helvetica').fontSize(11).fillColor('#222222')
+    .text(`${label}: ${value}`, x, doc.y, {
+      width: doc.page.width - doc.page.margins.left * 2
+    });
+  if (gapAfter) doc.moveDown(gapAfter);
 }
 
 // ======================================================
@@ -121,129 +133,114 @@ function generateInvoicePDF(data, mode = 'invoice') {
     doc.on('error', reject);
 
     const isEstimate = mode === 'estimate';
-    const docTitle = isEstimate ? 'ESTIMATE' : 'INVOICE';
-    const totalLabel = isEstimate ? 'Estimated Total' : 'Total';
-    const paidLabel = isEstimate ? 'Deposit / Down Payment' : 'Amount Paid';
-    const sectionColor = '#cbd5e1';
     const M = doc.page.margins.left;
     const contentWidth = doc.page.width - M * 2;
-
-    // ================================================================
-    // HEADER: Logo + Company info (left) | Doc title + number (right)
-    // ================================================================
-    const headerTopY = M;
-    let logoDrawn = false;
+    const centerX = M + contentWidth / 2;
     const logoBuffer = resolveLogoBuffer(data);
+
+    const businessName = String(data.businessName || '').trim();
+    const businessAddress = String(data.businessAddress || '').trim();
+    const businessPhone = String(data.businessPhone || '').trim();
+    const businessEmail = String(data.businessEmail || '').trim();
+    const clientName = String(data.clientName || '').trim();
+    const clientAddress = String(data.clientAddress || '').trim();
+    const clientPhone = String(data.clientPhone || '').trim();
+    const clientEmail = String(data.clientEmail || '').trim();
+    const workDescription = String(data.workDescription || '').trim();
+
+    const total = Number(data.total || 0);
+    const paid = Number(data.paid || 0);
+    const balance = Number(data.balance || 0);
+    const contractPrice = Number.isFinite(total - balance) ? total - balance : paid;
+    const dumpFee = balance;
+    const dateValue = data.date || formatDisplayDate();
+
+    // Centered logo, then the company details stack underneath.
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, M, headerTopY, { fit: [90, 56] });
-        logoDrawn = true;
-      } catch (e) { /* skip bad logo */ }
+        doc.image(logoBuffer, centerX - 52, 88, { fit: [104, 60] });
+      } catch {
+        // If the logo fails, continue with the text layout.
+      }
     }
 
-    const companyX = logoDrawn ? M + 100 : M;
-    const companyMaxWidth = contentWidth / 2 - (logoDrawn ? 100 : 0);
+    doc.y = 166;
+    if (businessName) {
+      doc.font('Helvetica').fontSize(17.5).fillColor('#2b2f36')
+        .text(businessName, M, doc.y, { width: contentWidth });
+    }
 
-    doc.font('Helvetica-Bold').fontSize(16).fillColor('#111827')
-      .text(data.businessName, companyX, headerTopY, { width: companyMaxWidth });
-    doc.font('Helvetica').fontSize(9.5).fillColor('#4b5563')
-      .text(data.businessAddress, companyX, doc.y + 2, { width: companyMaxWidth })
-      .text(data.businessPhone, companyX, doc.y + 1, { width: companyMaxWidth })
-      .text(data.businessEmail, companyX, doc.y + 1, { width: companyMaxWidth });
+    if (businessAddress) {
+      doc.moveDown(1);
+      doc.font('Helvetica').fontSize(11).fillColor('#333333')
+        .text(businessAddress, M, doc.y, { width: contentWidth });
+    }
 
-    // Doc title block — right side, aligned to top of header
-    const titleBlockWidth = contentWidth / 2;
-    const titleBlockX = M + contentWidth - titleBlockWidth;
-    doc.font('Helvetica-Bold').fontSize(26).fillColor('#111827')
-      .text(docTitle, titleBlockX, headerTopY, { width: titleBlockWidth, align: 'right' });
-    doc.font('Helvetica').fontSize(10).fillColor('#374151')
-      .text(`Date: ${data.date}`, titleBlockX, doc.y + 4, { width: titleBlockWidth, align: 'right' })
-      .text(`${docTitle} #: ${data.invoiceNumber}`, titleBlockX, doc.y + 2, { width: titleBlockWidth, align: 'right' });
+    if (businessPhone) {
+      doc.font('Helvetica').fontSize(11).fillColor('#333333')
+        .text(businessPhone, M, doc.y, { width: contentWidth });
+    }
 
-    // Move below the taller of the two header columns
-    doc.y = Math.max(doc.y, headerTopY + 80) + 18;
+    if (businessEmail) {
+      drawEmailLine(doc, businessEmail);
+    }
 
-    // Full-width divider
-    doc.moveTo(M, doc.y).lineTo(M + contentWidth, doc.y)
-      .lineWidth(1.2).strokeColor('#e2e8f0').stroke();
-    doc.moveDown(1.1);
-
-    // ================================================================
-    // CUSTOMER INFORMATION
-    // ================================================================
-    drawSectionHeading(doc, 'Customer Information', contentWidth, sectionColor);
-    writeFieldRow(doc, 'Name',    data.clientName,    { labelWidth: 72, width: contentWidth });
-    writeFieldRow(doc, 'Address', data.clientAddress, { labelWidth: 72, width: contentWidth });
-    writeFieldRow(doc, 'Phone',   data.clientPhone,   { labelWidth: 72, width: contentWidth });
-    writeFieldRow(doc, 'Email',   data.clientEmail,   { labelWidth: 72, width: contentWidth });
-
-    // ================================================================
-    // SCOPE OF WORK
-    // ================================================================
-    doc.moveDown(1.1);
-    const workHeading = isEstimate ? 'Scope of Work' : 'Work Completed';
-    drawSectionHeading(doc, workHeading, contentWidth, sectionColor);
-    doc.font('Helvetica').fontSize(10.5).fillColor('#1f2937');
-    writeWrappedBlock(doc, data.workDescription || 'No scope of work provided.', {
-      width: contentWidth,
-      paragraphGap: 7,
-      lineGap: 3
-    });
-    // ================================================================
-    // SUMMARY BOX
-    // ================================================================
-    doc.moveDown(1.2);
-    const summaryHeading = isEstimate ? 'Estimate Summary' : 'Invoice Summary';
-    drawSectionHeading(doc, summaryHeading, contentWidth, sectionColor);
-
-    // Draw the box background
-    const boxPad = 16;
-    const rowH = 38;
-    const boxHeight = rowH * 3 + boxPad;
-    const boxY = doc.y;
-
-    doc.roundedRect(M, boxY, contentWidth, boxHeight, 8)
-      .lineWidth(0.8)
-      .strokeColor('#d7dee8')
-      .fillAndStroke('#f8fafc', '#d7dee8');
-
-    // Row 1 — Total
-    const r1Y = boxY + boxPad / 2;
-    doc.font('Helvetica').fontSize(9.5).fillColor('#6b7280')
-      .text(totalLabel, M + 16, r1Y, { width: contentWidth - 32 });
-    doc.font('Helvetica-Bold').fontSize(14).fillColor('#111827')
-      .text(`$${formatMoney(data.total)}`, M + 16, r1Y + 13, { width: contentWidth - 32 });
-
-    // Row 1 right — Paid
-    doc.font('Helvetica').fontSize(9.5).fillColor('#6b7280')
-      .text(paidLabel, M, r1Y, { width: contentWidth - 16, align: 'right' });
-    doc.font('Helvetica-Bold').fontSize(14).fillColor('#111827')
-      .text(`$${formatMoney(data.paid)}`, M, r1Y + 13, { width: contentWidth - 16, align: 'right' });
-
-    // Thin divider between rows
-    const divY = boxY + rowH + boxPad / 2;
-    doc.moveTo(M + 16, divY).lineTo(M + contentWidth - 16, divY)
-      .lineWidth(0.5).strokeColor('#e2e8f0').stroke();
-
-    // Row 2 — Balance Due (highlighted)
-    const r2Y = divY + 8;
-    doc.font('Helvetica').fontSize(10).fillColor('#374151')
-      .text('Balance Due', M + 16, r2Y, { width: contentWidth - 32 });
-    doc.font('Helvetica-Bold').fontSize(16).fillColor('#111827')
-      .text(`$${formatMoney(data.balance)}`, M, r2Y, { width: contentWidth - 16, align: 'right' });
-
-    doc.y = boxY + boxHeight + 20;
-
-    // ================================================================
-    // CLOSING LINE
-    // ================================================================
-    doc.moveTo(M, doc.y).lineTo(M + contentWidth, doc.y)
-      .lineWidth(0.8).strokeColor('#e2e8f0').stroke();
     doc.moveDown(0.8);
-    const closing = isEstimate
-      ? 'Thank you for considering us. This estimate is valid for 30 days.'
-      : 'Thank you for your business!';
-    doc.font('Helvetica').fontSize(10.5).fillColor('#374151').text(closing, { align: 'center' });
+    doc.font('Helvetica').fontSize(11).fillColor('#333333')
+      .text(`Date: ${dateValue}`, M, doc.y, { width: contentWidth });
+
+    drawHeading(doc, 'Customer Information');
+    drawInlineField(doc, 'Name', clientName, { width: contentWidth });
+    drawInlineField(doc, 'Address', clientAddress, { width: contentWidth });
+    drawInlineField(doc, 'Phone', clientPhone, { width: contentWidth });
+
+    if (clientEmail) {
+      const y = doc.y;
+      doc.font('Helvetica').fontSize(11).fillColor('#2563eb')
+        .text(clientEmail, M, y, {
+          width: contentWidth,
+          link: `mailto:${clientEmail}`,
+          underline: true
+        });
+    }
+
+    drawHeading(doc, isEstimate ? 'Scope of Work' : 'Work Completed');
+    if (workDescription) {
+      const lines = workDescription
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const listItems = lines.map((line) => line.replace(/^(\-|\*|\u2022|\d+\.)\s+/, '').trim()).filter(Boolean);
+      const looksLikeList = lines.some((line) => /^(\-|\*|\u2022|\d+\.)\s+/.test(line));
+
+      doc.font('Helvetica').fontSize(11).fillColor('#222222');
+      if (looksLikeList) {
+        doc.list(listItems, M + 12, doc.y, {
+          width: contentWidth - 12,
+          bulletIndent: 12,
+          textIndent: 18
+        });
+      } else {
+        writeWrappedBlock(doc, workDescription, {
+          width: contentWidth,
+          paragraphGap: 6,
+          lineGap: 3
+        });
+      }
+    } else {
+      doc.font('Helvetica').fontSize(11).fillColor('#222222')
+        .text('No scope of work provided.', M, doc.y, { width: contentWidth });
+    }
+
+    drawHeading(doc, isEstimate ? 'Estimate Summary' : 'Invoice Summary');
+    drawSummaryLine(doc, 'Contract Price', formatMoney(contractPrice));
+    drawSummaryLine(doc, 'Dump Fee', formatMoney(dumpFee), { gapAfter: 0.6 });
+    drawSummaryLine(doc, 'Total', formatMoney(total), { gapAfter: 0.6 });
+    drawSummaryLine(doc, 'Amount Paid', formatMoney(paid));
+    drawSummaryLine(doc, 'Balance Due', formatMoney(balance), { gapAfter: 0.8 });
+
+    doc.font('Helvetica').fontSize(11).fillColor('#222222')
+      .text('Thank you for your business!', M, doc.y, { width: contentWidth });
 
     doc.end();
   });
@@ -251,7 +248,6 @@ function generateInvoicePDF(data, mode = 'invoice') {
 
 function buildInvoiceData({ client, latestNote = null, companyProfile = {}, mode = 'invoice' }) {
   const company = normalizeCompanyProfile(companyProfile, process.env);
-  // Prefer the saved client scope, then fall back to the company default scope.
   const workDescription = String(client.scope_of_work || company.defaultScopeOfWork || '').trim() || 'No scope of work provided.';
   const prefix = mode === 'estimate' ? 'EST' : 'INV';
 
@@ -261,7 +257,7 @@ function buildInvoiceData({ client, latestNote = null, companyProfile = {}, mode
     businessPhone: company.businessPhone,
     businessEmail: company.businessEmail,
     logoBase64: company.logoBase64 || null,
-    date: new Date().toLocaleDateString(),
+    date: formatDisplayDate(new Date()),
     invoiceNumber: `${prefix}-${client.id}-${Date.now()}`,
     clientName: client.name || '',
     clientAddress: client.address || '',
@@ -270,7 +266,8 @@ function buildInvoiceData({ client, latestNote = null, companyProfile = {}, mode
     workDescription,
     total: client.total ?? client.total_due ?? 0,
     paid: client.paid ?? client.amount_paid ?? 0,
-    balance: client.balance ?? 0
+    balance: client.balance ?? 0,
+    latestNote
   };
 }
 
