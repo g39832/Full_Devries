@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const PDFDocument = require('pdfkit');
 const { normalizeCompanyProfile } = require('./company-profile');
 
@@ -27,19 +25,16 @@ function formatDisplayDate(date = new Date()) {
 }
 
 function resolveLogoBuffer(data) {
+  // Only use the uploaded business logo — never fall back to the placeholder
+  // asset which renders with a black background.
   if (data.logoBase64) {
     try {
       return Buffer.from(data.logoBase64, 'base64');
     } catch {
-      // Fall through to the default brand asset if the stored logo is invalid.
+      // Invalid base64 — fall through to text-only header
     }
   }
-
-  try {
-    return fs.readFileSync(DEFAULT_LOGO_PATH);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function writeWrappedBlock(doc, text, { width, paragraphGap = 6, lineGap = 2 } = {}) {
@@ -151,36 +146,39 @@ function generateInvoicePDF(data, mode = 'invoice') {
     const total = Number(data.total || 0);
     const paid = Number(data.paid || 0);
     const balance = Number(data.balance || 0);
-    const contractPrice = Number.isFinite(total - balance) ? total - balance : paid;
-    const dumpFee = balance;
     const dateValue = data.date || formatDisplayDate();
 
-    // Centered logo, then the company details stack underneath.
+    // ================================================================
+    // HEADER — logo centered if uploaded, otherwise text-only
+    // ================================================================
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, centerX - 52, 88, { fit: [104, 60] });
+        // Render with PNG transparency preserved — no background fill
+        doc.image(logoBuffer, centerX - 52, 52, { fit: [104, 60] });
+        doc.y = 130;
       } catch {
-        // If the logo fails, continue with the text layout.
+        doc.y = 52;
       }
+    } else {
+      // No logo — start text header from top margin
+      doc.y = 52;
     }
 
-    doc.y = 166;
     if (businessName) {
-      doc.font('Helvetica').fontSize(17.5).fillColor('#2b2f36')
+      doc.font('Helvetica-Bold').fontSize(17.5).fillColor('#1f2937')
         .text(businessName, M, doc.y, { width: contentWidth });
     }
 
+    doc.moveDown(0.4);
+
     if (businessAddress) {
-      doc.moveDown(1);
       doc.font('Helvetica').fontSize(11).fillColor('#333333')
         .text(businessAddress, M, doc.y, { width: contentWidth });
     }
-
     if (businessPhone) {
       doc.font('Helvetica').fontSize(11).fillColor('#333333')
         .text(businessPhone, M, doc.y, { width: contentWidth });
     }
-
     if (businessEmail) {
       drawEmailLine(doc, businessEmail);
     }
@@ -189,11 +187,13 @@ function generateInvoicePDF(data, mode = 'invoice') {
     doc.font('Helvetica').fontSize(11).fillColor('#333333')
       .text(`Date: ${dateValue}`, M, doc.y, { width: contentWidth });
 
+    // ================================================================
+    // CUSTOMER INFORMATION
+    // ================================================================
     drawHeading(doc, 'Customer Information');
-    drawInlineField(doc, 'Name', clientName, { width: contentWidth });
+    drawInlineField(doc, 'Name',    clientName,    { width: contentWidth });
     drawInlineField(doc, 'Address', clientAddress, { width: contentWidth });
-    drawInlineField(doc, 'Phone', clientPhone, { width: contentWidth });
-
+    drawInlineField(doc, 'Phone',   clientPhone,   { width: contentWidth });
     if (clientEmail) {
       const y = doc.y;
       doc.font('Helvetica').fontSize(11).fillColor('#2563eb')
@@ -202,16 +202,20 @@ function generateInvoicePDF(data, mode = 'invoice') {
           link: `mailto:${clientEmail}`,
           underline: true
         });
+      doc.y = Math.max(doc.y, y + 16);
     }
 
+    // ================================================================
+    // SCOPE OF WORK
+    // ================================================================
     drawHeading(doc, isEstimate ? 'Scope of Work' : 'Work Completed');
     if (workDescription) {
       const lines = workDescription
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean);
-      const listItems = lines.map((line) => line.replace(/^(\-|\*|\u2022|\d+\.)\s+/, '').trim()).filter(Boolean);
       const looksLikeList = lines.some((line) => /^(\-|\*|\u2022|\d+\.)\s+/.test(line));
+      const listItems = lines.map((line) => line.replace(/^(\-|\*|\u2022|\d+\.)\s+/, '').trim()).filter(Boolean);
 
       doc.font('Helvetica').fontSize(11).fillColor('#222222');
       if (looksLikeList) {
@@ -232,15 +236,52 @@ function generateInvoicePDF(data, mode = 'invoice') {
         .text('No scope of work provided.', M, doc.y, { width: contentWidth });
     }
 
-    drawHeading(doc, isEstimate ? 'Estimate Summary' : 'Invoice Summary');
-    drawSummaryLine(doc, 'Contract Price', formatMoney(contractPrice));
-    drawSummaryLine(doc, 'Dump Fee', formatMoney(dumpFee), { gapAfter: 0.6 });
-    drawSummaryLine(doc, 'Total', formatMoney(total), { gapAfter: 0.6 });
-    drawSummaryLine(doc, 'Amount Paid', formatMoney(paid));
-    drawSummaryLine(doc, 'Balance Due', formatMoney(balance), { gapAfter: 0.8 });
+    // ================================================================
+    // SUMMARY — ESTIMATE vs INVOICE are different
+    // ================================================================
+    if (isEstimate) {
+      // ESTIMATE: just show the total — no amount paid, no dump fee, no balance
+      drawHeading(doc, 'Estimate Total');
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#111827')
+        .text(formatMoney(total), M, doc.y, { width: contentWidth });
 
-    doc.font('Helvetica').fontSize(11).fillColor('#222222')
-      .text('Thank you for your business!', M, doc.y, { width: contentWidth });
+      doc.moveDown(1.2);
+      doc.font('Helvetica').fontSize(10).fillColor('#555555')
+        .text('This estimate is valid for 30 days. Prices subject to change based on final inspection.', M, doc.y, {
+          width: contentWidth
+        });
+
+      doc.moveDown(1.4);
+
+      // Acceptance signature block
+      drawHeading(doc, 'Terms & Acceptance');
+      doc.font('Helvetica').fontSize(11).fillColor('#222222')
+        .text('By signing below, you authorize the work described above at the stated price.', M, doc.y, {
+          width: contentWidth
+        });
+
+      doc.moveDown(1.8);
+      const sigY = doc.y;
+      doc.moveTo(M, sigY).lineTo(M + 220, sigY).lineWidth(0.8).strokeColor('#aaaaaa').stroke();
+      doc.font('Helvetica').fontSize(9).fillColor('#666666')
+        .text('Customer Signature', M, sigY + 4, { width: 220 });
+
+      doc.moveTo(M + 260, sigY).lineTo(M + 380, sigY).lineWidth(0.8).strokeColor('#aaaaaa').stroke();
+      doc.font('Helvetica').fontSize(9).fillColor('#666666')
+        .text('Date', M + 260, sigY + 4, { width: 120 });
+
+    } else {
+      // INVOICE: contract price, total, amount paid, balance due
+      drawHeading(doc, 'Invoice Summary');
+      drawSummaryLine(doc, 'Contract Price', formatMoney(total));
+      doc.moveDown(0.3);
+      drawSummaryLine(doc, 'Amount Paid',    formatMoney(paid));
+      doc.moveDown(0.3);
+      drawSummaryLine(doc, 'Balance Due',    formatMoney(balance), { gapAfter: 0.8 });
+
+      doc.font('Helvetica').fontSize(11).fillColor('#222222')
+        .text('Thank you for your business!', M, doc.y, { width: contentWidth });
+    }
 
     doc.end();
   });
