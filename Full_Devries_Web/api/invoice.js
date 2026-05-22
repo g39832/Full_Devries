@@ -43,13 +43,14 @@ async function handleDocumentGeneration(req, res, mode) {
 
     const latestNote = await fetchLatestNote(clientId);
     const storedCompanyProfile = await readStoredCompanyProfile();
-    const normalizedProfile = normalizeCompanyProfile(storedCompanyProfile || {});
 
-    // Attach base64 logo if stored
+    // Extract base64 logo from the stored data URL before normalizing
     if (storedCompanyProfile?.logoUrl) {
       const match = storedCompanyProfile.logoUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
-      if (match) normalizedProfile.logoBase64 = match[1];
+      if (match) storedCompanyProfile.logoBase64 = match[1];
     }
+
+    const normalizedProfile = normalizeCompanyProfile(storedCompanyProfile || {});
 
     const invoiceData = buildInvoiceData({ client, latestNote, companyProfile: normalizedProfile, mode });
     const pdfBuffer = await generateInvoicePDF(invoiceData, mode);
