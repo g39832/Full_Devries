@@ -1,8 +1,6 @@
 const PDFDocument = require('pdfkit');
 const { normalizeCompanyProfile } = require('./company-profile');
 
-const DEFAULT_LOGO_PATH = path.join(__dirname, '..', 'assets', 'devries_pic.png');
-
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
