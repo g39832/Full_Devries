@@ -152,8 +152,8 @@ function generateInvoicePDF(data, mode = 'invoice') {
     if (logoBuffer) {
       try {
         // Render with PNG transparency preserved — no background fill
-        doc.image(logoBuffer, centerX - 52, 52, { fit: [104, 60] });
-        doc.y = 130;
+        doc.image(logoBuffer, centerX - 80, 52, { fit: [160, 100] });
+        doc.y = 168;
       } catch {
         doc.y = 52;
       }
