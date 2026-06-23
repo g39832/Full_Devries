@@ -868,9 +868,45 @@ function triggerFinanceUpdate() {
   document.dispatchEvent(new Event('financeUpdated'));
 }
 // ======================================================
-// FINANCE UNDO STACK (GLOBAL)
+// FINANCE UNDO STACK (SCOPED BY CLIENT)
 // ======================================================
-let financeUndoStack = [];
+const financeUndoStacks = new Map();
+
+function pushFinanceUndoState(clientId, snapshot) {
+  const key = Number(clientId);
+  if (!Number.isFinite(key) || key <= 0) return;
+
+  const stack = financeUndoStacks.get(key) || [];
+  stack.push(snapshot);
+  financeUndoStacks.set(key, stack);
+}
+
+function popFinanceUndoState(clientId) {
+  const key = Number(clientId);
+  if (!Number.isFinite(key) || key <= 0) return null;
+
+  const stack = financeUndoStacks.get(key);
+  if (!stack || stack.length === 0) return null;
+
+  const snapshot = stack.pop();
+  if (stack.length === 0) {
+    financeUndoStacks.delete(key);
+  } else {
+    financeUndoStacks.set(key, stack);
+  }
+
+  return snapshot;
+}
+
+function peekFinanceUndoState(clientId) {
+  const key = Number(clientId);
+  if (!Number.isFinite(key) || key <= 0) return null;
+
+  const stack = financeUndoStacks.get(key);
+  if (!stack || stack.length === 0) return null;
+
+  return stack[stack.length - 1];
+}
 
 // ======================================================
 // DOM REFERENCES
@@ -1349,7 +1385,7 @@ function setupFinancialSection(client) {
       const newTotal = parseMoney(totalDueInput?.value) || 0;
 
       // 🧠 Save PREVIOUS state to undo stack
-      financeUndoStack.push({
+      pushFinanceUndoState(activeId, {
         clientId: activeId,
         total_due: client.total_due,
         amount_paid: client.amount_paid,
@@ -1382,7 +1418,7 @@ function setupFinancialSection(client) {
       }
 
       // 🧠 Save PREVIOUS state to undo stack
-      financeUndoStack.push({
+      pushFinanceUndoState(activeId, {
         clientId: activeId,
         total_due: client.total_due,
         amount_paid: client.amount_paid,
@@ -1827,14 +1863,15 @@ if (projectPanel) {
 // UNDO FINANCIAL CHANGE
 // ==============================
 if (target.id === "undoFinanceBtn") {
-  if (financeUndoStack.length === 0) {
+  const last = peekFinanceUndoState(activeId);
+  if (!last) {
     showToast("Nothing to undo", "info");
     return;
   }
 
   if (!confirm("Undo the last payment/total change?")) return;
 
-  const last = financeUndoStack.pop();
+  popFinanceUndoState(activeId);
 
   try {
     await window.api.restoreFinanceState(last.clientId, {
