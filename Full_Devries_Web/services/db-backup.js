@@ -51,7 +51,7 @@ async function runBackup({ retention = 30 } = {}) {
   ensureBackupDir();
   await db.schemaReady;
 
-  const tables = ['settings', 'clients', 'payments', 'notes', 'finance_overrides'];
+  const tables = ['settings', 'clients', 'payments', 'notes', 'finance_overrides', 'finance_margin_entries'];
   const snapshot = {
     createdAt: new Date().toISOString(),
     tables: {}

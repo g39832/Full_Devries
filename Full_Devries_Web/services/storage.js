@@ -1,10 +1,14 @@
 const path = require('path');
+const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'client-files';
 const STORAGE_BACKEND = (process.env.STORAGE_BACKEND || 'auto').toLowerCase();
+
+// Local filesystem fallback — files land in <project>/uploads/<key>/...
+const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
 
 let supabase = null;
 
@@ -31,6 +35,14 @@ function isRemoteStorageEnabled() {
   return hasSupabaseConfig();
 }
 
+/**
+ * Storage is always available: remote (Supabase) when configured,
+ * otherwise the local filesystem under uploads/.
+ */
+function isStorageAvailable() {
+  return true;
+}
+
 function storageHeaders(extra = {}) {
   return {
     apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -38,6 +50,71 @@ function storageHeaders(extra = {}) {
     ...extra
   };
 }
+
+// ================================================================
+// LOCAL FILESYSTEM FALLBACK
+// ================================================================
+
+function ensureUploadsDir() {
+  if (!fs.existsSync(uploadsRoot)) {
+    fs.mkdirSync(uploadsRoot, { recursive: true });
+  }
+}
+
+function localObjectPath(relativePath) {
+  // Never allow path traversal outside uploads/.
+  const resolved = path.resolve(uploadsRoot, relativePath);
+  if (resolved !== uploadsRoot && !resolved.startsWith(uploadsRoot + path.sep)) {
+    throw new Error('Invalid storage path');
+  }
+  return resolved;
+}
+
+async function localUploadFile(file, objectPath) {
+  ensureUploadsDir();
+  const dest = localObjectPath(objectPath);
+  await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+  const body = file.buffer;
+  if (!body) {
+    throw new Error('Missing upload buffer for local upload');
+  }
+  await fs.promises.writeFile(dest, body);
+  return objectPath;
+}
+
+function localListFiles(prefix) {
+  ensureUploadsDir();
+  const dir = localObjectPath(prefix);
+  if (!fs.existsSync(dir)) return [];
+  const entries = fs.readdirSync(dir).filter((name) => {
+    try {
+      return fs.statSync(path.join(dir, name)).isFile();
+    } catch {
+      return false;
+    }
+  });
+  return entries.map((name) => {
+    const objectPath = `${prefix}/${name}`;
+    return {
+      name: path.basename(objectPath),
+      path: objectPath,
+      url: '/uploads/' + objectPath.split('/').map(encodeURIComponent).join('/'),
+      ext: path.extname(objectPath).toLowerCase()
+    };
+  });
+}
+
+function localDeleteFile(prefix, fileName) {
+  ensureUploadsDir();
+  const target = localObjectPath(path.join(prefix, path.basename(fileName)));
+  if (!fs.existsSync(target)) return false;
+  fs.unlinkSync(target);
+  return true;
+}
+
+// ================================================================
+// REMOTE (SUPABASE) IMPLEMENTATION
+// ================================================================
 
 async function ensureRemoteBucket() {
   if (!isRemoteStorageEnabled()) return;
@@ -67,6 +144,9 @@ async function ensureRemoteBucket() {
 }
 
 async function remoteUploadFile(file, objectPath) {
+  if (!isRemoteStorageEnabled()) {
+    return localUploadFile(file, objectPath);
+  }
   console.log('remoteUploadFile called');
   console.log('Supabase bucket:', SUPABASE_STORAGE_BUCKET);
   await ensureRemoteBucket();
@@ -96,6 +176,9 @@ async function remoteUploadFile(file, objectPath) {
 }
 
 async function remoteListFiles(prefix) {
+  if (!isRemoteStorageEnabled()) {
+    return localListFiles(prefix);
+  }
   await ensureRemoteBucket();
   const client = getSupabaseClient();
   if (!client) {
@@ -138,6 +221,9 @@ async function remoteListFiles(prefix) {
 }
 
 async function remoteDeleteFile(prefix, fileName) {
+  if (!isRemoteStorageEnabled()) {
+    return localDeleteFile(prefix, fileName);
+  }
   await ensureRemoteBucket();
   const client = getSupabaseClient();
   if (!client) {
@@ -175,6 +261,7 @@ async function remoteDeleteFile(prefix, fileName) {
 }
 
 module.exports = {
+  isStorageAvailable,
   isRemoteStorageEnabled,
   ensureRemoteBucket,
   remoteUploadFile,

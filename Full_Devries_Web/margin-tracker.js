@@ -219,7 +219,8 @@
       created_at: row.created_at || null,
       total_due: toNumber(row.total_due),
       amount_paid: toNumber(row.amount_paid),
-      balance: toNumber(row.balance)
+      balance: toNumber(row.balance),
+      job_cost: toNumber(row.job_cost)
     };
   }
 
@@ -398,6 +399,35 @@
       buckets[index].expenseCount += 1;
     }
 
+    // Client job costs (clients.job_cost) are one-time costs per client.
+    // Allocate each paying client's job cost across their payment buckets in
+    // proportion to revenue, so the chart series match the aggregate totals
+    // (and per-client rows) instead of showing $0 expenses / 100% margins,
+    // and month/quarter trends stay meaningful instead of one giant spike.
+    const jobCostById = new Map(clients.map((client) => [Number(client.id), toNumber(client.job_cost)]));
+    const clientBucketRevenue = new Map();
+    for (const payment of periodPayments) {
+      const index = bucketForDate(payment.payment_date);
+      if (index === null || index === undefined || !buckets[index]) continue;
+      const clientId = Number(payment.client_id);
+      if (!clientId) continue;
+      const entry = clientBucketRevenue.get(clientId) || new Map();
+      entry.set(index, (entry.get(index) || 0) + payment.amount);
+      clientBucketRevenue.set(clientId, entry);
+    }
+    let allocatedJobCosts = 0;
+    for (const [clientId, bucketRevenue] of clientBucketRevenue) {
+      const cost = toNumber(jobCostById.get(clientId));
+      if (cost <= 0) continue;
+      const clientTotalRevenue = [...bucketRevenue.values()].reduce((sum, value) => sum + value, 0);
+      for (const [index, revenue] of bucketRevenue) {
+        const share = clientTotalRevenue > 0 ? cost * (revenue / clientTotalRevenue) : 0;
+        buckets[index].operatingExpenses += share;
+        buckets[index].totalExpenses += share;
+        allocatedJobCosts += share;
+      }
+    }
+
     for (const bucket of buckets) {
       bucket.grossProfit = bucket.revenue - bucket.operatingExpenses;
       bucket.netProfit = bucket.revenue - bucket.totalExpenses;
@@ -434,6 +464,28 @@
       }
       previousBuckets[index].totalExpenses += expense.amount;
       previousBuckets[index].expenseCount += 1;
+    }
+
+    // Allocate previous-period job costs the same way for consistent deltas.
+    const previousClientBucketRevenue = new Map();
+    for (const payment of previousPayments) {
+      const index = previousBucketForDate(payment.payment_date);
+      if (index === null || index === undefined || !previousBuckets[index]) continue;
+      const clientId = Number(payment.client_id);
+      if (!clientId) continue;
+      const entry = previousClientBucketRevenue.get(clientId) || new Map();
+      entry.set(index, (entry.get(index) || 0) + payment.amount);
+      previousClientBucketRevenue.set(clientId, entry);
+    }
+    for (const [clientId, bucketRevenue] of previousClientBucketRevenue) {
+      const cost = toNumber(jobCostById.get(clientId));
+      if (cost <= 0) continue;
+      const clientTotalRevenue = [...bucketRevenue.values()].reduce((sum, value) => sum + value, 0);
+      for (const [index, revenue] of bucketRevenue) {
+        const share = clientTotalRevenue > 0 ? cost * (revenue / clientTotalRevenue) : 0;
+        previousBuckets[index].operatingExpenses += share;
+        previousBuckets[index].totalExpenses += share;
+      }
     }
 
     for (const bucket of previousBuckets) {
@@ -523,7 +575,10 @@
       const directTaxExpense = expensesForClient.reduce((sum, expense) => sum + (expense.category.toLowerCase() === 'taxes' ? expense.amount : 0), 0);
       const sharedOperatingAllocation = revenueAllocationBase > 0 ? sharedOperatingExpenses * (revenue / revenueAllocationBase) : 0;
       const sharedTaxAllocation = revenueAllocationBase > 0 ? sharedTaxExpenses * (revenue / revenueAllocationBase) : 0;
-      const operatingExpenses = directOperatingExpense + sharedOperatingAllocation;
+      // Include the client's recorded job cost as a direct cost so margins
+      // aren't reported as ~100% for clients that never got a margin entry.
+      const jobCost = toNumber(client.job_cost);
+      const operatingExpenses = directOperatingExpense + sharedOperatingAllocation + jobCost;
       const taxExpenses = directTaxExpense + sharedTaxAllocation;
       const grossProfit = revenue - operatingExpenses;
       const netProfit = revenue - operatingExpenses - taxExpenses;
@@ -533,7 +588,7 @@
       const previousClientPayments = previousPayments.filter((payment) => Number(payment.client_id) === Number(clientId));
       const previousClientExpenses = previousExpenses.filter((expense) => Number(expense.resolvedClientId) === Number(clientId));
       const previousRevenue = previousClientPayments.reduce((sum, payment) => sum + payment.amount, 0);
-      const previousOperatingExpense = previousClientExpenses.reduce((sum, expense) => sum + (expense.category.toLowerCase() === 'taxes' ? 0 : expense.amount), 0);
+      const previousOperatingExpense = previousClientExpenses.reduce((sum, expense) => sum + (expense.category.toLowerCase() === 'taxes' ? 0 : expense.amount), 0) + jobCost;
       const previousTaxExpense = previousClientExpenses.reduce((sum, expense) => sum + (expense.category.toLowerCase() === 'taxes' ? expense.amount : 0), 0);
       const previousNetProfit = previousRevenue - previousOperatingExpense - previousTaxExpense;
       const previousMarginPct = previousRevenue > 0 ? (previousNetProfit / previousRevenue) * 100 : 0;
@@ -555,6 +610,7 @@
         name: client.name,
         revenue,
         expenses: operatingExpenses + taxExpenses,
+        jobCost,
         grossProfit,
         netProfit,
         grossMarginPct,
@@ -613,6 +669,8 @@
 
     const latestBucket = buckets[buckets.length - 1] || createBucket('None', 0);
     const previousBucket = previousBuckets[previousBuckets.length - 1] || createBucket('None', 0);
+    // Job costs were already allocated into the buckets above, so the
+    // aggregate expense totals simply sum the bucket series.
     const currentSeriesTotal = buckets.reduce((sum, bucket) => sum + bucket.revenue, 0);
     const currentExpenseTotal = buckets.reduce((sum, bucket) => sum + bucket.totalExpenses, 0);
     const currentProfitTotal = currentSeriesTotal - currentExpenseTotal;
@@ -640,6 +698,14 @@
     for (const expense of periodExpenses) {
       const key = expense.category || 'Misc';
       categoryTotals[key] = (categoryTotals[key] || 0) + expense.amount;
+    }
+    // Client job costs (clients.job_cost) are part of the expense picture and
+    // already show up in the per-client rows, headline totals, and chart
+    // series; surface them in the breakdown too so the donut never claims
+    // "no expense data" when job costs exist. Use the amount accumulated
+    // during bucket allocation so it stays correct in Month/Quarter views.
+    if (allocatedJobCosts > 0) {
+      categoryTotals['Job Cost'] = (categoryTotals['Job Cost'] || 0) + allocatedJobCosts;
     }
 
     const categoryItems = Object.entries(categoryTotals)
@@ -1187,7 +1253,7 @@
             </div>
           </div>
           <div class="mt-panel-body">
-            <div class="mt-chart">${lineChart(model.viewSeries, 'marginPct', null, ['#f7c55f'])}</div>
+            <div class="mt-chart">${lineChart(model.viewSeries, 'marginPct', null, ['#f7c55f'], (value) => `${percentFmt.format(value)}%`)}</div>
             <div class="mt-chip-row">
               <span class="mt-chip"><strong>${escapeHtml(periodLabel(state.year, state.view, state.month, state.quarter))}</strong> active</span>
               <span class="mt-chip"><strong>${escapeHtml(percentFmt.format(model.currentMarginPct))}%</strong> margin</span>
@@ -1293,12 +1359,12 @@
 
   const chartPalette = ['#72edc7', '#7ab7d6', '#f7c55f', '#f08eb0', '#9f8cff', '#ff9c9c', '#6fe0ff'];
 
-  function lineChart(series, keyA, keyB, colors) {
+  function lineChart(series, keyA, keyB, colors, format = null) {
     const valuesA = series.map((item) => toNumber(item[keyA]));
     const valuesB = keyB ? series.map((item) => toNumber(item[keyB])) : [];
     const labels = series.map((item) => item.label);
-    const pointsA = buildPath(valuesA, 700, 220, labels);
-    const pointsB = keyB ? buildPath(valuesB, 700, 220, labels) : null;
+    const pointsA = buildPath(valuesA, 700, 220, labels, format);
+    const pointsB = keyB ? buildPath(valuesB, 700, 220, labels, format) : null;
     const max = Math.max(...valuesA, ...valuesB, 1);
     const areaAId = `areaA-${svgUid += 1}`;
     const areaBId = `areaB-${svgUid += 1}`;
@@ -1328,7 +1394,7 @@
     `;
   }
 
-  function buildPath(values, width, height, labels = []) {
+  function buildPath(values, width, height, labels = [], format = null) {
     const max = Math.max(...values, 1);
     const min = Math.min(...values, 0);
     const spread = max - min || 1;
@@ -1339,9 +1405,10 @@
     }));
     const line = points.map((point, idx) => `${idx === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
     const area = `${line} L ${width} ${height - 18} L 0 ${height - 18} Z`;
+    const formatter = format || formatMoney;
     const circles = points.map((point, idx) => `
       <circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4.5" fill="#ffffff" stroke="#72edc7" stroke-width="2">
-        <title>${escapeHtml(`${labels[idx] || `Point ${idx + 1}`}: ${formatMoney(values[idx])}`)}</title>
+        <title>${escapeHtml(`${labels[idx] || `Point ${idx + 1}`}: ${formatter(values[idx])}`)}</title>
       </circle>
     `).join('');
     return { line, area, circles };
@@ -1420,7 +1487,13 @@
         ${forecastItem('Next margin', projected.nextMargin, '#9f8cff', true)}
       </div>
       <div class="mt-chip-row" style="margin-top:14px;">
-        <span class="mt-chip"><strong>${escapeHtml(formatDelta(projected.revenueSlope / Math.max(projected.nextRevenue, 1) * 100))}</strong> revenue slope</span>
+        ${(() => {
+          // Avoid absurd percentages when projected revenue is 0 or negative.
+          const revenueSlopePct = projected.nextRevenue > 0
+            ? formatDelta((projected.revenueSlope / projected.nextRevenue) * 100)
+            : '—';
+          return `<span class="mt-chip"><strong>${escapeHtml(revenueSlopePct)}</strong> revenue slope</span>`;
+        })()}
         <span class="mt-chip"><strong>${escapeHtml(formatDelta(projected.marginSlope, 'points'))}</strong> margin slope</span>
       </div>
     `;
@@ -1479,6 +1552,24 @@
         const date = toDate(expense.expense_date);
         if (!date) continue;
         map[row.id][date.getMonth()] -= expense.amount;
+      }
+      // Job cost is a one-time cost per client; spread it across the months
+      // where they received payments in proportion to revenue so heatmap
+      // cells match the margin rows (and the Revenue vs Expenses chart).
+      const jobCostValue = toNumber(row.jobCost);
+      if (jobCostValue > 0) {
+        const monthRevenue = {};
+        let clientRevenue = 0;
+        for (const payment of row.paymentsForClient) {
+          const date = toDate(payment.payment_date);
+          if (!date) continue;
+          monthRevenue[date.getMonth()] = (monthRevenue[date.getMonth()] || 0) + payment.amount;
+          clientRevenue += payment.amount;
+        }
+        for (const [monthIndex, revenue] of Object.entries(monthRevenue)) {
+          const share = clientRevenue > 0 ? jobCostValue * (revenue / clientRevenue) : 0;
+          map[row.id][Number(monthIndex)] -= share;
+        }
       }
     }
     return map;

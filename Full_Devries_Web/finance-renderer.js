@@ -2,7 +2,12 @@
 // FINANCE PAGE RENDERER (Stable + Live Updates from Payments & Clients)
 // ======================================================
 
-const taxGroups = ["w9", "pnl", "1099", "inference"];
+const taxGroups = ["w9", "pnl", "1099", "insurance"];
+
+// The insurance group was historically stored under the key "inference".
+// Keep reading the legacy key so previously uploaded files stay visible
+// and deletable; new uploads use the correct "insurance" key.
+const legacyTaxGroupKeys = { insurance: ["inference"] };
 const financeTableBody = document.getElementById("metricsBody");
 const yearSelector = document.getElementById("finance-year");
 
@@ -273,6 +278,39 @@ if (yearSelector) {
 }
 
 // ======================================================
+// DRAG & DROP ON FINANCE DROP ZONES
+// ======================================================
+function setupFinanceDropZones() {
+  document.querySelectorAll('.drop-zone[data-group]').forEach((dz) => {
+    ['dragover', 'dragleave', 'drop'].forEach((evt) =>
+      dz.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      })
+    );
+
+    dz.addEventListener('drop', async (e) => {
+      const files = Array.from(e.dataTransfer.files || []);
+      const group = dz.dataset.group;
+      if (!files.length || !group) return;
+
+      const original = dz.textContent;
+      dz.textContent = 'Uploading...';
+      try {
+        await uploadPDFsWithFallback(files, `${group}-${activeYear}`);
+        loadPDFs(group);
+        document.dispatchEvent(new Event('financeUpdated'));
+      } catch (err) {
+        console.error(err);
+        alert('Upload failed. Check that storage is configured.');
+      } finally {
+        dz.textContent = original;
+      }
+    });
+  });
+}
+
+// ======================================================
 // ADD UPLOAD BUTTONS (Styled)
 // ======================================================
 function addUploadButtons() {
@@ -450,12 +488,27 @@ async function loadPDFs(group) {
   container.innerHTML = "";
 
   try {
-    const res = await fetch(`/api/pdf/list/${group}-${activeYear}`);
-    if (!res.ok) throw new Error("List failed");
+    // Load from the canonical group plus any legacy keys (the insurance
+    // group used to be stored under "inference"), so older uploads stay
+    // visible. Each file remembers which key it lives in so deleting it
+    // targets the right bucket.
+    const keysToLoad = [group, ...(legacyTaxGroupKeys[group] || [])];
+    let files = [];
 
-    const data = await res.json();
+    for (const key of keysToLoad) {
+      const res = await fetch(`/api/pdf/list/${key}-${activeYear}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (Array.isArray(data.files)) {
+        files = files.concat(data.files.map((f) => ({ ...f, _group: key })));
+      }
+    }
 
-    if (!data.files || data.files.length === 0) {
+    // Dedupe by name — the canonical group wins over legacy.
+    const seen = new Set();
+    files = files.filter((f) => (seen.has(f.name) ? false : (seen.add(f.name), true)));
+
+    if (files.length === 0) {
       container.innerHTML =
         `<div style="color:#888;font-size:13px;">No PDFs uploaded.</div>`;
       return;
@@ -463,7 +516,7 @@ async function loadPDFs(group) {
 
     const isMobile = window.innerWidth <= 768;
 
-    data.files.forEach((file) => {
+    files.forEach((file) => {
       const card = document.createElement("div");
       card.style.display = "inline-flex";
       card.style.flexDirection = "column";
@@ -520,7 +573,7 @@ async function loadPDFs(group) {
         if (!confirm(`Delete ${file.name}?`)) return;
 
         await fetch(
-          `/api/pdf/delete/${group}-${activeYear}?file=${encodeURIComponent(file.name)}`,
+          `/api/pdf/delete/${file._group || group}-${activeYear}?file=${encodeURIComponent(file.name)}`,
           { method: "DELETE" }
         );
 
@@ -613,4 +666,5 @@ function refreshFinanceMetrics() {
   await updateFinanceMetrics();
   taxGroups.forEach((group) => loadPDFs(group));
   addUploadButtons();
+  setupFinanceDropZones();
 })();

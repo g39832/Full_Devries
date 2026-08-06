@@ -1032,7 +1032,7 @@ if (intakeFormEl) {
       email: document.getElementById("email")?.value || "",
       phone: document.getElementById("phone")?.value || "",
       address: document.getElementById("address")?.value || "",
-      status: "Lead"
+      status: "Prospect"
     };
 
     try {

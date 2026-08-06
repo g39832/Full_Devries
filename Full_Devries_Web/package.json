@@ -6,6 +6,7 @@
   "description": "Roofing CRM 2026 - Web Version",
   "scripts": {
     "start": "node server.js",
+    "dev": "node scripts/dev-server.js",
     "migrate:sqlite-to-pg": "node scripts/migrate-sqlite-to-pg.js",
     "test:smoke": "node scripts/smoke-test.js",
     "test:backup-restore": "node scripts/verify-backup-restore.js"

@@ -1,5 +1,13 @@
 const assert = require('assert');
 
+// Load .env early so the safety guard below can see TEST_DATABASE_URL
+// (server.js loads dotenv too, but the guard runs before that require).
+try {
+  require('dotenv').config();
+} catch (_) {}
+
+const { isStorageAvailable } = require('../services/storage');
+
 const baseUrl = 'http://127.0.0.1:3000';
 
 function sleep(ms) {
@@ -40,10 +48,27 @@ async function main() {
   process.env.NODE_ENV = 'test';
   process.env.ENABLE_DB_BACKUPS = 'false';
   process.env.PORT = '3000';
+
+  // ============================================================
+  // SAFETY GUARD: never run the smoke test against the production
+  // database unless the operator explicitly opts in.
+  //
+  // Note: api/db.js prefers TEST_DATABASE_URL whenever NODE_ENV is
+  // 'test' AND TEST_DATABASE_URL is set — that combination wins even
+  // if SMOKE_ALLOW_PRODUCTION is also true.
+  // ============================================================
   if (process.env.TEST_DATABASE_URL) {
     console.log('Using TEST_DATABASE_URL for smoke test.');
+  } else if (process.env.SMOKE_ALLOW_PRODUCTION === 'true') {
+    console.warn('SMOKE_ALLOW_PRODUCTION=true: running smoke test against DATABASE_URL.');
+  } else if (process.env.DATABASE_URL) {
+    throw new Error(
+      'Refusing to run smoke test against DATABASE_URL (production).\n' +
+      'Set TEST_DATABASE_URL to a dedicated test database, or set ' +
+      'SMOKE_ALLOW_PRODUCTION=true to explicitly allow it.'
+    );
   } else {
-    console.warn('TEST_DATABASE_URL is not set; smoke test will use DATABASE_URL.');
+    throw new Error('Neither TEST_DATABASE_URL nor DATABASE_URL is set.');
   }
 
   const { startServer } = require('../server');
@@ -104,25 +129,37 @@ async function main() {
     const form = new FormData();
     form.append('files', new Blob(['smoke upload'], { type: 'application/pdf' }), 'smoke.pdf');
 
-    const uploadRes = await fetch(`${baseUrl}/api/pdf/upload/${clientId}`, {
-      method: 'POST',
-      body: form,
-      headers: { Cookie: cookie }
-    });
-    const uploadJson = await uploadRes.json();
-    assert.strictEqual(uploadRes.status, 200, 'upload should return 200');
-    assert.strictEqual(uploadJson.success, true, 'upload should succeed');
+    // ============================================================
+    // PDF upload/list/delete go through services/storage.js, which
+    // falls back to local filesystem storage when Supabase storage is
+    // not configured. Gate on the app's own availability check
+    // (isStorageAvailable) so the local-fallback path is exercised.
+    // ============================================================
+    const storageEnabled = isStorageAvailable();
 
-    const pdfList = await req(`/api/pdf/list/${clientId}`, { cookie });
-    assert.strictEqual(pdfList.res.status, 200, 'list pdf should return 200');
-    assert.ok(Array.isArray(pdfList.json?.files) && pdfList.json.files.length > 0, 'pdf list should have file');
+    if (!storageEnabled) {
+      console.warn('Remote storage not configured; skipping PDF upload/list/delete assertions.');
+    } else {
+      const uploadRes = await fetch(`${baseUrl}/api/pdf/upload/${clientId}`, {
+        method: 'POST',
+        body: form,
+        headers: { Cookie: cookie }
+      });
+      const uploadJson = await uploadRes.json();
+      assert.strictEqual(uploadRes.status, 200, 'upload should return 200');
+      assert.strictEqual(uploadJson.success, true, 'upload should succeed');
 
-    const uploadedName = pdfList.json.files[0].name;
-    const delPdf = await req(`/api/pdf/delete/${clientId}/${encodeURIComponent(uploadedName)}`, {
-      method: 'DELETE',
-      cookie
-    });
-    assert.strictEqual(delPdf.res.status, 200, 'delete pdf should return 200');
+      const pdfList = await req(`/api/pdf/list/${clientId}`, { cookie });
+      assert.strictEqual(pdfList.res.status, 200, 'list pdf should return 200');
+      assert.ok(Array.isArray(pdfList.json?.files) && pdfList.json.files.length > 0, 'pdf list should have file');
+
+      const uploadedName = pdfList.json.files[0].name;
+      const delPdf = await req(`/api/pdf/delete/${clientId}/${encodeURIComponent(uploadedName)}`, {
+        method: 'DELETE',
+        cookie
+      });
+      assert.strictEqual(delPdf.res.status, 200, 'delete pdf should return 200');
+    }
 
     const delClient = await req('/api/delete-client', {
       method: 'POST',

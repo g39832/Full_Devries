@@ -127,7 +127,7 @@ router.post('/save-client', asyncHandler(async (req, res) => {
   const phone = parseStringField(req.body.phone ?? '', 'phone', { required: false, maxLength: 40, defaultValue: '' });
   const email = parseStringField(req.body.email ?? '', 'email', { required: false, maxLength: 254, defaultValue: '' });
   const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500, defaultValue: '' });
-  const status = parseStringField(req.body.status ?? 'Lead', 'status', { required: false, maxLength: 30, defaultValue: 'Lead' });
+  const status = parseStringField(req.body.status ?? 'Prospect', 'status', { required: false, maxLength: 30, defaultValue: 'Prospect' });
   const totalDueInput = req.body.total_due;
   const scopeOfWork = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
   const jobCost = parseNumberField(req.body.job_cost ?? 0, 'job_cost', { required: false, defaultValue: 0 });
@@ -141,7 +141,7 @@ router.post('/save-client', asyncHandler(async (req, res) => {
   await db.query(`
     INSERT INTO clients (name, phone, email, address, status, total_due, amount_paid, balance, scope_of_work, job_cost, created_at)
     VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10)
-  `, [finalName, phone, email, address, status || 'Lead', total, total, scopeOfWork, jobCost, createdAt]);
+  `, [finalName, phone, email, address, status || 'Prospect', total, total, scopeOfWork, jobCost, createdAt]);
 
   const year = new Date(createdAt).getFullYear();
   await updateFinanceTotals(year);
@@ -187,7 +187,7 @@ router.post('/update-project', asyncHandler(async (req, res) => {
     WHERE id = $10
   `, [finalName, phone, email, address, status, newTotal || 0, newBalance, scopeOfWork, newJobCost, id]);
 
-  const year = new Date(clientRow.created_at).getFullYear();
+  const year = new Date(clientRow.created_at || Date.now()).getFullYear();
   await updateFinanceTotals(year);
 
   return res.json({ success: true, financeUpdated: true });
@@ -207,7 +207,7 @@ router.post('/delete-client', asyncHandler(async (req, res) => {
   await db.query('DELETE FROM clients WHERE id = $1', [id]);
 
   if (clientRow) {
-    const year = new Date(clientRow.created_at).getFullYear();
+    const year = new Date(clientRow.created_at || Date.now()).getFullYear();
     await updateFinanceTotals(year);
   }
 
@@ -231,7 +231,7 @@ router.put('/clients/:id/total', asyncHandler(async (req, res) => {
 
   await db.query('UPDATE clients SET total_due = $1, balance = $2 WHERE id = $3', [total, newBalance, id]);
 
-  const year = new Date(clientRow.created_at).getFullYear();
+  const year = new Date(clientRow.created_at || Date.now()).getFullYear();
   await updateFinanceTotals(year);
 
   return res.json({ success: true, financeUpdated: true });
@@ -273,8 +273,15 @@ router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
     conn.release();
   }
 
-  const year = new Date().getFullYear();
-  await updateFinanceTotals(year);
+  // The payment lands in the current year, but it also changes the
+  // client's balance, which belongs to the client's creation year — so
+  // refresh both years' cached totals.
+  const paymentYear = new Date().getFullYear();
+  const clientYear = new Date(clientRow.created_at || Date.now()).getFullYear();
+  const yearsToUpdate = [...new Set([paymentYear, clientYear])];
+  for (const y of yearsToUpdate) {
+    await updateFinanceTotals(y);
+  }
 
   return res.json({ success: true, financeUpdated: true });
 }));
@@ -311,8 +318,14 @@ router.put('/clients/:id/reset-paid', asyncHandler(async (req, res) => {
     conn.release();
   }
 
-  const year = new Date(clientRow.created_at).getFullYear();
-  await updateFinanceTotals(year);
+  // A negative payment row is inserted for the current year, and the
+  // client's balance change belongs to its creation year — refresh both.
+  const paymentYear = new Date().getFullYear();
+  const clientYear = new Date(clientRow.created_at || Date.now()).getFullYear();
+  const yearsToUpdate = [...new Set([paymentYear, clientYear])];
+  for (const y of yearsToUpdate) {
+    await updateFinanceTotals(y);
+  }
 
   const updatedClientResult = await db.query('SELECT total_due, amount_paid, balance FROM clients WHERE id = $1', [id]);
   return res.json({ success: true, client: updatedClientResult.rows[0], financeUpdated: true });
@@ -358,8 +371,14 @@ router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
     conn.release();
   }
 
-  const year = new Date(clientRow.created_at).getFullYear();
-  await updateFinanceTotals(year);
+  // Undo may insert a payment-delta row for the current year, and the
+  // client balance change belongs to its creation year — refresh both.
+  const paymentYear = new Date().getFullYear();
+  const clientYear = new Date(clientRow.created_at || Date.now()).getFullYear();
+  const yearsToUpdate = [...new Set([paymentYear, clientYear])];
+  for (const y of yearsToUpdate) {
+    await updateFinanceTotals(y);
+  }
 
   const updatedClientResult = await db.query('SELECT total_due, amount_paid, balance FROM clients WHERE id = $1', [id]);
   return res.json({ success: true, client: updatedClientResult.rows[0], financeUpdated: true });

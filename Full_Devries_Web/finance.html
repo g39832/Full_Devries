@@ -725,7 +725,9 @@
       <label for="finance-year" style="display:block; margin-bottom:6px; font-weight:600;">
         Select Year:
       </label>
-      <input type="number" id="finance-year" min="2000" max="2100" value="2026">
+      <select id="finance-year">
+        <option value="">Loading years...</option>
+      </select>
 
       <table class="metrics-table">
         <thead>
@@ -784,10 +786,10 @@
           <div class="pdf-list" id="1099-list"></div>
         </div>
 
-        <div class="tax-group" id="inference-group">
+        <div class="tax-group" id="insurance-group">
           <h4>Insurance Docs</h4>
-          <div class="drop-zone" data-group="inference">📄 Drop PDFs Here</div>
-          <div class="pdf-list" id="inference-list"></div>
+          <div class="drop-zone" data-group="insurance">📄 Drop PDFs Here</div>
+          <div class="pdf-list" id="insurance-list"></div>
         </div>
 
       </div>

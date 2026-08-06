@@ -8,3 +8,5 @@ backups/
 *.db-shm
 *.db-wal
 npm-debug.log*
+server.log
+*.log

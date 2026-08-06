@@ -7,7 +7,7 @@ const {
   parseStringField
 } = require('./request-utils');
 const {
-  isRemoteStorageEnabled,
+  isStorageAvailable,
   ensureRemoteBucket,
   remoteUploadFile,
   remoteListFiles,
@@ -43,10 +43,8 @@ router.post('/upload/:key', upload.any(), asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: 'No files uploaded.' });
   }
 
-  const remoteEnabled = isRemoteStorageEnabled();
-  console.log('isRemoteStorageEnabled:', remoteEnabled);
-  if (!remoteEnabled) {
-    return res.status(500).json({ success: false, error: 'Remote storage is not configured.' });
+  if (!isStorageAvailable()) {
+    return res.status(500).json({ success: false, error: 'Storage is not available.' });
   }
 
   await ensureRemoteBucket();
@@ -86,8 +84,8 @@ router.get('/list/:key', asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid list key.' });
   }
 
-  if (!isRemoteStorageEnabled()) {
-    return res.status(500).json({ success: false, error: 'Remote storage is not configured.' });
+  if (!isStorageAvailable()) {
+    return res.status(500).json({ success: false, error: 'Storage is not available.' });
   }
 
   const isClientId = /^\d+$/.test(key);
@@ -108,8 +106,8 @@ router.delete('/delete/:clientId/:fileName', asyncHandler(async (req, res) => {
   }
 
   try {
-    if (!isRemoteStorageEnabled()) {
-      return res.status(500).json({ success: false, error: 'Remote storage is not configured.' });
+    if (!isStorageAvailable()) {
+      return res.status(500).json({ success: false, error: 'Storage is not available.' });
     }
 
     const deleted = await remoteDeleteFile(clientId, fileName);
@@ -137,8 +135,8 @@ router.delete('/delete/:groupKey', asyncHandler(async (req, res) => {
 
   const decodedFile = decodeURIComponent(fileName);
   try {
-    if (!isRemoteStorageEnabled()) {
-      return res.status(500).json({ error: 'Remote storage is not configured.' });
+    if (!isStorageAvailable()) {
+      return res.status(500).json({ error: 'Storage is not available.' });
     }
 
     const deleted = await remoteDeleteFile(groupKey, decodedFile);
