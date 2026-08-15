@@ -88,8 +88,10 @@ router.get('/list/:key', asyncHandler(async (req, res) => {
     return res.status(500).json({ success: false, error: 'Storage is not available.' });
   }
 
-  const isClientId = /^\d+$/.test(key);
-  const files = (await remoteListFiles(key)).filter((file) => (isClientId ? true : file.ext === '.pdf'));
+  // Job photo keys (job-<id>) and legacy client keys (<clientId>) list all
+  // files (images + PDFs). Other group keys (finance tax groups) remain PDF-only.
+  const isPhotoKey = /^job-\d+$/.test(key) || /^\d+$/.test(key);
+  const files = (await remoteListFiles(key)).filter((file) => (isPhotoKey ? true : file.ext === '.pdf'));
 
   res.json({ success: true, files });
 }));

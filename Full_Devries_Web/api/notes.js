@@ -69,4 +69,58 @@ router.put('/update/:clientId/:noteId', asyncHandler(async (req, res) => {
   res.json({ note: rows[0] || null });
 }));
 
+// ======================================================
+// JOB-SCOPED NOTES (each Job holds its own notes)
+// ======================================================
+
+router.get('/job/:jobId', asyncHandler(async (req, res) => {
+  const jobId = parseIntField(req.params.jobId, 'jobId', { min: 1 });
+  await db.schemaReady;
+  const { rows } = await db.query(
+    'SELECT id, content, created_at FROM notes WHERE job_id = $1 ORDER BY created_at ASC',
+    [jobId]
+  );
+  res.json({ notes: rows });
+}));
+
+router.post('/job/:jobId', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const jobId = parseIntField(req.params.jobId, 'jobId', { min: 1 });
+  const note = parseStringField(req.body.note, 'note', { minLength: 1, maxLength: 10000 });
+
+  await db.schemaReady;
+  const jobResult = await db.query('SELECT client_id FROM jobs WHERE id = $1', [jobId]);
+  if (!jobResult.rows[0]) return res.status(404).json({ error: 'Job not found' });
+
+  const { rows } = await db.query(
+    'INSERT INTO notes (client_id, job_id, content) VALUES ($1, $2, $3) RETURNING id, content, created_at',
+    [jobResult.rows[0].client_id, jobId, note]
+  );
+
+  res.json({ note: rows[0] });
+}));
+
+router.put('/job/:jobId/:noteId', asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const jobId = parseIntField(req.params.jobId, 'jobId', { min: 1 });
+  const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
+  const note = parseStringField(req.body.note, 'note', { minLength: 1, maxLength: 10000 });
+
+  await db.schemaReady;
+  await db.query(
+    'UPDATE notes SET content = $1 WHERE id = $2 AND job_id = $3',
+    [note, noteId, jobId]
+  );
+  res.json({ success: true });
+}));
+
+router.delete('/job/:jobId/:noteId', asyncHandler(async (req, res) => {
+  const jobId = parseIntField(req.params.jobId, 'jobId', { min: 1 });
+  const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
+
+  await db.schemaReady;
+  await db.query('DELETE FROM notes WHERE id = $1 AND job_id = $2', [noteId, jobId]);
+  res.json({ success: true });
+}));
+
 module.exports = router;

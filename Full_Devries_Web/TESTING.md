@@ -4,6 +4,11 @@ This project talks to a **Postgres database**. In production that's the Supabase
 project, but you can (and should) run and test the app locally **without touching
 production data**.
 
+> **Important:** since the Jobs/Tags/Roles rework, the test suite covers the
+> full required scenario (no duplicate clients, job photos, tag filtering,
+> idempotent approval, finance math, overpayments, admin roles, notifications).
+> It still refuses to run against `DATABASE_URL` (production).
+
 ---
 
 ## 1. Prerequisites
@@ -24,8 +29,8 @@ docker run --name devries-test-db -e POSTGRES_PASSWORD=testpass -e POSTGRES_DB=d
 
 ### Option C (advanced): run tests against production
 Only if you fully understand the risk. Set `SMOKE_ALLOW_PRODUCTION=true` and/or
-`BACKUP_ALLOW_PRODUCTION=true`. **The smoke test creates and deletes a real
-client + notes + payment in whatever DB it points at.** Use a test DB.
+`BACKUP_ALLOW_PRODUCTION=true`. **The smoke test creates and deletes real rows.**
+Use a test DB.
 
 ---
 
@@ -51,8 +56,6 @@ PORT=3000
 ENABLE_DB_BACKUPS=false
 ```
 
----
-
 ## 3. Run the app locally
 
 ```bash
@@ -60,11 +63,13 @@ npm start
 # -> Server running on http://localhost:3000
 ```
 
-- Log in with the admin password (`123007` in the current dev setup, or the
-  value stored in the `admin_password` settings row).
-- The app's schema (`settings`, `clients`, `payments`, `notes`,
-  `finance_overrides`, `finance_margin_entries`) is created automatically on
-  first boot (`api/db.js` → `initSchema()`).
+- Sign in with a Google account — the login page is Google-only. Only emails
+  listed in `ADMIN_EMAILS` are admins; there is no automatic first-login admin.
+  Admins can promote/demote other users in Settings → Users.
+- The app's schema is created automatically on first boot (`api/db.js` →
+  `initSchema()`): `settings`, `clients`, `jobs`, `payments`, `notes`,
+  `finance_overrides`, `finance_margin_entries`, `tags`, `job_tags`,
+  `app_users`, `finance_adjustments`, `notifications`.
 
 ### Safe local dev server (never touches production data)
 
@@ -74,12 +79,7 @@ npm run dev
 ```
 
 `npm run dev` **refuses to start** unless `TEST_DATABASE_URL` is set, so it can
-never accidentally connect to the production `DATABASE_URL`. It also disables
-backups and uses port 3001 (override with `DEV_PORT`) so it won't clash with
-`npm start`. Use `npm start` only when you intentionally want the production
-DB.
-
----
+never accidentally connect to the production `DATABASE_URL`.
 
 ## 4. Run the test suites
 
@@ -87,20 +87,39 @@ Both suites are **guarded**: they refuse to run against `DATABASE_URL`
 (production) unless you explicitly set `SMOKE_ALLOW_PRODUCTION=true` /
 `BACKUP_ALLOW_PRODUCTION=true`.
 
-### Smoke test (login, clients, payments, notes, optional PDFs)
+### Smoke test (login, clients, jobs, photos, tags, approval, finance, roles, notifications)
 
 ```bash
 npm run test:smoke
 ```
 
-What it does:
-1. Boots the real server on port 3000 in `NODE_ENV=test` (uses `TEST_DATABASE_URL`).
+What it does (all against the **test** DB):
+1. Boots the real server on port 3000 in `NODE_ENV=test`.
 2. Asserts unauthenticated API access is rejected (401).
-3. Logs in, creates a client, records a payment, adds/lists a note, deletes the client.
-4. If remote storage is configured (`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
-   set and `STORAGE_BACKEND != local`), it also uploads/lists/deletes a PDF.
-   Otherwise those steps are skipped with a warning — so the suite passes locally
-   without storage config.
+3. Bootstraps an admin session (login is Google-only now), checks `/api/auth/me` reports admin.
+4. Creates client "John Smith", adds Jobs 1/2/3, and **asserts the client was
+   never duplicated** and all jobs belong to the same client.
+5. Asserts a payment is **rejected before approval**, then approves the job
+   (and re-approves to prove idempotency — no duplicate finance records or
+   duplicate "approved" notifications).
+6. Records a payment and an expense, then asserts
+   `Total Due − Paid = Balance Due`, `Paid − Expenses = Profit`, and
+   `Profit ÷ Paid × 100 = Margin %` are computed server-side.
+7. Enters an overpayment and asserts **Balance Due = $0 (never negative)** and
+   the Overpayment/Credit equals the excess.
+8. Tags: creates "Prospect", rejects a case-insensitive duplicate (409), tags
+   two jobs, filters by tag, renames the tag (relationships preserved), deletes
+   the tag (jobs intact).
+9. Photos: uploads an image to Job 1 and asserts it is **not** visible on
+   Job 2 (scoped storage keys).
+10. Notifications: asserts approval/payment/overpayment notifications exist.
+11. Admin: applies a finance adjustment and verifies the audit trail
+    (old value, new value, reason, who). Then swaps the session to a **normal
+    user** and asserts admin endpoints return **403** (finance adjustment, tag
+    creation, user list).
+12. Regression: client notes, job-scoped notes, client-level PDF upload/list/
+    delete (when storage is configured), finance years + summary, and logout →
+    401.
 
 ### Backup / restore verification
 
@@ -108,43 +127,24 @@ What it does:
 npm run test:backup-restore
 ```
 
-What it does:
-1. Creates a JSON backup (`backups/crm-backup-*.json`) from the **test** DB.
-2. Validates the JSON structure and that all required tables (`settings`,
-   `clients`, `payments`, `notes`, `finance_overrides`) are present with
-   well-formed rows.
+Validates a JSON backup contains all tables (`settings`, `clients`, `jobs`,
+`payments`, `notes`, `finance_overrides`, `finance_margin_entries`, `tags`,
+`job_tags`, `app_users`, `finance_adjustments`, `notifications`).
 
----
+## 5. Read-only production inspection scripts
 
-## 5. What's NOT covered by the automated tests
+These never write and never read row contents (schema + counts only):
 
-A few functional gaps were fixed in the app itself (July/Aug 2026):
+```bash
+node scripts/inspect-schema.js            # tables/columns/FKs from information_schema
+ALLOW_PRODUCTION_AUDIT=true node scripts/inspect-data-counts.js  # row counts per table
+```
 
-- **PDF upload/list/delete now works without Supabase storage.** `storage.js`
-  falls back to the local `uploads/` folder when `SUPABASE_URL` /
-  `SUPABASE_SERVICE_ROLE_KEY` aren't set, so all PDF features work out of the
-  box locally. When you do configure Supabase storage (set the env vars and
-  create the bucket), uploads go to the cloud instead.
-- **New leads are saved with status `Prospect`** (was `Lead`, which the app's
-  status list doesn't include). The sidebar counts, colors, and status dropdown
-  all understand `Prospect`.
-- **Margin Tracker now factors in `clients.job_cost`** for both per-client rows
-  and aggregate totals, so margins match the finance page's Avg Margin instead
-  of reporting ~100% for everyone.
-- **Finance "Select Year" is now a real dropdown** populated from the database
-  years, and the margin tracker stays in sync when it changes.
-- **Forecast panel no longer shows absurd slope percentages** — it displays a
-  dash when projected revenue is 0.
-- **Cross-year payments refresh both years' finance totals** (the payment year
-  and the client's creation year).
-- **Finance page drop zones now actually accept dropped PDFs** (they only
-  advertised it before).
+## 6. What still needs manual verification
 
-Still worth knowing before deploying:
-
-- **`vercel.json` rewrites `/api/*` to `https://${BACKEND_URL}/api/*`** — before
-  deploying to Vercel, set a `BACKEND_URL` environment variable in your Vercel
-  project to your backend host (e.g. `myapp.onrender.com`, no `https://`).
-  Without it, `/api/*` calls fail on the Vercel site.
-- `finance_margin_entries` is now included in JSON backups (along with
-  `settings, clients, payments, notes, finance_overrides`).
+- **Google login** cannot be exercised by the automated suite (it needs a
+  real Supabase Google provider). Follow `MANUAL-STEPS.md` to configure Google
+  Cloud + Supabase + Render, then test: login page → "Continue with Google" →
+  Google consent → redirected back → `/main`.
+- **Email notifications** are off by default (`EMAIL_NOTIFICATIONS_ENABLED`).
+  In-app notifications work immediately.

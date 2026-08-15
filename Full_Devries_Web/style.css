@@ -1522,3 +1522,296 @@ button.btn-primary:hover {
 .toast.success { border-color: rgba(40, 167, 69, 0.5); }
 .toast.error { border-color: rgba(220, 53, 69, 0.5); }
 .toast.info { border-color: rgba(23, 162, 184, 0.5); }
+
+/* ============================================================
+   v2/v3 UI — jobs, tags, notifications, settings
+   ============================================================ */
+.user-badge {
+  color: #e7edf7;
+}
+
+.icon-btn {
+  cursor: pointer;
+  border-radius: 10px;
+  border: none;
+  color: white;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+/* Tag filter bar (sidebar) */
+.tag-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
+}
+.tag-filter-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.tag-chip {
+  background: rgba(127, 217, 255, 0.12);
+  color: #9ad0ff;
+  border: 1px solid rgba(127, 217, 255, 0.25);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.tag-chip:hover { background: rgba(127, 217, 255, 0.25); }
+.tag-chip.active {
+  background: #2f80ed;
+  color: #fff;
+  border-color: #2f80ed;
+}
+
+/* Job tags (inside panels) */
+.job-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.job-tag {
+  background: rgba(47, 128, 237, 0.14);
+  color: #1e3c72;
+  border: 1px solid rgba(47, 128, 237, 0.3);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.job-tag-remove { color: #c2410c; font-weight: 700; }
+
+/* Client panel: jobs list */
+.client-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.job-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(47, 128, 237, 0.08), rgba(20, 20, 40, 0.35));
+  border: 1px solid rgba(47, 128, 237, 0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.job-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+.job-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+.job-row-meta {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+}
+.job-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.job-open-btn {
+  background: linear-gradient(135deg, #2f80ed, #4f8dfd);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Job photos grid */
+.job-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.job-photo-card {
+  position: relative;
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+}
+.job-photo-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  cursor: pointer;
+  display: block;
+}
+.job-photo-card a {
+  color: #1e3c72;
+  font-size: 0.82rem;
+  text-decoration: none;
+  padding: 10px 8px;
+}
+.job-photo-delete {
+  background: rgba(74, 85, 104, 0.9);
+  color: #fff;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  margin-top: auto;
+}
+
+/* Job finance rows */
+.list-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 10px 0 4px;
+}
+.job-finance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 0.88rem;
+  color: #e7edf7;
+}
+.job-finance-row small { color: rgba(255, 255, 255, 0.55); }
+.job-finance-delete:hover { color: #ff6b6b; }
+
+/* Notifications panel */
+.notifications-panel {
+  position: fixed;
+  top: 62px;
+  right: 16px;
+  width: min(400px, calc(100vw - 32px));
+  max-height: 70vh;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  z-index: 10002;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: #1e3c72;
+}
+.notifications-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 0.95rem;
+}
+.notifications-mark-all {
+  background: none;
+  border: none;
+  color: #2f80ed;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.notifications-list {
+  overflow-y: auto;
+  max-height: 60vh;
+}
+.notification-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eef2f7;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: #1e3c72;
+}
+.notification-item:hover { background: #f8fafc; }
+.notification-item.read { opacity: 0.6; }
+.notification-icon { font-size: 1.05rem; }
+.notification-body small { color: #94a3b8; }
+
+/* Settings modal */
+.settings-modal {
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+}
+.settings-modal-card {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
+  color: #1e3c72;
+  padding: 24px;
+}
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.settings-tab {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #d0d7de;
+  background: #f1f5fa;
+  color: #53657d;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.settings-tab.active {
+  background: linear-gradient(135deg, #2f80ed, #4f8dfd);
+  color: #fff;
+  border-color: transparent;
+}
+.settings-tab-panel { font-size: 0.92rem; }
+
+/* Link-style button */
+.link-btn { font-weight: 700; }
+.link-btn:hover { text-decoration: underline; }
+
+/* Print: keep only the panel content */
+@media print {
+  .notifications-panel,
+  .settings-modal {
+    display: none !important;
+  }
+}

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signing in… - Roofing CRM</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #101323, #24304a);
+      color: #e7edf7;
+    }
+    .card {
+      text-align: center;
+      padding: 40px 48px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      max-width: 420px;
+    }
+    .spinner {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 16px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #7fd9ff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    a { color: #7fd9ff; }
+    .error { color: #ff9aa2; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h2 id="statusText" style="margin: 0 0 8px;">Signing you in…</h2>
+    <p id="detailText" style="margin: 0 0 16px; color: rgba(231,237,247,0.75); font-size: 0.92rem;">Completing your Google sign-in.</p>
+    <p id="errorBox" style="display:none;"><a href="login.html">← Back to login</a></p>
+  </div>
+
+  <script>
+    (async () => {
+      const statusText = document.getElementById("statusText");
+      const detailText = document.getElementById("detailText");
+      const errorBox = document.getElementById("errorBox");
+
+      const hash = window.location.hash || "";
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+      if (hashParams.get("error")) {
+        const errCode = hashParams.get("error") || "unknown";
+        const errDesc = hashParams.get("error_description") || "";
+        statusText.textContent = "Sign-in failed";
+        if (errDesc) {
+          detailText.textContent = errCode + ": " + errDesc;
+        } else if (errCode === "access_denied") {
+          detailText.textContent =
+            "Access was denied. Usually this means you clicked Cancel on the Google prompt, or your Google account is not on the app's test-users list (Google Cloud → Google Auth Platform → Audience → Test users).";
+        } else {
+          detailText.textContent = "Google returned an error: " + errCode + ". You can try again from the login page.";
+        }
+        detailText.style.color = "#ff9aa2";
+        errorBox.style.display = "block";
+        return;
+      }
+
+      try {
+        if (!window.supabase || typeof window.supabase.createClient !== "function") {
+          throw new Error("Supabase client library failed to load.");
+        }
+
+        const configRes = await fetch("/api/supabase-config");
+        if (!configRes.ok) throw new Error("Failed to load Supabase configuration.");
+        const config = await configRes.json();
+        if (!config.supabaseUrl || !config.supabaseAnonKey) {
+          throw new Error("Google login is not configured yet. Please ask the administrator to finish the setup.");
+        }
+
+        const supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+
+        // Pick up the OAuth tokens (PKCE code exchange happens here).
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
+
+        const session = data && data.session;
+        if (!session || !session.access_token) {
+          // No fresh session — maybe the user arrived here directly.
+          window.location.href = "/login.html";
+          return;
+        }
+
+        // Hand the verified session token to our backend, which re-verifies it
+        // against Supabase server-side and opens the CRM session.
+        const res = await fetch("/api/auth/google/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accessToken: session.access_token })
+        });
+
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || !result.success) {
+          throw new Error((result && result.error) || "Session could not be established.");
+        }
+
+        statusText.textContent = "Signed in!";
+        detailText.textContent = "Redirecting to the CRM…";
+        window.location.href = "/main.html";
+      } catch (err) {
+        console.error("Auth callback error:", err);
+        statusText.textContent = "Could not sign in";
+        detailText.textContent = err.message || "Something went wrong during sign-in.";
+        detailText.style.color = "#ff9aa2";
+        errorBox.style.display = "block";
+      }
+    })();
+  </script>
+</body>
+</html>

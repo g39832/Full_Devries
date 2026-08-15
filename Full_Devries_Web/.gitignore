@@ -10,3 +10,6 @@ backups/
 npm-debug.log*
 server.log
 *.log
+
+# Local embedded Postgres test database
+.local-db/

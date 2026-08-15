@@ -58,7 +58,7 @@ function verifyBackupJson(fullPath) {
     throw new Error('Backup is missing createdAt metadata');
   }
 
-  const requiredTables = ['settings', 'clients', 'payments', 'notes', 'finance_overrides'];
+  const requiredTables = ['settings', 'clients', 'jobs', 'payments', 'notes', 'finance_overrides', 'tags', 'job_tags', 'app_users', 'finance_adjustments', 'notifications'];
   const tables = snapshot.tables || {};
   const missing = requiredTables.filter((t) => !Array.isArray(tables[t]));
   if (missing.length) {
@@ -84,11 +84,10 @@ function verifyBackupJson(fullPath) {
 }
 
 async function main() {
-  let backups = listBackups();
-  if (!backups.length) {
-    await runBackup({ retention: 30 });
-    backups = listBackups();
-  }
+  // Always create a fresh backup — stale backups from an older schema must not
+  // be mistaken for current coverage.
+  await runBackup({ retention: 30 });
+  const backups = listBackups();
 
   if (!backups.length) {
     throw new Error('No backups available after backup creation attempt.');

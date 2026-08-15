@@ -300,8 +300,13 @@
       <p class="page-subtitle">Track leads, notes, files, and project details from one workspace.</p>
     </div>
     <div class="page-header-actions">
+      <span id="userBadge" class="user-badge" style="display:none; background:rgba(255,255,255,0.14); border-radius:20px; padding:6px 12px; font-size:0.82rem; font-weight:600; white-space:nowrap;"></span>
+      <button id="notificationsBtn" class="icon-btn" title="Notifications" aria-label="Notifications" style="background:rgba(255,255,255,0.14); box-shadow:none;">
+        🔔 <span id="notificationsBadge" style="display:none; background:#e5484d; color:#fff; border-radius:10px; padding:1px 6px; font-size:0.72rem; margin-left:2px;"></span>
+      </button>
       <button id="emailSettingsBtn" style="background:rgba(255,255,255,0.14); box-shadow:none;">Email Setup</button>
       <button id="companyProfileBtn" style="background:rgba(255,255,255,0.14); box-shadow:none;">Company Profile</button>
+      <button id="settingsBtn" style="background:rgba(255,255,255,0.14); box-shadow:none;">Settings</button>
       <button id="toggleFinance">Finance Dashboard</button>
     </div>
   </header>
@@ -326,6 +331,8 @@
           <input type="text" id="searchClients" placeholder="Search name, phone, or email...">
         </div>
 
+        <div class="tag-filter-bar" id="tagFilterBar" style="display:none;"></div>
+
         <!-- Scrollable List of Clients -->
         <ul id="clientList" class="client-list"></ul>
       </div>
@@ -341,6 +348,34 @@
 
   <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+  <!-- Notifications Panel -->
+  <div id="notificationsPanel" class="notifications-panel" style="display:none;">
+    <div class="notifications-panel-header">
+      <strong>Notifications</strong>
+      <button id="markAllReadBtn" class="notifications-mark-all">Mark all read</button>
+    </div>
+    <div id="notificationsList" class="notifications-list"></div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="settings-modal" style="display:none;">
+    <div class="settings-modal-card">
+      <button id="closeSettingsBtn" class="close-x" style="color:#666;">&times;</button>
+      <h2 style="margin:0 0 4px; font-size:1.3rem; color:#1e3c72;">Settings</h2>
+      <p style="margin:0 0 14px; color:#53657d; font-size:0.9rem;">Tags, users, and your account.</p>
+      <div class="settings-tabs">
+        <button class="settings-tab active" data-tab="tags">Tags</button>
+        <button class="settings-tab" data-tab="users" id="usersTabBtn" style="display:none;">Users</button>
+        <button class="settings-tab" data-tab="activity" id="activityTabBtn" style="display:none;">Activity</button>
+        <button class="settings-tab" data-tab="account">Account</button>
+      </div>
+      <div id="settingsTabTags" class="settings-tab-panel"></div>
+      <div id="settingsTabUsers" class="settings-tab-panel" style="display:none;"></div>
+      <div id="settingsTabActivity" class="settings-tab-panel" style="display:none;"></div>
+      <div id="settingsTabAccount" class="settings-tab-panel" style="display:none;"></div>
+    </div>
+  </div>
+
   <!-- PDF Preview Modal -->
   <div id="pdfModal">
     <div id="pdfModalContent">
@@ -349,8 +384,10 @@
     </div>
   </div>
 
-  <!-- Renderer script -->
-  <script src="main-renderer.js?v=2" defer></script>
+  <!-- Renderer scripts -->
+  <script src="main-renderer.js?v=3" defer></script>
+  <script src="main-renderer-v2.js?v=1" defer></script>
+  <script src="main-renderer-v3.js?v=1" defer></script>
   <script>
     // Toggle button to finance page
     const toggleBtn = document.getElementById('toggleFinance');

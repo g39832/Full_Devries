@@ -28,8 +28,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const session = require('express-session');
 const multer = require('multer');
-const rateLimit = require('express-rate-limit');
 const { AppError } = require('./api/request-utils');
+const db = require('./api/db');
 const { startBackupScheduler } = require('./services/db-backup');
 
 const app = express();
@@ -39,33 +39,26 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-// ===== RATE LIMITING =====
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Too many login attempts. Try again in 15 minutes.' }
-});
-app.use('/api/login', loginLimiter);
-
 // ===== SESSION =====
 const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
-app.use(
-  session({
-    name: 'devries.sid',
-    secret: sessionSecret,
-    proxy: true,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 12
-    }
-  })
-);
+const sessionStore = new (require('express-session').MemoryStore)();
+const sessionMiddleware = session({
+  name: 'devries.sid',
+  secret: sessionSecret,
+  proxy: true,
+  resave: false,
+  saveUninitialized: false,
+  store: sessionStore,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 1000 * 60 * 60 * 12
+  }
+});
+app.use(sessionMiddleware);
+// Expose the store so the test suite can construct role-scoped sessions.
+app.locals.sessionStore = sessionStore;
 
 function isAuthenticated(req) {
   return Boolean(req.session && req.session.authenticated === true);
@@ -92,9 +85,76 @@ app.use('/api', (req, res, next) => {
 });
 
 // ===== API AUTH GUARD =====
+// Google OAuth session verification and logout are intentionally exempt.
+const PUBLIC_API_PATHS = new Set([
+  '/auth/google/session',
+  '/auth/logout',
+  // Supabase URL + anon key only (anon key is safe to expose; it is not a secret).
+  '/supabase-config'
+]);
 app.use('/api', (req, res, next) => {
-  if (req.path === '/login' || req.path === '/change-password') return next();
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
   return requireApiAuth(req, res, next);
+});
+
+// ===== ACTIVITY LOG (admin "who did what" audit trail) =====
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const ACTIVITY_ACTIONS = [
+  { pattern: /^\/save-client$/, action: 'Add or update client' },
+  { pattern: /^\/delete-client$/, action: 'Delete client' },
+  { pattern: /^\/update-project$/, action: 'Update project' },
+  { pattern: /^\/clients\/\d+\/jobs$/, action: 'Add job' },
+  { pattern: /^\/jobs\/\d+\/payment$/, action: 'Record payment' },
+  { pattern: /^\/jobs\/\d+\/reset-paid$/, action: 'Reset payments' },
+  { pattern: /^\/jobs\/\d+\/total$/, action: 'Set job total' },
+  { pattern: /^\/jobs\/\d+\/finance-state$/, action: 'Restore finance state' },
+  { pattern: /^\/jobs\/\d+\/expenses$/, action: 'Record expense' },
+  { pattern: /^\/jobs\/\d+\/expenses\/\d+$/, action: 'Delete expense' },
+  { pattern: /^\/jobs\/\d+\/tags$/, action: 'Set job tags' },
+  { pattern: /^\/jobs\/\d+$/, action: 'Update or delete job' },
+  { pattern: /^\/clients\/\d+\/payment$/, action: 'Record client payment' },
+  { pattern: /^\/clients\/\d+\/total$/, action: 'Set client total' },
+  { pattern: /^\/clients\/\d+\/reset-paid$/, action: 'Reset client payments' },
+  { pattern: /^\/clients\/\d+\/finance-state$/, action: 'Restore client finance state' },
+  { pattern: /^\/clients\/\d+\/notes/, action: 'Manage client notes' },
+  { pattern: /^\/finance\/save$/, action: 'Save finance overrides' },
+  { pattern: /^\/finance\/margin\/entries/, action: 'Manage margin entries' },
+  { pattern: /^\/notes/, action: 'Manage notes' },
+  { pattern: /^\/pdf\/upload/, action: 'Upload file' },
+  { pattern: /^\/pdf\/delete/, action: 'Delete file' },
+  { pattern: /^\/tags/, action: 'Manage tags' },
+  { pattern: /^\/admin\/finance-adjustments$/, action: 'Finance adjustment' },
+  { pattern: /^\/admin\/users\/\d+\/role$/, action: 'Change user role' },
+  { pattern: /^\/admin/, action: 'Admin action' },
+  { pattern: /^\/company-profile/, action: 'Update company profile' },
+  { pattern: /^\/email-settings/, action: 'Update email settings' },
+  { pattern: /^\/send-invoice/, action: 'Send invoice' },
+  { pattern: /^\/send-estimate/, action: 'Send estimate' },
+  { pattern: /^\/notifications/, action: 'Update notifications' },
+  { pattern: /^\/auth\/logout$/, action: 'Log out' }
+];
+
+function activityActionFor(pathname) {
+  for (const entry of ACTIVITY_ACTIONS) {
+    if (entry.pattern.test(pathname)) return entry.action;
+  }
+  return null;
+}
+
+app.use('/api', (req, res, next) => {
+  if (!MUTATING_METHODS.has(req.method)) return next();
+  const actor = getSessionUser(req);
+  if (!actor) return next();
+  const action = activityActionFor(req.path) || `${req.method} ${req.path}`;
+  res.on('finish', () => {
+    if (res.statusCode >= 400) return;
+    db.query(
+      `INSERT INTO activity_log (actor_email, actor_name, actor_role, action, method, path, summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [actor.email, actor.name || actor.email, actor.role || 'user', action, req.method, req.originalUrl, action]
+    ).catch((err) => console.error('[activity] failed to record:', err.message));
+  });
+  next();
 });
 
 const healthRoutes = require('./api/health');
@@ -109,6 +169,12 @@ app.use('/api', (req, res, next) => {
   if (!hasBodyMethod) return next();
 
   if (req.is('multipart/form-data')) return next();
+
+  // Bodiless requests (e.g. POST /api/auth/logout) are fine without a body.
+  const contentLength = Number(req.headers['content-length'] || 0);
+  const hasBody = contentLength > 0 || Boolean(req.headers['transfer-encoding']);
+  if (!hasBody) return next();
+
   if (!req.is('application/json')) {
     return next(new AppError(415, 'Content-Type must be application/json'));
   }
@@ -116,8 +182,12 @@ app.use('/api', (req, res, next) => {
 });
 
 // ===== API ROUTES =====
-const authRoutes = require('./api/auth');
+const { router: authRoutes, requireRole, getSessionUser } = require('./api/auth');
 const clientsRoutes = require('./api/clients');
+const { router: jobsRoutes } = require('./api/jobs');
+const tagsRoutes = require('./api/tags');
+const adminRoutes = require('./api/admin');
+const notificationsRoutes = require('./api/notifications');
 const companyProfileRoutes = require('./api/company-profile');
 const emailSettingsRoutes = require('./api/email-settings');
 const invoiceRoutes = require('./api/invoice');
@@ -125,15 +195,23 @@ const pdfRoutes = require('./api/pdf');
 const notesRoutes = require('./api/notes');
 const supabaseConfigRoutes = require('./api/supabase-config');
 
-// Mount routers under /api
-app.use('/api', authRoutes);
+// Mount routers under /api. The auth router is mounted at '/api/auth' for
+// /api/auth/me, /api/auth/google/session, and /api/auth/logout.
+app.use('/api/auth', authRoutes);
 app.use('/api', clientsRoutes);
+app.use('/api', jobsRoutes);
+app.use('/api/tags', tagsRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationsRoutes);
 app.use('/api/company-profile', companyProfileRoutes);
 app.use('/api/email-settings', emailSettingsRoutes);
 app.use('/api', invoiceRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/supabase-config', supabaseConfigRoutes);
 app.use('/api/notes', notesRoutes);
+
+// Expose role helper for other modules
+app.locals.requireRole = requireRole;
 
 // ===== BLOCK SENSITIVE FILES FROM STATIC ACCESS =====
 const blockedStaticPaths = [

@@ -26,7 +26,6 @@
   const categories = ['Labor', 'Marketing', 'Software', 'Contractors', 'Operations', 'Taxes', 'Misc'];
   const invoiceStatuses = ['Pending', 'Billed', 'Partially Paid', 'Paid', 'Overdue'];
   const pageSize = 8;
-  let svgUid = 0;
   let refreshTimer = null;
 
   const state = {
@@ -401,7 +400,7 @@
 
     // Client job costs (clients.job_cost) are one-time costs per client.
     // Allocate each paying client's job cost across their payment buckets in
-    // proportion to revenue, so the chart series match the aggregate totals
+    // proportion to revenue, so the headline totals match the aggregate totals
     // (and per-client rows) instead of showing $0 expenses / 100% margins,
     // and month/quarter trends stay meaningful instead of one giant spike.
     const jobCostById = new Map(clients.map((client) => [Number(client.id), toNumber(client.job_cost)]));
@@ -700,8 +699,8 @@
       categoryTotals[key] = (categoryTotals[key] || 0) + expense.amount;
     }
     // Client job costs (clients.job_cost) are part of the expense picture and
-    // already show up in the per-client rows, headline totals, and chart
-    // series; surface them in the breakdown too so the donut never claims
+    // already show up in the per-client rows and headline totals;
+    // surface them in the breakdown too so it never claims
     // "no expense data" when job costs exist. Use the amount accumulated
     // during bucket allocation so it stays correct in Month/Quarter views.
     if (allocatedJobCosts > 0) {
@@ -945,7 +944,7 @@
         <div class="mt-toolbar">
           <div class="mt-toolbar-copy">
             <div class="mt-title">Margin Tracker</div>
-            <p class="mt-subtitle">Loading live analytics, charts, and client profitability insights...</p>
+            <p class="mt-subtitle">Loading live analytics and client profitability insights...</p>
           </div>
           <div class="mt-chip-row">
             <span class="mt-chip"><strong>Loading</strong> dashboard</span>
@@ -1014,7 +1013,7 @@
         <div class="mt-toolbar">
           <div class="mt-toolbar-copy">
             <div class="mt-title">Margin Tracker</div>
-            <p class="mt-subtitle">Selected period: <strong>${escapeHtml(periodText)}</strong>. Enter the four fields first, then review charts only if you want extra context.</p>
+            <p class="mt-subtitle">Selected period: <strong>${escapeHtml(periodText)}</strong>. Enter the four fields, save once, and review the numbers below.</p>
           </div>
           <div class="mt-toolbar-actions">
             <div class="mt-view-toggle" role="tablist" aria-label="Margin view">
@@ -1032,7 +1031,6 @@
 
         ${renderExpenseForm(model)}
         ${renderKpiGrid(model)}
-        ${renderChartGrid(model)}
         <details class="mt-panel" style="padding:0; overflow:hidden;">
           <summary style="list-style:none; cursor:pointer; padding:18px 18px 0; font-weight:800; color: var(--text-main);">Advanced Filters</summary>
           <div style="padding:0 0 18px;">
@@ -1148,7 +1146,7 @@
         <div class="mt-panel-header">
           <div>
             <h4 class="mt-panel-title">Top KPI snapshot</h4>
-            <p class="mt-panel-copy">Animated finance cards with directional context, sparklines, and premium hover feedback.</p>
+            <p class="mt-panel-copy">Animated finance cards with directional context and premium hover feedback.</p>
           </div>
         </div>
         <div class="mt-panel-body">
@@ -1166,7 +1164,6 @@
   function metricCard(label, value, previousValue, tone, caption, isPercent = false, subtitle = '') {
     const delta = previousValue ? ((value - previousValue) / Math.max(Math.abs(previousValue), 1)) * 100 : 0;
     const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
-    const spark = sparklineSVG(seriesForSparkline(tone));
     const valueText = isPercent ? `${percentFmt.format(value)}%` : formatMoney(value);
     const deltaText = previousValue ? formatDelta(Math.abs(delta)) : 'No comparison';
     const arrow = direction === 'up' ? '+' : direction === 'down' ? '-' : '*';
@@ -1182,397 +1179,9 @@
           </div>
           <div class="mt-chip">${escapeHtml(subtitle || caption)}</div>
         </div>
-        ${spark}
         <div class="mt-kpi-meta">${escapeHtml(caption)}</div>
       </article>
     `;
-  }
-
-  function seriesForSparkline(tone) {
-    const buckets = state.currentModel?.viewSeries || [];
-    if (!buckets.length) return [0, 0, 0, 0];
-    if (tone === 'expenses') return buckets.map((bucket) => bucket.expenses);
-    if (tone === 'profit') return buckets.map((bucket) => bucket.netProfit);
-    if (tone === 'margin') return buckets.map((bucket) => bucket.marginPct);
-    return buckets.map((bucket) => bucket.revenue);
-  }
-
-  function sparklineSVG(values) {
-    const normalized = normalizeSeries(values, 120, 36);
-    const points = normalized.map((point, idx) => `${idx === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-    const fillPath = `${points} L 120 36 L 0 36 Z`;
-    const gradientId = `sparkGrad-${svgUid += 1}`;
-    return `
-      <svg class="mt-sparkline" viewBox="0 0 120 36" role="img" aria-hidden="true">
-        <defs>
-          <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#72edc7" stop-opacity="0.65"/>
-            <stop offset="100%" stop-color="#72edc7" stop-opacity="0.02"/>
-          </linearGradient>
-        </defs>
-        <path d="${fillPath}" fill="url(#${gradientId})"></path>
-        <path d="${points}" fill="none" stroke="#72edc7" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"></path>
-      </svg>
-    `;
-  }
-
-  function normalizeSeries(values, width, height) {
-    const cleaned = values.map((value) => toNumber(value));
-    const max = Math.max(...cleaned, 1);
-    const min = Math.min(...cleaned, 0);
-    const spread = max - min || 1;
-    return cleaned.map((value, index) => ({
-      x: cleaned.length === 1 ? width / 2 : (index / (cleaned.length - 1)) * width,
-      y: height - ((value - min) / spread) * (height - 6) - 3
-    }));
-  }
-
-  function renderChartGrid(model) {
-    return `
-      <div class="mt-grid">
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Visual Insights: Revenue vs Expenses</h4>
-              <p class="mt-panel-copy">Secondary analytics for reviewing trends after the quick entry is saved.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            <div class="mt-chart">${lineChart(model.viewSeries, 'revenue', 'expenses', ['#72edc7', '#7ab7d6'])}</div>
-            <div class="mt-legend">
-              <span class="mt-legend-item"><span class="mt-dot" style="background:#72edc7"></span>Revenue</span>
-              <span class="mt-legend-item"><span class="mt-dot" style="background:#7ab7d6"></span>Expenses</span>
-            </div>
-          </div>
-        </div>
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Margin Trends</h4>
-              <p class="mt-panel-copy">A supporting view of margin movement through the selected period.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            <div class="mt-chart">${lineChart(model.viewSeries, 'marginPct', null, ['#f7c55f'], (value) => `${percentFmt.format(value)}%`)}</div>
-            <div class="mt-chip-row">
-              <span class="mt-chip"><strong>${escapeHtml(periodLabel(state.year, state.view, state.month, state.quarter))}</strong> active</span>
-              <span class="mt-chip"><strong>${escapeHtml(percentFmt.format(model.currentMarginPct))}%</strong> margin</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-grid-2">
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Client Profitability Rankings</h4>
-              <p class="mt-panel-copy">Helpful context, not part of the primary input flow.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            <div class="mt-chart">${barRankingChart(model.topProfitClients)}</div>
-          </div>
-        </div>
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Expense Breakdown</h4>
-              <p class="mt-panel-copy">A compact category breakdown for reference.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            <div class="mt-chart">${donutChart(model.categoryItems)}</div>
-            <div class="mt-legend">
-              ${model.categoryItems.slice(0, 5).map((item, idx) => `
-                <span class="mt-legend-item"><span class="mt-dot" style="background:${chartPalette[idx % chartPalette.length]}"></span>${escapeHtml(item.label)} ${escapeHtml(formatMoney(item.value))}</span>
-              `).join('')}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-grid-3">
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Forecast Projections</h4>
-              <p class="mt-panel-copy">Optional forward-looking context from the same dataset.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            ${forecastPanel(model.projected)}
-          </div>
-        </div>
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Profitability Heatmap</h4>
-              <p class="mt-panel-copy">A secondary visual layer for spotting patterns quickly.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            <div class="mt-chart">${heatmapChart(model.filteredClients)}</div>
-          </div>
-        </div>
-        <div class="mt-panel">
-          <div class="mt-panel-header">
-            <div>
-              <h4 class="mt-panel-title">Smart Insights</h4>
-              <p class="mt-panel-copy">Simple narrative highlights pulled from the live data.</p>
-            </div>
-          </div>
-          <div class="mt-panel-body">
-            <div class="mt-list">
-              ${model.insights.map((insight) => `
-                <div class="mt-alert-card ${insight.tone}">
-                  <div style="font-weight:800; margin-bottom:6px;">${escapeHtml(insight.title)}</div>
-                  <div>${escapeHtml(insight.text)}</div>
-                  <small style="display:block; margin-top:6px; color: var(--text-muted);">${escapeHtml(insight.detail)}</small>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-panel">
-        <div class="mt-panel-header">
-          <div>
-            <h4 class="mt-panel-title">Smart Alerts</h4>
-            <p class="mt-panel-copy">Lightweight warnings that stay out of the way unless something needs attention.</p>
-          </div>
-        </div>
-        <div class="mt-panel-body">
-          <div class="mt-alert-grid">
-            ${model.alerts.map((alert) => `
-              <div class="mt-alert-card ${alert.tone}">
-                <div style="font-weight:800; margin-bottom:6px;">${escapeHtml(alert.title)}</div>
-                <div>${escapeHtml(alert.text)}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  const chartPalette = ['#72edc7', '#7ab7d6', '#f7c55f', '#f08eb0', '#9f8cff', '#ff9c9c', '#6fe0ff'];
-
-  function lineChart(series, keyA, keyB, colors, format = null) {
-    const valuesA = series.map((item) => toNumber(item[keyA]));
-    const valuesB = keyB ? series.map((item) => toNumber(item[keyB])) : [];
-    const labels = series.map((item) => item.label);
-    const pointsA = buildPath(valuesA, 700, 220, labels, format);
-    const pointsB = keyB ? buildPath(valuesB, 700, 220, labels, format) : null;
-    const max = Math.max(...valuesA, ...valuesB, 1);
-    const areaAId = `areaA-${svgUid += 1}`;
-    const areaBId = `areaB-${svgUid += 1}`;
-    return `
-      <svg viewBox="0 0 700 220" preserveAspectRatio="none" aria-label="Trend chart">
-        <defs>
-          <linearGradient id="${areaAId}" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="${colors[0]}" stop-opacity="0.45"></stop>
-            <stop offset="100%" stop-color="${colors[0]}" stop-opacity="0.03"></stop>
-          </linearGradient>
-          ${keyB ? `
-            <linearGradient id="${areaBId}" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="${colors[1]}" stop-opacity="0.35"></stop>
-              <stop offset="100%" stop-color="${colors[1]}" stop-opacity="0.03"></stop>
-            </linearGradient>
-          ` : ''}
-        </defs>
-        <rect x="0" y="0" width="700" height="220" rx="20" fill="rgba(255,255,255,0.02)"></rect>
-        ${gridLines(max)}
-        ${pointsA.area ? `<path d="${pointsA.area}" fill="url(#${areaAId})"></path>` : ''}
-        ${pointsA.line ? `<path d="${pointsA.line}" fill="none" stroke="${colors[0]}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>` : ''}
-        ${pointsA.circles}
-        ${keyB && pointsB ? `<path d="${pointsB.area}" fill="url(#${areaBId})"></path>` : ''}
-        ${keyB && pointsB ? `<path d="${pointsB.line}" fill="none" stroke="${colors[1]}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>` : ''}
-        ${keyB && pointsB ? pointsB.circles : ''}
-      </svg>
-    `;
-  }
-
-  function buildPath(values, width, height, labels = [], format = null) {
-    const max = Math.max(...values, 1);
-    const min = Math.min(...values, 0);
-    const spread = max - min || 1;
-    const stepX = values.length > 1 ? width / (values.length - 1) : width / 2;
-    const points = values.map((value, idx) => ({
-      x: idx * stepX,
-      y: height - 26 - ((value - min) / spread) * (height - 56)
-    }));
-    const line = points.map((point, idx) => `${idx === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
-    const area = `${line} L ${width} ${height - 18} L 0 ${height - 18} Z`;
-    const formatter = format || formatMoney;
-    const circles = points.map((point, idx) => `
-      <circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4.5" fill="#ffffff" stroke="#72edc7" stroke-width="2">
-        <title>${escapeHtml(`${labels[idx] || `Point ${idx + 1}`}: ${formatter(values[idx])}`)}</title>
-      </circle>
-    `).join('');
-    return { line, area, circles };
-  }
-
-  function gridLines(max) {
-    return [0.2, 0.4, 0.6, 0.8].map((step) => {
-      const y = 220 - 24 - (220 - 56) * step;
-      return `<line x1="18" x2="682" y1="${y}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>`;
-    }).join('');
-  }
-
-  function barRankingChart(rows) {
-    const top = rows.slice(0, 6);
-    if (!top.length) {
-      return `<div class="mt-empty">No profitability data is available for the active filters.</div>`;
-    }
-    const max = Math.max(...top.map((row) => Math.max(row.netProfit, 1)));
-    return `
-      <div class="mt-list" style="max-height:none;">
-        ${top.map((row, idx) => {
-          const width = (row.netProfit / max) * 100;
-          return `
-            <div class="mt-list-item" style="flex-direction:column;">
-              <div style="display:flex; justify-content:space-between; gap:10px; width:100%; margin-bottom:8px;">
-                <div>
-                  <strong>${escapeHtml(row.name)}</strong>
-                  <small>${escapeHtml(formatDelta(row.marginPct, 'percent'))} margin | ${escapeHtml(formatMoney(row.revenue))} revenue</small>
-                </div>
-                <div style="text-align:right;">
-                  <strong>${escapeHtml(formatMoney(row.netProfit))}</strong>
-                  <small>Net profit</small>
-                </div>
-              </div>
-              <div style="width:100%; height:12px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden;">
-                <div style="width:${width}%; height:100%; border-radius:999px; background:linear-gradient(135deg, ${chartPalette[idx % chartPalette.length]}, rgba(114,237,199,0.9));"></div>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-  }
-
-  function donutChart(items) {
-    const total = items.reduce((sum, item) => sum + item.value, 0);
-    if (!total) {
-      return `<div class="mt-empty">No expense data in this selection yet.</div>`;
-    }
-    let cumulative = 0;
-    const segments = items.slice(0, 7).map((item, idx) => {
-      const start = cumulative / total * 360;
-      cumulative += item.value;
-      const end = cumulative / total * 360;
-      const color = chartPalette[idx % chartPalette.length];
-      return `${color} ${start}deg ${end}deg`;
-    }).join(', ');
-    return `
-      <div style="display:grid; place-items:center; min-height:220px;">
-        <div style="width:190px; height:190px; border-radius:50%; background:conic-gradient(${segments}); position:relative; box-shadow: inset 0 0 0 24px rgba(8,16,24,0.98);">
-          <div style="position:absolute; inset:50% auto auto 50%; transform:translate(-50%, -50%); text-align:center;">
-            <div style="font-size:0.74rem; letter-spacing:0.1em; text-transform:uppercase; color: var(--text-muted); font-weight:700;">Expenses</div>
-            <div style="font-size:1.35rem; font-weight:800; color: var(--text-main);">${escapeHtml(formatMoney(total))}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function forecastPanel(projected) {
-    return `
-      <div class="mt-grid-2">
-        ${forecastItem('Next revenue', projected.nextRevenue, '#72edc7')}
-        ${forecastItem('Next expenses', projected.nextExpenses, '#7ab7d6')}
-        ${forecastItem('Next profit', projected.nextProfit, '#f7c55f')}
-        ${forecastItem('Next margin', projected.nextMargin, '#9f8cff', true)}
-      </div>
-      <div class="mt-chip-row" style="margin-top:14px;">
-        ${(() => {
-          // Avoid absurd percentages when projected revenue is 0 or negative.
-          const revenueSlopePct = projected.nextRevenue > 0
-            ? formatDelta((projected.revenueSlope / projected.nextRevenue) * 100)
-            : '—';
-          return `<span class="mt-chip"><strong>${escapeHtml(revenueSlopePct)}</strong> revenue slope</span>`;
-        })()}
-        <span class="mt-chip"><strong>${escapeHtml(formatDelta(projected.marginSlope, 'points'))}</strong> margin slope</span>
-      </div>
-    `;
-  }
-
-  function forecastItem(label, value, color, percent = false) {
-    return `
-      <div class="mt-alert-card">
-        <div style="font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color: var(--text-muted); font-weight:800;">${escapeHtml(label)}</div>
-        <div style="font-size:1.35rem; font-weight:800; margin-top:8px; color:${color};">${escapeHtml(percent ? `${percentFmt.format(value)}%` : formatMoney(value))}</div>
-      </div>
-    `;
-  }
-
-  function heatmapChart(rows) {
-    const topClients = [...rows].sort((a, b) => b.netProfit - a.netProfit).slice(0, 6);
-    const monthSeries = buildMonthlyHeatmap(rows);
-    if (!topClients.length) {
-      return `<div class="mt-empty">No client rows available to build the heatmap.</div>`;
-    }
-    return `
-      <div style="overflow:auto;">
-        <div style="min-width:540px;">
-          <div style="display:grid; grid-template-columns: 140px repeat(12, minmax(0, 1fr)); gap:8px; align-items:center;">
-            <div></div>
-            ${monthNames.map((label) => `<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.08em; color: var(--text-muted); text-align:center;">${label}</div>`).join('')}
-            ${topClients.map((client) => {
-              const row = monthSeries[client.id] || [];
-              return `
-                <div style="font-weight:800; color: var(--text-main); font-size:0.9rem;">${escapeHtml(client.name)}</div>
-                ${row.map((value) => {
-                  const intensity = clamp(Math.abs(value) / Math.max(client.netProfit || 1, 1), 0, 1);
-                  const background = value >= 0
-                    ? `rgba(110, 244, 182, ${0.1 + intensity * 0.55})`
-                    : `rgba(255, 126, 140, ${0.1 + intensity * 0.55})`;
-                  return `<div title="${escapeHtml(`${client.name}: ${formatMoney(value)}`)}" style="height:30px; border-radius:10px; background:${background}; border:1px solid rgba(255,255,255,0.04);"></div>`;
-                }).join('')}
-              `;
-            }).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function buildMonthlyHeatmap(rows) {
-    const map = {};
-    for (const row of rows) {
-      map[row.id] = Array.from({ length: 12 }, () => 0);
-      for (const payment of row.paymentsForClient) {
-        const date = toDate(payment.payment_date);
-        if (!date) continue;
-        map[row.id][date.getMonth()] += payment.amount;
-      }
-      for (const expense of row.expensesForClient) {
-        const date = toDate(expense.expense_date);
-        if (!date) continue;
-        map[row.id][date.getMonth()] -= expense.amount;
-      }
-      // Job cost is a one-time cost per client; spread it across the months
-      // where they received payments in proportion to revenue so heatmap
-      // cells match the margin rows (and the Revenue vs Expenses chart).
-      const jobCostValue = toNumber(row.jobCost);
-      if (jobCostValue > 0) {
-        const monthRevenue = {};
-        let clientRevenue = 0;
-        for (const payment of row.paymentsForClient) {
-          const date = toDate(payment.payment_date);
-          if (!date) continue;
-          monthRevenue[date.getMonth()] = (monthRevenue[date.getMonth()] || 0) + payment.amount;
-          clientRevenue += payment.amount;
-        }
-        for (const [monthIndex, revenue] of Object.entries(monthRevenue)) {
-          const share = clientRevenue > 0 ? jobCostValue * (revenue / clientRevenue) : 0;
-          map[row.id][Number(monthIndex)] -= share;
-        }
-      }
-    }
-    return map;
   }
 
   function renderSmartPanels(model) {
@@ -1708,7 +1317,6 @@
   }
 
   function renderExpandedRow(row) {
-    const miniSeries = buildMiniSeries(row);
     const invoiceHistory = row.paymentsForClient.slice(0, 6).map((payment) => `
       <div class="mt-list-item">
         <div>
@@ -1732,10 +1340,6 @@
       <tr class="mt-expand-row">
         <td colspan="10">
           <div class="mt-expand-panel">
-            <div class="mt-mini-chart">
-              <div style="font-weight:800; margin-bottom:10px;">Mini trend</div>
-              ${miniSeries}
-            </div>
             <div>
               <div style="font-weight:800; margin-bottom:10px;">Invoice history</div>
               <div class="mt-list">${invoiceHistory || '<div class="mt-empty">No payment history.</div>'}</div>
@@ -1748,28 +1352,6 @@
         </td>
       </tr>
     `;
-  }
-
-  function buildMiniSeries(row) {
-    const months = Array.from({ length: 12 }, (_, index) => ({
-      label: monthNames[index],
-      revenue: 0,
-      expenses: 0
-    }));
-    for (const payment of row.paymentsForClient) {
-      const date = toDate(payment.payment_date);
-      if (date) months[date.getMonth()].revenue += payment.amount;
-    }
-    for (const expense of row.expensesForClient) {
-      const date = toDate(expense.expense_date);
-      if (date) months[date.getMonth()].expenses += expense.amount;
-    }
-    return lineChart(months.map((item) => ({
-      label: item.label,
-      revenue: item.revenue,
-      expenses: item.expenses,
-      marginPct: item.revenue > 0 ? ((item.revenue - item.expenses) / item.revenue) * 100 : 0
-    })), 'revenue', 'expenses', ['#72edc7', '#7ab7d6']);
   }
 
   function formatExpenseSummary(expense) {

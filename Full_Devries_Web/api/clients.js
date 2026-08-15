@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('./db');
 const { asyncHandler, assertObject, parseIntField, parseNumberField, parseStringField, parseYear } = require('./request-utils');
+const { isFinanceEnabled } = require('./jobs');
 
 // ======================================================
 // HELPER: SAFE YEAR HANDLER
@@ -22,13 +23,13 @@ function parseOptionalPagination(value, max) {
 }
 
 async function getFinanceTotalsForYear(year) {
+  // Authoritative source is job-level data — client aggregates are computed
+  // from `jobs`, never from stale client cache columns.
   const clientSummaryResult = await db.query(`
     SELECT
-      COUNT(*)::int AS total_clients,
-      COALESCE(SUM(total_due), 0) AS total_expected,
-      COALESCE(SUM(balance), 0) AS total_remaining
-    FROM clients
-    WHERE EXTRACT(YEAR FROM created_at)::int = $1
+      (SELECT COUNT(*)::int FROM jobs WHERE EXTRACT(YEAR FROM created_at)::int = $1) AS total_clients,
+      (SELECT COALESCE(SUM(total_due), 0) FROM jobs WHERE EXTRACT(YEAR FROM created_at)::int = $1) AS total_expected,
+      (SELECT COALESCE(SUM(GREATEST(0, total_due - amount_paid)), 0) FROM jobs WHERE EXTRACT(YEAR FROM created_at)::int = $1) AS total_remaining
   `, [year]);
 
   const paymentSummaryResult = await db.query(`
@@ -82,13 +83,18 @@ router.get('/search', asyncHandler(async (req, res) => {
   const offset = parseOptionalPagination(req.query.offset, 1000000) ?? 0;
   await db.schemaReady;
 
+  const clientColumns = `
+    clients.*,
+    (SELECT COUNT(*)::int FROM jobs WHERE jobs.client_id = clients.id) AS job_count
+  `;
+
   if (!term) {
     if (limit === null) {
-      const { rows } = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
+      const { rows } = await db.query(`SELECT ${clientColumns} FROM clients ORDER BY created_at DESC`);
       return res.json(rows);
     }
     const { rows } = await db.query(
-      'SELECT * FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      `SELECT ${clientColumns} FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
     return res.json(rows);
@@ -96,7 +102,7 @@ router.get('/search', asyncHandler(async (req, res) => {
 
   const like = `%${term}%`;
   let sql = `
-    SELECT DISTINCT clients.*
+    SELECT DISTINCT ${clientColumns}
     FROM clients
     LEFT JOIN notes ON notes.client_id = clients.id
     WHERE clients.name ILIKE $1
@@ -138,15 +144,51 @@ router.post('/save-client', asyncHandler(async (req, res) => {
   const createdAt = new Date().toISOString();
 
   await db.schemaReady;
-  await db.query(`
-    INSERT INTO clients (name, phone, email, address, status, total_due, amount_paid, balance, scope_of_work, job_cost, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10)
-  `, [finalName, phone, email, address, status || 'Prospect', total, total, scopeOfWork, jobCost, createdAt]);
+  const conn = await db.pool.connect();
+  let clientId = null;
+  try {
+    await conn.query('BEGIN');
+    const clientResult = await conn.query(`
+      INSERT INTO clients (name, phone, email, address, status, total_due, amount_paid, balance, scope_of_work, job_cost, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10)
+      RETURNING id
+    `, [finalName, phone, email, address, status || 'Prospect', total, total, scopeOfWork, jobCost, createdAt]);
+    clientId = clientResult.rows[0].id;
+
+    // Every new client starts with one default Job, so job-level data
+    // (status, scope, cost, totals) lives on the Job while the Client row
+    // stays the customer record. Adding more jobs never creates duplicates.
+    const finalStatus = status || 'Prospect';
+    await conn.query(`
+      INSERT INTO jobs (client_id, name, status, address, scope_of_work, job_cost, total_due, amount_paid, balance, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, $8, $8)
+    `, [clientId, finalName, finalStatus, address, scopeOfWork, jobCost, total, createdAt]);
+    await conn.query('COMMIT');
+  } catch (err) {
+    await conn.query('ROLLBACK');
+    throw err;
+  } finally {
+    conn.release();
+  }
 
   const year = new Date(createdAt).getFullYear();
   await updateFinanceTotals(year);
 
-  return res.json({ success: true, financeUpdated: true });
+  // New leads are awaiting approval — keep it visible.
+  try {
+    const { createNotification } = require('../services/notifications');
+    await createNotification({
+      type: 'awaiting_approval',
+      message: `${finalName} is a new client awaiting approval.`,
+      entityType: 'client',
+      entityId: clientId,
+      clientId
+    });
+  } catch (err) {
+    console.error('Client notification failed:', err.message);
+  }
+
+  return res.json({ success: true, financeUpdated: true, clientId });
 }));
 
 // ======================================================
@@ -165,27 +207,63 @@ router.post('/update-project', asyncHandler(async (req, res) => {
   const totalDueInput = req.body.total_due;
   const scopeOfWork = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
   const jobCostInput = req.body.job_cost;
-  const finalName = name || `${fName} ${lName}`.trim();
 
   await db.schemaReady;
-  const clientResult = await db.query('SELECT amount_paid, total_due, job_cost, created_at FROM clients WHERE id = $1', [id]);
+  const clientResult = await db.query('SELECT name, phone, email, address, created_at, status FROM clients WHERE id = $1', [id]);
   const clientRow = clientResult.rows[0];
   if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const newTotal = typeof totalDueInput !== 'undefined'
-    ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: Number(clientRow.total_due || 0) })
-    : Number(clientRow.total_due || 0);
-  const newBalance = (newTotal || 0) - Number(clientRow.amount_paid || 0);
-  const newJobCost = typeof jobCostInput !== 'undefined'
-    ? parseNumberField(jobCostInput, 'job_cost', { required: false, defaultValue: Number(clientRow.job_cost || 0) })
-    : Number(clientRow.job_cost || 0);
+  // Legacy endpoint: the client row holds contact info; job-level fields
+  // (status/scope/cost/totals) map to the client's default (first) job.
+  const jobResult = await db.query('SELECT id, status, address, scope_of_work, job_cost, total_due, amount_paid FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1', [id]);
+  const defaultJob = jobResult.rows[0];
+  if (!defaultJob) return res.status(404).json({ error: 'Client has no jobs' });
+
+  // Only update fields that were actually sent (never wipe unspecified ones).
+  const finalName = name || `${fName} ${lName}`.trim() || clientRow.name;
+  const nextPhone = req.body.phone !== undefined ? phone : clientRow.phone;
+  const nextEmail = req.body.email !== undefined ? email : clientRow.email;
+  const nextAddress = req.body.address !== undefined ? address : clientRow.address;
+  const nextStatus = status || clientRow.status || 'Prospect';
+  const nextTotal = typeof totalDueInput !== 'undefined'
+    ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: Number(defaultJob.total_due || 0) })
+    : Number(defaultJob.total_due || 0);
+  const nextJobCost = typeof jobCostInput !== 'undefined'
+    ? parseNumberField(jobCostInput, 'job_cost', { required: false, defaultValue: Number(defaultJob.job_cost || 0) })
+    : Number(defaultJob.job_cost || 0);
+  const nextScope = req.body.scope_of_work !== undefined ? scopeOfWork : defaultJob.scope_of_work;
+  const nextBalance = Math.max(0, nextTotal - Number(defaultJob.amount_paid || 0));
 
   await db.query(`
     UPDATE clients
-    SET name = $1, phone = $2, email = $3, address = $4, status = $5, total_due = $6, balance = $7,
-        scope_of_work = $8, job_cost = $9
-    WHERE id = $10
-  `, [finalName, phone, email, address, status, newTotal || 0, newBalance, scopeOfWork, newJobCost, id]);
+    SET name = $1, phone = $2, email = $3, address = $4, status = $5
+    WHERE id = $6
+  `, [finalName, nextPhone, nextEmail, nextAddress, nextStatus, id]);
+
+  await db.query(`
+    UPDATE jobs
+    SET name = $1, status = $2, address = $3, scope_of_work = $4, job_cost = $5, total_due = $6, balance = $7, updated_at = CURRENT_TIMESTAMP
+    WHERE id = $8
+  `, [finalName, nextStatus, nextAddress, nextScope, nextJobCost, nextTotal, nextBalance, defaultJob.id]);
+
+  // Idempotent approval notification on transition.
+  try {
+    const { isFinanceEnabled } = require('./jobs');
+    const wasApproved = isFinanceEnabled(defaultJob.status);
+    const nowApproved = isFinanceEnabled(nextStatus);
+    if (!wasApproved && nowApproved) {
+      const { createNotification } = require('../services/notifications');
+      await createNotification({
+        type: 'approved',
+        message: `${finalName} approved. Finance tracking enabled.`,
+        entityType: 'client',
+        entityId: id,
+        clientId: id
+      });
+    }
+  } catch (err) {
+    console.error('Approval notification failed:', err.message);
+  }
 
   const year = new Date(clientRow.created_at || Date.now()).getFullYear();
   await updateFinanceTotals(year);
@@ -227,9 +305,15 @@ router.put('/clients/:id/total', asyncHandler(async (req, res) => {
   const clientRow = clientResult.rows[0];
   if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const newBalance = total - Number(clientRow.amount_paid || 0);
-
-  await db.query('UPDATE clients SET total_due = $1, balance = $2 WHERE id = $3', [total, newBalance, id]);
+  // Legacy client-level total now updates the client's default job (the
+  // authoritative job-level record); the client cache columns stay synced via
+  // the database trigger, so old readers keep working.
+  const jobResult = await db.query('SELECT id, amount_paid FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1', [id]);
+  const defaultJob = jobResult.rows[0];
+  if (defaultJob) {
+    const newBalance = Math.max(0, total - Number(defaultJob.amount_paid || 0));
+    await db.query('UPDATE jobs SET total_due = $1, balance = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [total, newBalance, defaultJob.id]);
+  }
 
   const year = new Date(clientRow.created_at || Date.now()).getFullYear();
   await updateFinanceTotals(year);
@@ -251,19 +335,28 @@ router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
   const clientRow = clientResult.rows[0];
   if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const newPaid = Number(clientRow.amount_paid || 0) + amount;
-  const newBalance = Number(clientRow.total_due || 0) - newPaid;
+  // Legacy client-level payment maps to the client's default job. Approved
+  // status is enforced the same way as job-level payments.
+  const jobResult = await db.query('SELECT id, status, total_due, amount_paid FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1', [id]);
+  const defaultJob = jobResult.rows[0];
+  if (!defaultJob) return res.status(400).json({ error: 'Client has no jobs' });
+  if (!isFinanceEnabled(defaultJob.status)) {
+    return res.status(400).json({ error: 'Finance tracking is locked until this client/job is APPROVED. Set the status to Approved first.' });
+  }
+
+  const newPaid = Number(defaultJob.amount_paid || 0) + amount;
+  const newBalance = Math.max(0, Number(defaultJob.total_due || 0) - newPaid);
 
   const conn = await db.pool.connect();
   try {
     await conn.query('BEGIN');
     await conn.query(
-      'INSERT INTO payments (client_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
-      [id, amount]
+      'INSERT INTO payments (client_id, job_id, amount, payment_date) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
+      [id, defaultJob.id, amount]
     );
     await conn.query(
-      'UPDATE clients SET amount_paid = $1, balance = $2 WHERE id = $3',
-      [newPaid, newBalance, id]
+      'UPDATE jobs SET amount_paid = $1, balance = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+      [newPaid, newBalance, defaultJob.id]
     );
     await conn.query('COMMIT');
   } catch (err) {
@@ -297,19 +390,23 @@ router.put('/clients/:id/reset-paid', asyncHandler(async (req, res) => {
   const clientRow = clientResult.rows[0];
   if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
-  const alreadyPaid = Number(clientRow.amount_paid || 0);
+  const jobResult = await db.query('SELECT id, total_due, amount_paid FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1', [id]);
+  const defaultJob = jobResult.rows[0];
+  if (!defaultJob) return res.status(400).json({ error: 'Client has no jobs' });
+
+  const alreadyPaid = Number(defaultJob.amount_paid || 0);
 
   const conn = await db.pool.connect();
   try {
     await conn.query('BEGIN');
     if (alreadyPaid > 0) {
       await conn.query(
-        'INSERT INTO payments (client_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
-        [id, -alreadyPaid]
+        'INSERT INTO payments (client_id, job_id, amount, payment_date) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
+        [id, defaultJob.id, -alreadyPaid]
       );
     }
-    const newBalance = Number(clientRow.total_due || 0);
-    await conn.query('UPDATE clients SET amount_paid = 0, balance = $1 WHERE id = $2', [newBalance, id]);
+    const newBalance = Math.max(0, Number(defaultJob.total_due || 0));
+    await conn.query('UPDATE jobs SET amount_paid = 0, balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [newBalance, defaultJob.id]);
     await conn.query('COMMIT');
   } catch (err) {
     await conn.query('ROLLBACK');
@@ -345,23 +442,27 @@ router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
   const clientRow = clientResult.rows[0];
   if (!clientRow) return res.status(404).json({ error: 'Client not found' });
 
+  const jobResult = await db.query('SELECT id, total_due, amount_paid FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1', [id]);
+  const defaultJob = jobResult.rows[0];
+  if (!defaultJob) return res.status(400).json({ error: 'Client has no jobs' });
+
   const nextTotal = total_due;
   const nextPaid = amount_paid;
-  const nextBalance = nextTotal - nextPaid;
-  const deltaPaid = nextPaid - Number(clientRow.amount_paid || 0);
+  const nextBalance = Math.max(0, nextTotal - nextPaid);
+  const deltaPaid = nextPaid - Number(defaultJob.amount_paid || 0);
 
   const conn = await db.pool.connect();
   try {
     await conn.query('BEGIN');
     if (deltaPaid !== 0) {
       await conn.query(
-        'INSERT INTO payments (client_id, amount, payment_date) VALUES ($1, $2, CURRENT_TIMESTAMP)',
-        [id, deltaPaid]
+        'INSERT INTO payments (client_id, job_id, amount, payment_date) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
+        [id, defaultJob.id, deltaPaid]
       );
     }
     await conn.query(
-      'UPDATE clients SET total_due = $1, amount_paid = $2, balance = $3 WHERE id = $4',
-      [nextTotal, nextPaid, nextBalance, id]
+      'UPDATE jobs SET total_due = $1, amount_paid = $2, balance = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
+      [nextTotal, nextPaid, nextBalance, defaultJob.id]
     );
     await conn.query('COMMIT');
   } catch (err) {
@@ -394,14 +495,16 @@ router.get('/finance/years', asyncHandler(async (req, res) => {
     await db.schemaReady;
 
     const clientYearsResult = await db.query('SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int AS year FROM clients');
+    const jobYearsResult = await db.query('SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int AS year FROM jobs');
     const paymentYearsResult = await db.query('SELECT DISTINCT EXTRACT(YEAR FROM payment_date)::int AS year FROM payments');
     const overrideYearsResult = await db.query('SELECT year FROM finance_overrides WHERE year IS NOT NULL');
 
     const clientYears = clientYearsResult.rows.map((r) => Number(r.year));
+    const jobYears = jobYearsResult.rows.map((r) => Number(r.year));
     const paymentYears = paymentYearsResult.rows.map((r) => Number(r.year));
     const overrideYears = overrideYearsResult.rows.map((r) => Number(r.year));
 
-    const allYears = [...clientYears, ...paymentYears, ...overrideYears];
+    const allYears = [...clientYears, ...jobYears, ...paymentYears, ...overrideYears];
     const uniqueYears = [...new Set(allYears.filter((y) => Number.isInteger(y) && y > 0))];
 
     const currentYear = new Date().getFullYear();
@@ -475,10 +578,19 @@ router.get('/finance/summary', asyncHandler(async (req, res) => {
       avgMarginPct: await (async () => {
         try {
           const r = await db.query(`
-            SELECT AVG(((total_due - job_cost) / NULLIF(total_due, 0)) * 100) AS avg_margin
-            FROM clients
-            WHERE EXTRACT(YEAR FROM created_at)::int = $1
-              AND total_due > 0 AND job_cost IS NOT NULL AND job_cost > 0
+            SELECT AVG(m.margin_pct) AS avg_margin
+            FROM (
+              SELECT
+                j.id,
+                (COALESCE(SUM(p.amount), 0) - COALESCE(SUM(e.amount), 0) - j.job_cost) /
+                  NULLIF(COALESCE(SUM(p.amount), 0), 0) * 100 AS margin_pct
+              FROM jobs j
+              LEFT JOIN payments p ON p.job_id = j.id
+              LEFT JOIN finance_margin_entries e ON e.job_id = j.id
+              WHERE EXTRACT(YEAR FROM j.created_at)::int = $1
+              GROUP BY j.id, j.job_cost
+              HAVING COALESCE(SUM(p.amount), 0) > 0
+            ) m
           `, [year]);
           const raw = r.rows[0]?.avg_margin;
           return raw != null ? Math.round(Number(raw) * 10) / 10 : null;

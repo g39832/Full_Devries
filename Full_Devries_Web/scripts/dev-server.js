@@ -63,4 +63,4 @@ process.env.ENABLE_DB_BACKUPS = 'false';
 // Default to a port that won't clash with `npm start` (3000). Override with DEV_PORT.
 process.env.PORT = process.env.DEV_PORT || '3001';
 
-require('../server');
+require('../server').startServer();

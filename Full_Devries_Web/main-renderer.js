@@ -15,6 +15,7 @@ function escapeHtml(str) {
 // ======================================================
 const STATUS_ORDER = [
   "Prospect",
+  "Pending Approval",
   "Approved",
   "Completed",
   "Invoice",
@@ -23,6 +24,7 @@ const STATUS_ORDER = [
 
 const STATUS_COLORS = {
   Prospect: "#a780ee",
+  "Pending Approval": "#e9c46a",
   Approved: "#6dddef",
   Completed: "#f0ad4e",
   Invoice: "#dfa575",
@@ -858,6 +860,342 @@ window.api = {
     }
     this._emailSettings = await res.json();
     return this._emailSettings;
+  },
+
+  // ==========================
+  // JOBS API
+  // ==========================
+  async listJobs(clientId) {
+    const res = await fetch(`/api/clients/${clientId}/jobs`);
+    if (!res.ok) throw new Error("Failed to load jobs");
+    const data = await res.json();
+    return data.jobs || [];
+  },
+
+  async addJob(clientId, data) {
+    const res = await fetch(`/api/clients/${clientId}/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      let message = "Failed to add job";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async getJob(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}`);
+    if (!res.ok) throw new Error("Failed to load job");
+    return res.json();
+  },
+
+  async updateJob(jobId, data) {
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      let message = "Failed to save job";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async deleteJob(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+    if (!res.ok) {
+      let message = "Failed to delete job";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async jobPayment(jobId, payment) {
+    const res = await fetch(`/api/jobs/${jobId}/payment`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payment })
+    });
+    if (!res.ok) {
+      let message = "Payment failed";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async jobTotal(jobId, total_due) {
+    const res = await fetch(`/api/jobs/${jobId}/total`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ total_due })
+    });
+    if (!res.ok) throw new Error("Total update failed");
+    return res.json();
+  },
+
+  async jobResetPaid(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}/reset-paid`, { method: "PUT" });
+    if (!res.ok) throw new Error("Reset failed");
+    return res.json();
+  },
+
+  async jobRestoreFinanceState(jobId, state) {
+    const res = await fetch(`/api/jobs/${jobId}/finance-state`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state)
+    });
+    if (!res.ok) throw new Error("Restore failed");
+    return res.json();
+  },
+
+  async listJobExpenses(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}/expenses`);
+    if (!res.ok) throw new Error("Failed to load expenses");
+    const data = await res.json();
+    return data.expenses || [];
+  },
+
+  async addJobExpense(jobId, data) {
+    const res = await fetch(`/api/jobs/${jobId}/expenses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      let message = "Failed to record expense";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async deleteJobExpense(jobId, expenseId) {
+    const res = await fetch(`/api/jobs/${jobId}/expenses/${expenseId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete expense");
+    return res.json();
+  },
+
+  async setJobTags(jobId, tagIds) {
+    const res = await fetch(`/api/jobs/${jobId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagIds })
+    });
+    if (!res.ok) {
+      let message = "Failed to update tags";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async listJobPhotos(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}/photos`);
+    if (!res.ok) throw new Error("Failed to load photos");
+    const data = await res.json();
+    return data.files || [];
+  },
+
+  async listJobPayments(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}/payments`);
+    if (!res.ok) throw new Error("Failed to load payments");
+    const data = await res.json();
+    return data.payments || [];
+  },
+
+  async searchJobsByTag(tagId) {
+    const res = await fetch(`/api/jobs?tag_id=${tagId}`);
+    if (!res.ok) throw new Error("Failed to filter jobs");
+    const data = await res.json();
+    return data.jobs || [];
+  },
+
+  async uploadJobFiles(files, jobId) {
+    return this.uploadPDFsWithFallback(files, `job-${jobId}`);
+  },
+
+  async deleteJobFile(jobId, fileName) {
+    return this.deletePDF(`job-${jobId}`, fileName);
+  },
+
+  // ==========================
+  // JOB NOTES API
+  // ==========================
+  async listJobNotes(jobId) {
+    const res = await fetch(`/api/notes/job/${jobId}`);
+    if (!res.ok) throw new Error("Failed to load job notes");
+    return res.json();
+  },
+
+  async addJobNote(jobId, note) {
+    const res = await fetch(`/api/notes/job/${jobId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note })
+    });
+    if (!res.ok) throw new Error("Failed to add note");
+    return res.json();
+  },
+
+  async updateJobNote(jobId, noteId, note) {
+    const res = await fetch(`/api/notes/job/${jobId}/${noteId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note })
+    });
+    if (!res.ok) throw new Error("Failed to update note");
+    return res.json();
+  },
+
+  async deleteJobNote(jobId, noteId) {
+    const res = await fetch(`/api/notes/job/${jobId}/${noteId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete note");
+    return res.json();
+  },
+
+  // ==========================
+  // TAGS API
+  // ==========================
+  async listTags() {
+    const res = await fetch('/api/tags');
+    if (!res.ok) throw new Error("Failed to load tags");
+    const data = await res.json();
+    return data.tags || [];
+  },
+
+  async createTag(name) {
+    const res = await fetch('/api/tags', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    if (!res.ok) {
+      let message = "Failed to create tag";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async renameTag(id, name) {
+    const res = await fetch(`/api/tags/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    if (!res.ok) {
+      let message = "Failed to rename tag";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async deleteTag(id) {
+    const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      let message = "Failed to delete tag";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  // ==========================
+  // NOTIFICATIONS API
+  // ==========================
+  async listNotifications() {
+    const res = await fetch('/api/notifications?limit=50');
+    if (!res.ok) throw new Error("Failed to load notifications");
+    return res.json();
+  },
+
+  async markNotificationRead(id) {
+    const res = await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to update notification");
+    return res.json();
+  },
+
+  async markAllNotificationsRead() {
+    const res = await fetch('/api/notifications/read-all', { method: "POST" });
+    if (!res.ok) throw new Error("Failed to update notifications");
+    return res.json();
+  },
+
+  // ==========================
+  // AUTH API
+  // ==========================
+  async getMe() {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) throw new Error("Not authenticated");
+    const data = await res.json();
+    return data.user || null;
+  },
+
+  async logout() {
+    const res = await fetch('/api/auth/logout', { method: "POST" });
+    if (!res.ok) throw new Error("Logout failed");
+    return res.json();
+  },
+
+  // ==========================
+  // ADMIN API
+  // ==========================
+  async adminAdjustments(jobId) {
+    const q = jobId ? `?jobId=${jobId}` : '';
+    const res = await fetch(`/api/admin/finance-adjustments${q}`);
+    if (!res.ok) throw new Error("Failed to load adjustments");
+    const data = await res.json();
+    return data.adjustments || [];
+  },
+
+  async adminCreateAdjustment(payload) {
+    const res = await fetch('/api/admin/finance-adjustments', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      let message = "Failed to create adjustment";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async adminUsers() {
+    const res = await fetch('/api/admin/users');
+    if (!res.ok) throw new Error("Failed to load users");
+    const data = await res.json();
+    return data.users || [];
+  },
+
+  async adminSetUserRole(id, role) {
+    const res = await fetch(`/api/admin/users/${id}/role`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role })
+    });
+    if (!res.ok) {
+      let message = "Failed to update role";
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async adminActivity() {
+    const res = await fetch('/api/admin/activity');
+    if (!res.ok) throw new Error("Failed to load activity");
+    return res.json();
   }
 };
 // ======================================================
@@ -935,6 +1273,15 @@ const SEARCH_DEBOUNCE_MS = 300;
 let sidebarListContainer = null;
 let newNoteSaving = false;
 
+// ===== v2 state (jobs, tags, roles, notifications) =====
+let currentUser = null;
+let activeTagFilter = null;
+let allTagsCache = [];
+let sidebarJobsCache = [];
+let activeJobId = null;
+let panelMode = null; // 'client' | 'job' | null
+let notificationsOpen = false;
+
 function isCenteredSidebarLayout() {
   const dashboard = document.querySelector(".crm-dashboard");
   if (!dashboard) return false;
@@ -959,6 +1306,11 @@ if (searchInput) {
         searchRequestController.abort();
       }
       searchRequestController = new AbortController();
+
+      if (activeTagFilter) {
+        filterJobSidebar(term);
+        return;
+      }
 
       try {
         const matchedStatus = STATUS_ORDER.find(
@@ -1007,8 +1359,15 @@ if (searchInput) {
     });
 
     if (e.key === "Enter" && selectedIndex >= 0) {
-      const id = parseInt(items[selectedIndex].dataset.id);
-      if (!Number.isNaN(id)) openClient(id);
+      const item = items[selectedIndex];
+      const id = parseInt(item.dataset.id);
+      if (!Number.isNaN(id)) {
+        if (item.dataset.kind === "job") {
+          openJob(id);
+        } else {
+          openClient(id);
+        }
+      }
     }
   });
 }
@@ -1051,6 +1410,10 @@ if (intakeFormEl) {
 // SIDEBAR
 // ======================================================
 async function refreshList() {
+  if (activeTagFilter) {
+    await refreshJobSidebar();
+    return;
+  }
   try {
     if (clientList) {
       clientList.innerHTML = `<li class="loading-state">Loading clients...</li>`;
@@ -1151,9 +1514,9 @@ function renderSidebarChunk() {
 }
 
 // ======================================================
-// OPEN CLIENT PANEL
+// OPEN CLIENT PANEL (legacy combined client+job view — kept for compat)
 // ======================================================
-async function openClient(id) {
+async function openClientLegacy(id) {
   if (!id) return;
   activeId = id;
   try {
@@ -2195,7 +2558,12 @@ if (clientList) {
 
   clientList.addEventListener("click", (e) => {
     const item = e.target.closest(".client-card");
-    if (item) openClient(parseInt(item.dataset.id));
+    if (!item) return;
+    if (item.dataset.kind === "job") {
+      openJob(parseInt(item.dataset.id));
+    } else {
+      openClient(parseInt(item.dataset.id));
+    }
   });
 }
 
@@ -2204,8 +2572,8 @@ if (clientList) {
 // ======================================================
 document.addEventListener("keydown", async (e) => {
   if (e.key === "Escape" && projectPanel && projectPanel.style.display === "block") {
-    await savePanelChanges({ silent: true, force: true });
-    closePanel();
+    e.preventDefault();
+    await closeCurrentPanel();
   }
 });
 
