@@ -131,10 +131,6 @@ router.get('/clients/:clientId/jobs', requireClientAccess(), asyncHandler(async 
     LEFT JOIN app_users u ON u.id = j.sales_user_id
     WHERE j.client_id = $1
   `;
-  if (!isAdminUser(user)) {
-    params.push(Number(user.id));
-    sql += ` AND j.sales_user_id = $${params.length}`;
-  }
   sql += ` ORDER BY j.created_at ASC, j.id ASC`;
   const { rows } = await db.query(sql, params);
   const hydrated = await Promise.all(rows.map((row) => hydrateJob(row, isAdminUser(user))));
@@ -273,7 +269,9 @@ router.put('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => {
   const nextJobCost = isAdminUser(user) && typeof jobCostInput !== 'undefined'
     ? parseNumberField(jobCostInput, 'job_cost', { required: false, min: 0, defaultValue: Number(job.job_cost || 0) })
     : Number(job.job_cost || 0);
-  const nextTotalDue = typeof totalDueInput !== 'undefined'
+  // Total due is a financial record — admin-only; restricted users can never
+  // change it (even if they send a stale value captured from their own view).
+  const nextTotalDue = isAdminUser(user) && typeof totalDueInput !== 'undefined'
     ? parseNumberField(totalDueInput, 'total_due', { required: false, min: 0, defaultValue: Number(job.total_due || 0) })
     : Number(job.total_due || 0);
   const nextBalance = Math.max(0, nextTotalDue - Number(job.amount_paid || 0));
@@ -324,7 +322,7 @@ router.put('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => {
 // ======================================================
 // DELETE JOB (preserves financial history — re-points records)
 // ======================================================
-router.delete('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => {
+router.delete('/jobs/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query('SELECT * FROM jobs WHERE id = $1', [id]);
@@ -362,7 +360,7 @@ router.delete('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => 
 // ======================================================
 // JOB FINANCE — TOTAL DUE
 // ======================================================
-router.put('/jobs/:id/total', requireJobAccess(), asyncHandler(async (req, res) => {
+router.put('/jobs/:id/total', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 });
@@ -382,7 +380,7 @@ router.put('/jobs/:id/total', requireJobAccess(), asyncHandler(async (req, res) 
 // ======================================================
 // JOB FINANCE — RECORD PAYMENT (APPROVED ONLY, server-enforced)
 // ======================================================
-router.put('/jobs/:id/payment', requireJobAccess(), asyncHandler(async (req, res) => {
+router.put('/jobs/:id/payment', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const amount = parseNumberField(req.body.payment ?? 0, 'payment', { required: false, defaultValue: 0 });
@@ -441,7 +439,7 @@ router.put('/jobs/:id/payment', requireJobAccess(), asyncHandler(async (req, res
 // ======================================================
 // JOB FINANCE — RESET PAID (force re-calc, admin-adjacent tool)
 // ======================================================
-router.put('/jobs/:id/reset-paid', requireJobAccess(), asyncHandler(async (req, res) => {
+router.put('/jobs/:id/reset-paid', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query('SELECT * FROM jobs WHERE id = $1', [id]);
@@ -475,7 +473,7 @@ router.put('/jobs/:id/reset-paid', requireJobAccess(), asyncHandler(async (req, 
 // ======================================================
 // JOB FINANCE — RESTORE STATE (for undo; delta row, like legacy behavior)
 // ======================================================
-router.put('/jobs/:id/finance-state', requireJobAccess(), asyncHandler(async (req, res) => {
+router.put('/jobs/:id/finance-state', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const totalDue = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 });
@@ -768,10 +766,6 @@ router.get('/jobs', asyncHandler(async (req, res) => {
   if (status) {
     params.push(status);
     where += ` AND j.status = $${params.length}`;
-  }
-  if (!isAdminUser(user)) {
-    params.push(Number(user.id));
-    where += ` AND j.sales_user_id = $${params.length}`;
   }
 
   const tagJoin = tagId !== null ? ` JOIN job_tags jt ON jt.job_id = j.id` : '';

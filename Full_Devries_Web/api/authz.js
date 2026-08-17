@@ -4,10 +4,12 @@
 // queries — authorization must be enforced here in Node.
 //
 // Model:
-//   * Admin              — full access to every client and job.
-//   * Restricted/Sales   — only clients that own a job assigned to them
-//                          (jobs.sales_user_id = their app_users.id).
-const db = require('./db');
+//   * Admin              — full access to every client and job, including
+//                          financial records (cost, margin, totals, payments).
+//   * Restricted/Sales   — can view ALL clients and jobs (read access), and
+//                          perform sales functions (notes, tags, status,
+//                          scope). Cost / margin data is stripped from their
+//                          payloads, and financial mutations are admin-only.
 const { getSessionUser } = require('./auth');
 
 const ROLE_ADMIN = 'admin';
@@ -21,23 +23,14 @@ function asyncMw(fn) {
 }
 
 async function jobAccessibleBy(user, jobId) {
-  if (isAdminUser(user)) return true;
-  if (!user) return false;
-  await db.schemaReady;
-  const { rows } = await db.query('SELECT sales_user_id FROM jobs WHERE id = $1', [jobId]);
-  if (!rows[0]) return false;
-  return rows[0].sales_user_id != null && Number(rows[0].sales_user_id) === Number(user.id);
+  // Any authenticated user may view any job. Cost/margin visibility is
+  // enforced separately when hydrating the payload (admin-only fields).
+  return Boolean(user);
 }
 
 async function clientAccessibleBy(user, clientId) {
-  if (isAdminUser(user)) return true;
-  if (!user) return false;
-  await db.schemaReady;
-  const { rows } = await db.query(
-    'SELECT 1 FROM jobs WHERE client_id = $1 AND sales_user_id = $2 LIMIT 1',
-    [clientId, user.id]
-  );
-  return rows.length > 0;
+  // Any authenticated user may view any client.
+  return Boolean(user);
 }
 
 function requireAdmin(req, res, next) {
@@ -86,24 +79,14 @@ function requireClientAccess() {
 }
 
 // SQL fragment that scopes a client query to the current user (used inside
-// routes that build dynamic SQL). Returns { clause, params } where clause is
-// an already-parameterized fragment ("AND ... $1" style handled by caller).
+// routes that build dynamic SQL). Restricted users see ALL clients and jobs,
+// so no scoping clause is applied.
 function scopedClientClause(user, baseParamIndex) {
-  if (isAdminUser(user)) return { clause: '', params: [] };
-  return {
-    clause: ` AND EXISTS (
-      SELECT 1 FROM jobs jj WHERE jj.client_id = clients.id AND jj.sales_user_id = $${baseParamIndex}
-    )`,
-    params: [Number(user.id)]
-  };
+  return { clause: '', params: [] };
 }
 
 function scopedJobClause(user, baseParamIndex) {
-  if (isAdminUser(user)) return { clause: '', params: [] };
-  return {
-    clause: ` AND jobs.sales_user_id = $${baseParamIndex}`,
-    params: [Number(user.id)]
-  };
+  return { clause: '', params: [] };
 }
 
 module.exports = {

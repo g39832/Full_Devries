@@ -100,10 +100,6 @@ router.get('/search', asyncHandler(async (req, res) => {
     params.push(primaryTagId);
     where += ` AND clients.primary_tag_id = $${params.length}`;
   }
-  if (!isAdminUser(user)) {
-    params.push(Number(user.id));
-    where += ` AND EXISTS (SELECT 1 FROM jobs jj WHERE jj.client_id = clients.id AND jj.sales_user_id = $${params.length})`;
-  }
 
   if (!term) {
     let sql = `SELECT ${clientColumns} FROM clients LEFT JOIN tags pt ON pt.id = clients.primary_tag_id WHERE 1=1 ${where} ORDER BY clients.created_at DESC`;
@@ -132,10 +128,6 @@ router.get('/search', asyncHandler(async (req, res) => {
   if (primaryTagId !== null) {
     all.push(primaryTagId);
     sql += ` AND clients.primary_tag_id = $${all.length}`;
-  }
-  if (!isAdminUser(user)) {
-    all.push(Number(user.id));
-    sql += ` AND EXISTS (SELECT 1 FROM jobs jj WHERE jj.client_id = clients.id AND jj.sales_user_id = $${all.length})`;
   }
   sql += ' ORDER BY clients.created_at DESC';
   if (limit !== null) {
@@ -255,7 +247,8 @@ router.post('/update-project', requireClientAccess(), asyncHandler(async (req, r
   const nextEmail = req.body.email !== undefined ? email : clientRow.email;
   const nextAddress = req.body.address !== undefined ? address : clientRow.address;
   const nextStatus = status || clientRow.status || 'Prospect';
-  const nextTotal = typeof totalDueInput !== 'undefined'
+  // Total due is a financial record — admin-only; restricted users can never change it.
+  const nextTotal = isAdminUser(user) && typeof totalDueInput !== 'undefined'
     ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: Number(defaultJob.total_due || 0) })
     : Number(defaultJob.total_due || 0);
   // Job cost is admin-only; restricted users can never change it.
@@ -349,7 +342,7 @@ router.post('/delete-client', requireAdmin, asyncHandler(async (req, res) => {
 // ======================================================
 // UPDATE TOTAL DUE
 // ======================================================
-router.put('/clients/:id/total', requireClientAccess(), asyncHandler(async (req, res) => {
+router.put('/clients/:id/total', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total = parseNumberField(req.body.total_due, 'total_due', { required: false, defaultValue: 0 });
@@ -378,7 +371,7 @@ router.put('/clients/:id/total', requireClientAccess(), asyncHandler(async (req,
 // ======================================================
 // RECORD PAYMENT
 // ======================================================
-router.put('/clients/:id/payment', requireClientAccess(), asyncHandler(async (req, res) => {
+router.put('/clients/:id/payment', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const amount = parseNumberField(req.body.payment ?? 0, 'payment', { required: false, defaultValue: 0 });
@@ -436,7 +429,7 @@ router.put('/clients/:id/payment', requireClientAccess(), asyncHandler(async (re
 // ======================================================
 // RESET BALANCE (FORCE RE-CALC)
 // ======================================================
-router.put('/clients/:id/reset-paid', requireClientAccess(), asyncHandler(async (req, res) => {
+router.put('/clients/:id/reset-paid', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
 
   await db.schemaReady;
@@ -485,7 +478,7 @@ router.put('/clients/:id/reset-paid', requireClientAccess(), asyncHandler(async 
 // ======================================================
 // RESTORE FINANCE STATE (FOR UNDO)
 // ======================================================
-router.put('/clients/:id/finance-state', requireClientAccess(), asyncHandler(async (req, res) => {
+router.put('/clients/:id/finance-state', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total_due = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0 });

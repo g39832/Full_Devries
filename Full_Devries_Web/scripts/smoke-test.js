@@ -487,9 +487,10 @@ async function main() {
     const financePageUser = await fetch(`${baseUrl}/finance.html`, { redirect: 'manual', headers: { Cookie: cookie } });
     assert.strictEqual(financePageUser.status, 302, 'non-admin must be redirected away from /finance.html');
 
-    // Restricted user: assigned job accessible, unassigned job denied, list scoped.
+    // Restricted user: can VIEW all jobs and clients, but cost/margin data is
+    // admin-only and financial mutations are blocked.
     const assignedAccess = await req(`/api/jobs/${job1}`, { cookie });
-    assert.strictEqual(assignedAccess.res.status, 200, 'restricted user should access their assigned job');
+    assert.strictEqual(assignedAccess.res.status, 200, 'restricted user should access any job');
 
     // Job cost / margin is admin-only: a restricted user's payload must not
     // expose cost, expenses, profit, or margin, and cost endpoints must 403.
@@ -500,15 +501,41 @@ async function main() {
     const blockedExpenses = await req(`/api/jobs/${job1}/expenses`, { cookie });
     assert.strictEqual(blockedExpenses.res.status, 403, 'normal user must get 403 on job expenses');
 
-    const deniedJob = await req(`/api/jobs/${jobIds[1]}`, { cookie });
-    assert.strictEqual(deniedJob.res.status, 403, 'restricted user must get 403 on an unassigned job');
+    // Restricted users can view jobs/clients they are not assigned to.
+    const otherJob = await req(`/api/jobs/${jobIds[1]}`, { cookie });
+    assert.strictEqual(otherJob.res.status, 200, 'restricted user should access an unassigned job');
+    assert.strictEqual(otherJob.json.job.finance.job_cost, null, 'restricted user must not see cost on an unassigned job');
+
+    // Financial mutations are admin-only: payments, totals, deletes all 403.
+    const blockedDelete = await req(`/api/jobs/${jobIds[1]}`, { method: 'DELETE', cookie });
+    assert.strictEqual(blockedDelete.res.status, 403, 'restricted user must get 403 on job delete');
+    const blockedPayment = await req(`/api/jobs/${jobIds[1]}/payment`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payment: 10 }),
+      cookie
+    });
+    assert.strictEqual(blockedPayment.res.status, 403, 'restricted user must get 403 on recording payment');
+    const blockedTotal = await req(`/api/jobs/${jobIds[1]}/total`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ total_due: 99999 }),
+      cookie
+    });
+    assert.strictEqual(blockedTotal.res.status, 403, 'restricted user must get 403 on changing total due');
+
+    // Job list and client list include ALL records for restricted users.
     const restrictedJobs = await req('/api/jobs', { cookie });
     assert.ok(
-      restrictedJobs.json.jobs.every((j) => Number(j.sales_user_id) === 999001),
-      'restricted user job list must only include their assigned jobs'
+      restrictedJobs.json.jobs.length >= 2,
+      'restricted user job list must include all jobs (not just assigned)'
     );
     const restrictedClientList = await req('/api/search?q=', { cookie });
     assert.ok(Array.isArray(restrictedClientList.json), 'restricted user client list should be an array');
+    assert.ok(
+      restrictedClientList.json.some((c) => Number(c.id) === Number(clientId)),
+      'restricted user client list must include all clients (even unassigned ones)'
+    );
 
     // Restore admin for the remaining regression checks
     await mutateSessionRole(app, cookie, 'admin');
