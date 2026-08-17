@@ -1018,6 +1018,19 @@ window.api = {
     return data.jobs || [];
   },
 
+  async listAllJobs(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.tag_id) qs.set("tag_id", params.tag_id);
+    if (params.sales_user_id) qs.set("sales_user_id", params.sales_user_id);
+    if (params.primary_tag_id) qs.set("primary_tag_id", params.primary_tag_id);
+    const q = qs.toString();
+    const res = await fetch(`/api/jobs${q ? "?" + q : ""}`);
+    if (!res.ok) throw new Error("Failed to load jobs");
+    const data = await res.json();
+    return data.jobs || [];
+  },
+
   async uploadJobFiles(files, jobId) {
     return this.uploadPDFsWithFallback(files, `job-${jobId}`);
   },
@@ -1071,11 +1084,11 @@ window.api = {
     return data.tags || [];
   },
 
-  async createTag(name) {
+  async createTag(name, kind = 'job') {
     const res = await fetch('/api/tags', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, kind })
     });
     if (!res.ok) {
       let message = "Failed to create tag";
@@ -1196,6 +1209,103 @@ window.api = {
     const res = await fetch('/api/admin/activity');
     if (!res.ok) throw new Error("Failed to load activity");
     return res.json();
+  },
+
+  // ==========================
+  // SALES PERSON + PRIMARY TAG + LINE ITEMS + JOB DOCUMENTS
+  // ==========================
+  async setJobSalesUser(jobId, salesUserId) {
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sales_user_id: salesUserId == null ? null : Number(salesUserId) })
+    });
+    if (!res.ok) {
+      let message = "Failed to assign sales person";
+      try { const d = await res.json(); message = d?.error || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async setClientPrimaryTag(clientId, primaryTagId) {
+    const res = await fetch(`/api/clients/${clientId}/primary-tag`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ primary_tag_id: primaryTagId == null ? null : Number(primaryTagId) })
+    });
+    if (!res.ok) {
+      let message = "Failed to set primary tag";
+      try { const d = await res.json(); message = d?.error || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async searchClientsByPrimaryTag(tagId) {
+    const res = await fetch(`/api/search?primary_tag_id=${tagId}`);
+    if (!res.ok) throw new Error("Filter failed");
+    return res.json();
+  },
+
+  async searchJobsBySalesUser(userId) {
+    const res = await fetch(`/api/jobs?sales_user_id=${userId}`);
+    if (!res.ok) throw new Error("Filter failed");
+    const data = await res.json();
+    return data.jobs || [];
+  },
+
+  async listLineItems(jobId) {
+    const res = await fetch(`/api/jobs/${jobId}/line-items`);
+    if (!res.ok) throw new Error("Failed to load line items");
+    const data = await res.json();
+    return data.items || [];
+  },
+
+  async saveLineItems(jobId, items) {
+    const res = await fetch(`/api/jobs/${jobId}/line-items`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items })
+    });
+    if (!res.ok) {
+      let message = "Failed to save line items";
+      try { const d = await res.json(); message = d?.error || message; } catch {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async sendJobInvoice(jobId) {
+    return this._downloadJobDocument(jobId, 'invoice');
+  },
+
+  async sendJobEstimate(jobId) {
+    return this._downloadJobDocument(jobId, 'estimate');
+  },
+
+  async _downloadJobDocument(jobId, mode) {
+    const endpoint = mode === 'estimate' ? `/api/jobs/${jobId}/estimate` : `/api/jobs/${jobId}/invoice`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) {
+      let message = `Failed to generate ${mode}`;
+      try { const d = await res.json(); message = d?.error || d?.message || message; } catch {}
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const match = cd.match(/filename="?([^"]+)"?/i);
+    const filename = match?.[1] || `${mode}-${jobId}.pdf`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = filename;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { success: true, filename };
   }
 };
 // ======================================================
@@ -1276,6 +1386,11 @@ let newNoteSaving = false;
 // ===== v2 state (jobs, tags, roles, notifications) =====
 let currentUser = null;
 let activeTagFilter = null;
+let activeClientTagFilter = null;
+let activeSalesFilter = null;
+let activeStatusFilter = null;
+let dashboardView = "clients";
+let activeJobStatusFilter = null;
 let allTagsCache = [];
 let sidebarJobsCache = [];
 let activeJobId = null;
@@ -1306,11 +1421,14 @@ if (searchInput) {
         searchRequestController.abort();
       }
       searchRequestController = new AbortController();
+      activeStatusFilter = null; // searching overrides any active status filter
 
-      if (activeTagFilter) {
-        filterJobSidebar(term);
+      if (!term) {
+        await refreshList();
         return;
       }
+
+      if (typeof setDashboardView === "function") setDashboardView("clients");
 
       try {
         const matchedStatus = STATUS_ORDER.find(
@@ -1410,20 +1528,40 @@ if (intakeFormEl) {
 // SIDEBAR
 // ======================================================
 async function refreshList() {
-  if (activeTagFilter) {
+  // Search results are always a flat client list (search is client-scoped).
+  if (lastSearchTerm) {
+    try {
+      const filtered = await window.api.searchClients(lastSearchTerm, { signal: searchRequestController?.signal });
+      renderSidebar(filtered || [], lastSearchTerm);
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      console.error(err);
+    }
+    return;
+  }
+
+  // Job tag filter: show the matching jobs in a flat list.
+  if (activeTagFilter && typeof refreshJobSidebar === "function") {
     await refreshJobSidebar();
     return;
   }
+
+  // Primary client tag filter: show the matching clients.
+  if (activeClientTagFilter && typeof refreshClientTagSidebar === "function") {
+    await refreshClientTagSidebar();
+    return;
+  }
+
+  // Default front page: a flat list of clients. Click one to see its jobs.
   try {
     if (clientList) {
       clientList.innerHTML = `<li class="loading-state">Loading clients...</li>`;
     }
     const clients = await window.api.searchClients("");
-    if (!clients || clients.length === 0) {
-      clientList.innerHTML = `<li class="empty-state">No clients found.</li>`;
-      return;
-    }
-    renderSidebar(clients);
+    const shown = activeStatusFilter
+      ? (clients || []).filter((c) => (c.status || "Lead") === activeStatusFilter)
+      : clients;
+    renderSidebar(shown || []);
   } catch (err) {
     console.error(err);
     if (clientList) {
@@ -1431,6 +1569,11 @@ async function refreshList() {
         `<li class="empty-state">Unable to load clients. Check server connection and refresh.</li>`;
     }
   }
+}
+
+async function toggleStatusFilter(status) {
+  activeStatusFilter = activeStatusFilter === status ? null : status;
+  await refreshList();
 }
 
 function renderSidebar(list = [], term = "") {
@@ -1448,9 +1591,9 @@ function renderSidebar(list = [], term = "") {
   const countsHTML = `
     <li class="status-counts" style="list-style:none; padding:0; margin:0 0 8px 0;">
       ${STATUS_ORDER.map(s =>
-        `<div style="color:${STATUS_COLORS[s] || "#007bff"}">
+        `<button type="button" class="status-count-chip${activeStatusFilter === s ? " active" : ""}" data-status-filter="${s}" title="Filter by ${s}" style="color:${STATUS_COLORS[s] || "#007bff"};">
           ${s}: ${counts[s]}
-        </div>`
+        </button>`
       ).join("")}
     </li>
   `;
@@ -1458,6 +1601,15 @@ function renderSidebar(list = [], term = "") {
   sidebarAllClients = list;
   sidebarSearchTerm = term;
   sidebarRenderCount = 0;
+
+  if (!list.length) {
+    clientList.innerHTML =
+      countsHTML +
+      `<li class="empty-state">No clients found.</li>`;
+    sidebarListContainer = null;
+    selectedIndex = -1;
+    return;
+  }
 
   clientList.innerHTML =
     countsHTML +
@@ -2557,6 +2709,26 @@ if (clientList) {
   });
 
   clientList.addEventListener("click", (e) => {
+    const statusBtn = e.target.closest("[data-status-filter]");
+    if (statusBtn) {
+      toggleStatusFilter(statusBtn.dataset.statusFilter);
+      return;
+    }
+    const jobTab = e.target.closest("[data-job-status-tab]");
+    if (jobTab) {
+      setJobStatusFilter(jobTab.dataset.jobStatusTab || null);
+      return;
+    }
+    const clientLink = e.target.closest("[data-open-client]");
+    if (clientLink) {
+      openClient(parseInt(clientLink.dataset.openClient));
+      return;
+    }
+    const tagChip = e.target.closest("[data-job-tag-id]");
+    if (tagChip) {
+      toggleTagFilter(Number(tagChip.dataset.jobTagId));
+      return;
+    }
     const item = e.target.closest(".client-card");
     if (!item) return;
     if (item.dataset.kind === "job") {

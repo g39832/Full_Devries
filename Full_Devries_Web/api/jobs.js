@@ -3,6 +3,8 @@ const router = express.Router();
 const db = require('./db');
 const { asyncHandler, assertObject, parseIntField, parseNumberField, parseStringField } = require('./request-utils');
 const { createNotification } = require('../services/notifications');
+const { getSessionUser } = require('./auth');
+const { isAdminUser, requireAdmin, requireJobAccess, requireClientAccess } = require('./authz');
 
 // ======================================================
 // STATUS / APPROVAL CONFIG
@@ -52,7 +54,7 @@ async function refreshFinanceTotals(year) {
 // ======================================================
 // FINANCE COMPUTATION (authoritative — derived from transactions)
 // ======================================================
-async function getJobFinance(jobId, jobRow = null) {
+async function getJobFinance(jobId, jobRow = null, includeCosts = false) {
   const job = jobRow || (await db.query('SELECT * FROM jobs WHERE id = $1', [jobId])).rows[0];
   if (!job) return null;
 
@@ -76,16 +78,18 @@ async function getJobFinance(jobId, jobRow = null) {
   const profit = paid - expenses;
   const marginPct = paid > 0 ? (profit / paid) * 100 : null;
 
+  // Cost / margin data is admin-only. Restricted users still receive the
+  // revenue side (due / paid / balance / credit) they need for sales work.
   return {
     total_due: totalDue,
     paid,
     balance_due: balanceDue,
     overpayment,
-    job_cost: jobCost,
-    entry_expenses: entryExpenses,
-    expenses,
-    profit,
-    margin_pct: marginPct !== null ? Math.round(marginPct * 10) / 10 : null,
+    job_cost: includeCosts ? jobCost : null,
+    entry_expenses: includeCosts ? entryExpenses : null,
+    expenses: includeCosts ? expenses : null,
+    profit: includeCosts ? profit : null,
+    margin_pct: includeCosts ? (marginPct !== null ? Math.round(marginPct * 10) / 10 : null) : null,
     finance_enabled: isFinanceEnabled(job.status)
   };
 }
@@ -101,9 +105,9 @@ async function getJobTags(jobId) {
   return rows;
 }
 
-async function hydrateJob(row) {
+async function hydrateJob(row, includeCosts = false) {
   if (!row) return null;
-  const [finance, tags] = await Promise.all([getJobFinance(row.id, row), getJobTags(row.id)]);
+  const [finance, tags] = await Promise.all([getJobFinance(row.id, row, includeCosts), getJobTags(row.id)]);
   return { ...row, finance, tags };
 }
 
@@ -115,40 +119,84 @@ async function getClientName(clientId) {
 // ======================================================
 // LIST JOBS FOR A CLIENT
 // ======================================================
-router.get('/clients/:clientId/jobs', asyncHandler(async (req, res) => {
+router.get('/clients/:clientId/jobs', requireClientAccess(), asyncHandler(async (req, res) => {
   const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  const user = getSessionUser(req);
   await db.schemaReady;
-  const { rows } = await db.query(`
-    SELECT * FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC
-  `, [clientId]);
-  const hydrated = await Promise.all(rows.map(hydrateJob));
+  const params = [clientId];
+  let sql = `
+    SELECT j.*, u.name AS sales_person_name, u.email AS sales_person_email,
+           (SELECT COUNT(*)::int FROM notes n WHERE n.job_id = j.id) AS note_count
+    FROM jobs j
+    LEFT JOIN app_users u ON u.id = j.sales_user_id
+    WHERE j.client_id = $1
+  `;
+  if (!isAdminUser(user)) {
+    params.push(Number(user.id));
+    sql += ` AND j.sales_user_id = $${params.length}`;
+  }
+  sql += ` ORDER BY j.created_at ASC, j.id ASC`;
+  const { rows } = await db.query(sql, params);
+  const hydrated = await Promise.all(rows.map((row) => hydrateJob(row, isAdminUser(user))));
   return res.json({ success: true, jobs: hydrated });
 }));
 
 // ======================================================
 // ADD JOB TO CLIENT (never creates a duplicate client)
 // ======================================================
-router.post('/clients/:clientId/jobs', asyncHandler(async (req, res) => {
+router.post('/clients/:clientId/jobs', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  const user = getSessionUser(req);
   const name = parseStringField(req.body.name ?? '', 'name', { minLength: 1, maxLength: 260 });
   const status = parseStringField(req.body.status ?? 'Pending Approval', 'status', { required: false, maxLength: 30, defaultValue: 'Pending Approval' });
   const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500, defaultValue: '' });
   const scopeOfWork = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
   const totalDue = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 });
-  const jobCost = parseNumberField(req.body.job_cost ?? 0, 'job_cost', { required: false, defaultValue: 0, min: 0 });
+  // Job cost feeds margin, which is admin-only. Restricted users cannot set it.
+  const jobCost = isAdminUser(user)
+    ? parseNumberField(req.body.job_cost ?? 0, 'job_cost', { required: false, defaultValue: 0, min: 0 })
+    : 0;
+  // Admins may assign a sales person; restricted users are always their own.
+  const salesUserId = isAdminUser(user)
+    ? (req.body.sales_user_id != null ? parseIntField(req.body.sales_user_id, 'sales_user_id', { min: 1, required: false }) : null)
+    : Number(user.id);
+  const lineItems = Array.isArray(req.body.line_items) ? req.body.line_items.slice(0, 200) : [];
 
   await db.schemaReady;
   const clientResult = await db.query('SELECT name FROM clients WHERE id = $1', [clientId]);
   if (!clientResult.rows[0]) return res.status(404).json({ error: 'Client not found' });
 
-  const { rows } = await db.query(`
-    INSERT INTO jobs (client_id, name, status, address, scope_of_work, job_cost, total_due, amount_paid, balance, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    RETURNING *
-  `, [clientId, name, status, address, scopeOfWork, jobCost, totalDue]);
+  const conn = await db.pool.connect();
+  let job;
+  try {
+    await conn.query('BEGIN');
+    const { rows } = await conn.query(`
+      INSERT INTO jobs (client_id, name, status, address, scope_of_work, job_cost, total_due, amount_paid, balance, sales_user_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *
+    `, [clientId, name, status, address, scopeOfWork, jobCost, totalDue, salesUserId]);
+    job = rows[0];
+    for (const [idx, li] of lineItems.entries()) {
+      const description = String(li.description || '').slice(0, 500);
+      const quantity = Number(li.quantity);
+      const unitPrice = Number(li.unit_price);
+      const amount = Number(li.amount);
+      if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice) || !Number.isFinite(amount)) continue;
+      if (!description && amount === 0) continue;
+      await conn.query(
+        'INSERT INTO job_line_items (job_id, description, quantity, unit_price, amount, sort_order) VALUES ($1,$2,$3,$4,$5,$6)',
+        [job.id, description, quantity, unitPrice, amount, idx]
+      );
+    }
+    await conn.query('COMMIT');
+  } catch (err) {
+    await conn.query('ROLLBACK');
+    throw err;
+  } finally {
+    conn.release();
+  }
 
-  const job = rows[0];
   const clientName = clientResult.rows[0].name;
   await createNotification({
     type: 'job_added',
@@ -169,32 +217,41 @@ router.post('/clients/:clientId/jobs', asyncHandler(async (req, res) => {
     });
   }
 
-  return res.json({ success: true, job: await hydrateJob(job) });
+  return res.json({ success: true, job: await hydrateJob(job, isAdminUser(user)) });
 }));
 
 // ======================================================
 // JOB DETAIL
 // ======================================================
-router.get('/jobs/:id', asyncHandler(async (req, res) => {
+router.get('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query(`
-    SELECT j.*, c.name AS client_name, c.phone AS client_phone, c.email AS client_email, c.address AS client_address
-    FROM jobs j JOIN clients c ON c.id = j.client_id
+    SELECT j.*, c.name AS client_name, c.phone AS client_phone, c.email AS client_email, c.address AS client_address,
+           c.primary_tag_id, u.name AS sales_person_name, u.email AS sales_person_email
+    FROM jobs j
+    JOIN clients c ON c.id = j.client_id
+    LEFT JOIN app_users u ON u.id = j.sales_user_id
     WHERE j.id = $1
   `, [id]);
   if (!rows[0]) return res.status(404).json({ error: 'Job not found' });
-  const job = await hydrateJob(rows[0]);
-  const clientFinance = await getClientFinance(rows[0].client_id);
+  const includeCosts = isAdminUser(getSessionUser(req));
+  const job = await hydrateJob(rows[0], includeCosts);
+  job.line_items = (await db.query(
+    'SELECT id, description, quantity, unit_price, amount, sort_order FROM job_line_items WHERE job_id = $1 ORDER BY sort_order ASC, id ASC',
+    [id]
+  )).rows;
+  const clientFinance = await getClientFinance(rows[0].client_id, includeCosts);
   return res.json({ success: true, job, client_finance: clientFinance });
 }));
 
 // ======================================================
 // UPDATE JOB (idempotent approval → no duplicate finance records)
 // ======================================================
-router.put('/jobs/:id', asyncHandler(async (req, res) => {
+router.put('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const user = getSessionUser(req);
   const name = parseStringField(req.body.name ?? '', 'name', { required: false, maxLength: 260 });
   const status = parseStringField(req.body.status ?? '', 'status', { required: false, maxLength: 30 });
   const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500 });
@@ -211,7 +268,9 @@ router.put('/jobs/:id', asyncHandler(async (req, res) => {
   const nextStatus = status || job.status;
   const nextAddress = req.body.address !== undefined ? address : job.address;
   const nextScope = req.body.scope_of_work !== undefined ? scopeOfWork : job.scope_of_work;
-  const nextJobCost = typeof jobCostInput !== 'undefined'
+  // Job cost is admin-only; restricted users can never change it (even if they
+  // send a stale value captured from their own view).
+  const nextJobCost = isAdminUser(user) && typeof jobCostInput !== 'undefined'
     ? parseNumberField(jobCostInput, 'job_cost', { required: false, min: 0, defaultValue: Number(job.job_cost || 0) })
     : Number(job.job_cost || 0);
   const nextTotalDue = typeof totalDueInput !== 'undefined'
@@ -219,11 +278,19 @@ router.put('/jobs/:id', asyncHandler(async (req, res) => {
     : Number(job.total_due || 0);
   const nextBalance = Math.max(0, nextTotalDue - Number(job.amount_paid || 0));
 
+  // Only admins may (re)assign a sales person.
+  let nextSalesUserId = job.sales_user_id;
+  if (isAdminUser(user) && req.body.sales_user_id !== undefined) {
+    nextSalesUserId = req.body.sales_user_id === null || req.body.sales_user_id === ''
+      ? null
+      : parseIntField(req.body.sales_user_id, 'sales_user_id', { min: 1, required: false });
+  }
+
   await db.query(`
     UPDATE jobs
-    SET name = $1, status = $2, address = $3, scope_of_work = $4, job_cost = $5, total_due = $6, balance = $7, updated_at = CURRENT_TIMESTAMP
-    WHERE id = $8
-  `, [nextName, nextStatus, nextAddress, nextScope, nextJobCost, nextTotalDue, nextBalance, id]);
+    SET name = $1, status = $2, address = $3, scope_of_work = $4, job_cost = $5, total_due = $6, balance = $7, sales_user_id = $8, updated_at = CURRENT_TIMESTAMP
+    WHERE id = $9
+  `, [nextName, nextStatus, nextAddress, nextScope, nextJobCost, nextTotalDue, nextBalance, nextSalesUserId, id]);
 
   const updated = (await db.query('SELECT * FROM jobs WHERE id = $1', [id])).rows[0];
   const clientName = await getClientName(updated.client_id);
@@ -251,13 +318,13 @@ router.put('/jobs/:id', asyncHandler(async (req, res) => {
     });
   }
 
-  return res.json({ success: true, job: await hydrateJob(updated) });
+  return res.json({ success: true, job: await hydrateJob(updated, isAdminUser(getSessionUser(req))) });
 }));
 
 // ======================================================
 // DELETE JOB (preserves financial history — re-points records)
 // ======================================================
-router.delete('/jobs/:id', asyncHandler(async (req, res) => {
+router.delete('/jobs/:id', requireJobAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query('SELECT * FROM jobs WHERE id = $1', [id]);
@@ -295,7 +362,7 @@ router.delete('/jobs/:id', asyncHandler(async (req, res) => {
 // ======================================================
 // JOB FINANCE — TOTAL DUE
 // ======================================================
-router.put('/jobs/:id/total', asyncHandler(async (req, res) => {
+router.put('/jobs/:id/total', requireJobAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 });
@@ -309,13 +376,13 @@ router.put('/jobs/:id/total', asyncHandler(async (req, res) => {
   await db.query('UPDATE jobs SET total_due = $1, balance = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [total, balance, id]);
 
   const updated = (await db.query('SELECT * FROM jobs WHERE id = $1', [id])).rows[0];
-  return res.json({ success: true, job: await hydrateJob(updated) });
+  return res.json({ success: true, job: await hydrateJob(updated, isAdminUser(getSessionUser(req))) });
 }));
 
 // ======================================================
 // JOB FINANCE — RECORD PAYMENT (APPROVED ONLY, server-enforced)
 // ======================================================
-router.put('/jobs/:id/payment', asyncHandler(async (req, res) => {
+router.put('/jobs/:id/payment', requireJobAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const amount = parseNumberField(req.body.payment ?? 0, 'payment', { required: false, defaultValue: 0 });
@@ -347,7 +414,7 @@ router.put('/jobs/:id/payment', asyncHandler(async (req, res) => {
   }
 
   const clientName = await getClientName(job.client_id);
-  const finance = await getJobFinance(id);
+  const finance = await getJobFinance(id, undefined, isAdminUser(getSessionUser(req)));
   await createNotification({
     type: 'payment',
     message: `Payment of $${Number(amount).toFixed(2)} received for ${clientName} ("${job.name}").`,
@@ -368,13 +435,13 @@ router.put('/jobs/:id/payment', asyncHandler(async (req, res) => {
   }
 
   await refreshFinanceTotals(new Date().getFullYear());
-  return res.json({ success: true, job: await hydrateJob(job), finance });
+  return res.json({ success: true, job: await hydrateJob(job, isAdminUser(getSessionUser(req))), finance });
 }));
 
 // ======================================================
 // JOB FINANCE — RESET PAID (force re-calc, admin-adjacent tool)
 // ======================================================
-router.put('/jobs/:id/reset-paid', asyncHandler(async (req, res) => {
+router.put('/jobs/:id/reset-paid', requireJobAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query('SELECT * FROM jobs WHERE id = $1', [id]);
@@ -402,13 +469,13 @@ router.put('/jobs/:id/reset-paid', asyncHandler(async (req, res) => {
   }
 
   const updated = (await db.query('SELECT * FROM jobs WHERE id = $1', [id])).rows[0];
-  return res.json({ success: true, job: await hydrateJob(updated) });
+  return res.json({ success: true, job: await hydrateJob(updated, isAdminUser(getSessionUser(req))) });
 }));
 
 // ======================================================
 // JOB FINANCE — RESTORE STATE (for undo; delta row, like legacy behavior)
 // ======================================================
-router.put('/jobs/:id/finance-state', asyncHandler(async (req, res) => {
+router.put('/jobs/:id/finance-state', requireJobAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const totalDue = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 });
@@ -444,13 +511,13 @@ router.put('/jobs/:id/finance-state', asyncHandler(async (req, res) => {
   }
 
   const updated = (await db.query('SELECT * FROM jobs WHERE id = $1', [id])).rows[0];
-  return res.json({ success: true, job: await hydrateJob(updated) });
+  return res.json({ success: true, job: await hydrateJob(updated, isAdminUser(getSessionUser(req))) });
 }));
 
 // ======================================================
 // JOB PAYMENTS (transaction history)
 // ======================================================
-router.get('/jobs/:id/payments', asyncHandler(async (req, res) => {
+router.get('/jobs/:id/payments', requireJobAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query(`
@@ -489,7 +556,7 @@ async function insertExpense(job, body) {
   return rows[0];
 }
 
-router.get('/jobs/:id/expenses', asyncHandler(async (req, res) => {
+router.get('/jobs/:id/expenses', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query(`
@@ -498,7 +565,7 @@ router.get('/jobs/:id/expenses', asyncHandler(async (req, res) => {
   return res.json({ success: true, expenses: rows });
 }));
 
-router.post('/jobs/:id/expenses', asyncHandler(async (req, res) => {
+router.post('/jobs/:id/expenses', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
@@ -524,7 +591,7 @@ router.post('/jobs/:id/expenses', asyncHandler(async (req, res) => {
   return res.json({ success: true, expense });
 }));
 
-router.delete('/jobs/:id/expenses/:expenseId', asyncHandler(async (req, res) => {
+router.delete('/jobs/:id/expenses/:expenseId', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const expenseId = parseIntField(req.params.expenseId, 'expenseId', { min: 1 });
   await db.schemaReady;
@@ -535,7 +602,7 @@ router.delete('/jobs/:id/expenses/:expenseId', asyncHandler(async (req, res) => 
 // ======================================================
 // JOB TAGS (attach/remove — any authenticated user)
 // ======================================================
-router.put('/jobs/:id/tags', asyncHandler(async (req, res) => {
+router.put('/jobs/:id/tags', requireJobAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const tagIds = Array.isArray(req.body.tagIds)
@@ -576,9 +643,72 @@ router.put('/jobs/:id/tags', asyncHandler(async (req, res) => {
 }));
 
 // ======================================================
+// JOB LINE ITEMS (estimate/invoice breakdown)
+// ======================================================
+router.get('/jobs/:id/line-items', requireJobAccess(), asyncHandler(async (req, res) => {
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  await db.schemaReady;
+  const { rows } = await db.query(
+    'SELECT id, description, quantity, unit_price, amount, sort_order FROM job_line_items WHERE job_id = $1 ORDER BY sort_order ASC, id ASC',
+    [id]
+  );
+  return res.json({ success: true, items: rows });
+}));
+
+router.put('/jobs/:id/line-items', requireJobAccess(), asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, 200) : [];
+
+  await db.schemaReady;
+  const jobResult = await db.query('SELECT id, amount_paid FROM jobs WHERE id = $1', [id]);
+  if (!jobResult.rows[0]) return res.status(404).json({ error: 'Job not found' });
+
+  const conn = await db.pool.connect();
+  let total = 0;
+  try {
+    await conn.query('BEGIN');
+    await conn.query('DELETE FROM job_line_items WHERE job_id = $1', [id]);
+    for (const [idx, li] of items.entries()) {
+      const description = String(li.description || '').slice(0, 500);
+      const quantity = Number(li.quantity);
+      const unitPrice = Number(li.unit_price);
+      const amount = Number(li.amount);
+      if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice) || !Number.isFinite(amount)) continue;
+      if (!description && amount === 0) continue;
+      const safeAmount = Math.max(0, amount);
+      total += safeAmount;
+      await conn.query(
+        'INSERT INTO job_line_items (job_id, description, quantity, unit_price, amount, sort_order) VALUES ($1,$2,$3,$4,$5,$6)',
+        [id, description, quantity, unitPrice, safeAmount, idx]
+      );
+    }
+    // Line items are the pricing source: keep the finance "amount due" in sync.
+    if (items.length > 0) {
+      await conn.query(
+        'UPDATE jobs SET total_due = $1, balance = GREATEST(0, $1 - amount_paid), updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [total, id]
+      );
+    }
+    await conn.query('COMMIT');
+  } catch (err) {
+    await conn.query('ROLLBACK');
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  const { rows } = await db.query(
+    'SELECT id, description, quantity, unit_price, amount, sort_order FROM job_line_items WHERE job_id = $1 ORDER BY sort_order ASC, id ASC',
+    [id]
+  );
+  return res.json({ success: true, items: rows, total });
+}));
+
+// ======================================================
 // JOB PHOTOS (list — storage-backed, includes legacy client key)
 // ======================================================
-router.get('/jobs/:id/photos', asyncHandler(async (req, res) => {
+router.get('/jobs/:id/photos', requireJobAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query('SELECT id, client_id, legacy_storage_key FROM jobs WHERE id = $1', [id]);
@@ -613,30 +743,52 @@ router.get('/jobs/:id/photos', asyncHandler(async (req, res) => {
 router.get('/jobs', asyncHandler(async (req, res) => {
   const tagIdRaw = req.query.tag_id;
   const tagId = tagIdRaw ? parseIntField(tagIdRaw, 'tag_id', { min: 1 }) : null;
+  const salesUserIdRaw = req.query.sales_user_id;
+  const salesUserId = salesUserIdRaw ? parseIntField(salesUserIdRaw, 'sales_user_id', { min: 1 }) : null;
+  const primaryTagRaw = req.query.primary_tag_id;
+  const primaryTagId = primaryTagRaw ? parseIntField(primaryTagRaw, 'primary_tag_id', { min: 1 }) : null;
+  const status = req.query.status ? parseStringField(req.query.status, 'status', { required: false, maxLength: 30 }) : null;
+  const user = getSessionUser(req);
 
   await db.schemaReady;
-  let rows;
+  const params = [];
+  let where = '';
   if (tagId !== null) {
-    rows = (await db.query(`
-      SELECT j.*, c.name AS client_name
-      FROM jobs j
-      JOIN clients c ON c.id = j.client_id
-      JOIN job_tags jt ON jt.job_id = j.id
-      WHERE jt.tag_id = $1
-      ORDER BY j.created_at DESC, j.id DESC
-    `, [tagId])).rows;
-  } else {
-    rows = (await db.query(`
-      SELECT j.*, c.name AS client_name
-      FROM jobs j
-      JOIN clients c ON c.id = j.client_id
-      ORDER BY j.created_at DESC, j.id DESC
-      LIMIT 500
-    `)).rows;
+    params.push(tagId);
+    where += ` AND jt.tag_id = $${params.length}`;
+  }
+  if (salesUserId !== null) {
+    params.push(salesUserId);
+    where += ` AND j.sales_user_id = $${params.length}`;
+  }
+  if (primaryTagId !== null) {
+    params.push(primaryTagId);
+    where += ` AND c.primary_tag_id = $${params.length}`;
+  }
+  if (status) {
+    params.push(status);
+    where += ` AND j.status = $${params.length}`;
+  }
+  if (!isAdminUser(user)) {
+    params.push(Number(user.id));
+    where += ` AND j.sales_user_id = $${params.length}`;
   }
 
+  const tagJoin = tagId !== null ? ` JOIN job_tags jt ON jt.job_id = j.id` : '';
+  const { rows } = await db.query(`
+    SELECT j.*, c.name AS client_name, u.name AS sales_person_name,
+           (SELECT COUNT(*)::int FROM notes n WHERE n.job_id = j.id) AS note_count
+    FROM jobs j
+    JOIN clients c ON c.id = j.client_id
+    LEFT JOIN app_users u ON u.id = j.sales_user_id
+    ${tagJoin}
+    WHERE 1=1 ${where}
+    ORDER BY j.created_at DESC, j.id DESC
+    LIMIT 500
+  `, params);
+
   const hydrated = await Promise.all(rows.map(async (row) => {
-    const finance = await getJobFinance(row.id, row);
+    const finance = await getJobFinance(row.id, row, isAdminUser(user));
     const tags = await getJobTags(row.id);
     return { ...row, finance, tags };
   }));
@@ -647,7 +799,7 @@ router.get('/jobs', asyncHandler(async (req, res) => {
 // ======================================================
 // CLIENT-LEVEL AGGREGATE (sum across all of a client's jobs)
 // ======================================================
-async function getClientFinance(clientId) {
+async function getClientFinance(clientId, includeCosts = false) {
   const { rows } = await db.query('SELECT * FROM jobs WHERE client_id = $1', [clientId]);
   const jobs = rows || [];
   let totalDue = 0;
@@ -659,12 +811,12 @@ async function getClientFinance(clientId) {
   let approvedCount = 0;
 
   for (const job of jobs) {
-    const finance = await getJobFinance(job.id, job);
+    const finance = await getJobFinance(job.id, job, includeCosts);
     totalDue += finance.total_due;
     paid += finance.paid;
     balanceDue += finance.balance_due;
     overpayment += finance.overpayment;
-    expenses += finance.expenses;
+    if (includeCosts) expenses += Number(finance.expenses || 0);
     jobCount += 1;
     if (finance.finance_enabled) approvedCount += 1;
   }
@@ -675,9 +827,9 @@ async function getClientFinance(clientId) {
     paid,
     balance_due: balanceDue,
     overpayment,
-    expenses,
-    profit,
-    margin_pct: paid > 0 ? Math.round((profit / paid) * 1000) / 10 : null,
+    expenses: includeCosts ? expenses : null,
+    profit: includeCosts ? profit : null,
+    margin_pct: includeCosts ? (paid > 0 ? Math.round((profit / paid) * 1000) / 10 : null) : null,
     job_count: jobCount,
     approved_job_count: approvedCount
   };

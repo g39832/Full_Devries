@@ -5,6 +5,10 @@ const { maskEmailConfig, normalizeEmailConfig } = require('../services/email-con
 
 const router = express.Router();
 const SETTINGS_KEY = 'email_delivery_config';
+const { requireAdmin } = require('./authz');
+
+// Email delivery config is an admin-only setting.
+router.use(requireAdmin);
 
 async function readStoredConfig() {
   await db.schemaReady;

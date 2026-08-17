@@ -3,6 +3,8 @@ const router = express.Router();
 const db = require('./db');
 const { asyncHandler, assertObject, parseIntField, parseNumberField, parseStringField, parseYear } = require('./request-utils');
 const { isFinanceEnabled } = require('./jobs');
+const { getSessionUser } = require('./auth');
+const { isAdminUser, requireAdmin, requireClientAccess } = require('./authz');
 
 // ======================================================
 // HELPER: SAFE YEAR HANDLER
@@ -81,43 +83,66 @@ router.get('/search', asyncHandler(async (req, res) => {
   const term = parseStringField(req.query.q ?? '', 'q', { required: false, maxLength: 200, defaultValue: '' });
   const limit = parseOptionalPagination(req.query.limit, 500);
   const offset = parseOptionalPagination(req.query.offset, 1000000) ?? 0;
+  const primaryTagRaw = req.query.primary_tag_id;
+  const primaryTagId = primaryTagRaw ? parseIntField(primaryTagRaw, 'primary_tag_id', { min: 1 }) : null;
+  const user = getSessionUser(req);
   await db.schemaReady;
 
   const clientColumns = `
     clients.*,
-    (SELECT COUNT(*)::int FROM jobs WHERE jobs.client_id = clients.id) AS job_count
+    (SELECT COUNT(*)::int FROM jobs WHERE jobs.client_id = clients.id) AS job_count,
+    pt.name AS primary_tag_name
   `;
 
+  const params = [];
+  let where = '';
+  if (primaryTagId !== null) {
+    params.push(primaryTagId);
+    where += ` AND clients.primary_tag_id = $${params.length}`;
+  }
+  if (!isAdminUser(user)) {
+    params.push(Number(user.id));
+    where += ` AND EXISTS (SELECT 1 FROM jobs jj WHERE jj.client_id = clients.id AND jj.sales_user_id = $${params.length})`;
+  }
+
   if (!term) {
-    if (limit === null) {
-      const { rows } = await db.query(`SELECT ${clientColumns} FROM clients ORDER BY created_at DESC`);
-      return res.json(rows);
+    let sql = `SELECT ${clientColumns} FROM clients LEFT JOIN tags pt ON pt.id = clients.primary_tag_id WHERE 1=1 ${where} ORDER BY clients.created_at DESC`;
+    const all = [...params];
+    if (limit !== null) {
+      all.push(limit, offset);
+      sql += ` LIMIT $${all.length - 1} OFFSET $${all.length}`;
     }
-    const { rows } = await db.query(
-      `SELECT ${clientColumns} FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+    const { rows } = await db.query(sql, all);
     return res.json(rows);
   }
 
   const like = `%${term}%`;
+  const all = [like, like, like, like, like];
   let sql = `
     SELECT DISTINCT ${clientColumns}
     FROM clients
     LEFT JOIN notes ON notes.client_id = clients.id
-    WHERE clients.name ILIKE $1
+    LEFT JOIN tags pt ON pt.id = clients.primary_tag_id
+    WHERE (clients.name ILIKE $1
        OR clients.phone ILIKE $2
        OR clients.email ILIKE $3
        OR clients.address ILIKE $4
-       OR notes.content ILIKE $5
-    ORDER BY clients.created_at DESC
+       OR notes.content ILIKE $5)
   `;
-  const params = [like, like, like, like, like];
-  if (limit !== null) {
-    sql += ' LIMIT $6 OFFSET $7';
-    params.push(limit, offset);
+  if (primaryTagId !== null) {
+    all.push(primaryTagId);
+    sql += ` AND clients.primary_tag_id = $${all.length}`;
   }
-  const { rows } = await db.query(sql, params);
+  if (!isAdminUser(user)) {
+    all.push(Number(user.id));
+    sql += ` AND EXISTS (SELECT 1 FROM jobs jj WHERE jj.client_id = clients.id AND jj.sales_user_id = $${all.length})`;
+  }
+  sql += ' ORDER BY clients.created_at DESC';
+  if (limit !== null) {
+    all.push(limit, offset);
+    sql += ` LIMIT $${all.length - 1} OFFSET $${all.length}`;
+  }
+  const { rows } = await db.query(sql, all);
 
   return res.json(rows);
 }));
@@ -142,6 +167,10 @@ router.post('/save-client', asyncHandler(async (req, res) => {
 
   const total = parseNumberField(totalDueInput ?? 0, 'total_due', { required: false, defaultValue: 0 });
   const createdAt = new Date().toISOString();
+  const user = getSessionUser(req);
+  const salesUserId = isAdminUser(user)
+    ? (req.body.sales_user_id != null ? parseIntField(req.body.sales_user_id, 'sales_user_id', { min: 1, required: false }) : null)
+    : Number(user.id);
 
   await db.schemaReady;
   const conn = await db.pool.connect();
@@ -160,9 +189,9 @@ router.post('/save-client', asyncHandler(async (req, res) => {
     // stays the customer record. Adding more jobs never creates duplicates.
     const finalStatus = status || 'Prospect';
     await conn.query(`
-      INSERT INTO jobs (client_id, name, status, address, scope_of_work, job_cost, total_due, amount_paid, balance, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, $8, $8)
-    `, [clientId, finalName, finalStatus, address, scopeOfWork, jobCost, total, createdAt]);
+      INSERT INTO jobs (client_id, name, status, address, scope_of_work, job_cost, total_due, amount_paid, balance, sales_user_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, $8, $9, $9)
+    `, [clientId, finalName, finalStatus, address, scopeOfWork, jobCost, total, salesUserId, createdAt]);
     await conn.query('COMMIT');
   } catch (err) {
     await conn.query('ROLLBACK');
@@ -194,7 +223,7 @@ router.post('/save-client', asyncHandler(async (req, res) => {
 // ======================================================
 // UPDATE CLIENT
 // ======================================================
-router.post('/update-project', asyncHandler(async (req, res) => {
+router.post('/update-project', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.body.id, 'id', { min: 1 });
   const fName = parseStringField(req.body.fName ?? '', 'fName', { required: false, maxLength: 120, defaultValue: '' });
@@ -207,6 +236,7 @@ router.post('/update-project', asyncHandler(async (req, res) => {
   const totalDueInput = req.body.total_due;
   const scopeOfWork = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
   const jobCostInput = req.body.job_cost;
+  const user = getSessionUser(req);
 
   await db.schemaReady;
   const clientResult = await db.query('SELECT name, phone, email, address, created_at, status FROM clients WHERE id = $1', [id]);
@@ -228,7 +258,8 @@ router.post('/update-project', asyncHandler(async (req, res) => {
   const nextTotal = typeof totalDueInput !== 'undefined'
     ? parseNumberField(totalDueInput, 'total_due', { required: false, defaultValue: Number(defaultJob.total_due || 0) })
     : Number(defaultJob.total_due || 0);
-  const nextJobCost = typeof jobCostInput !== 'undefined'
+  // Job cost is admin-only; restricted users can never change it.
+  const nextJobCost = isAdminUser(user) && typeof jobCostInput !== 'undefined'
     ? parseNumberField(jobCostInput, 'job_cost', { required: false, defaultValue: Number(defaultJob.job_cost || 0) })
     : Number(defaultJob.job_cost || 0);
   const nextScope = req.body.scope_of_work !== undefined ? scopeOfWork : defaultJob.scope_of_work;
@@ -272,9 +303,32 @@ router.post('/update-project', asyncHandler(async (req, res) => {
 }));
 
 // ======================================================
+// PRIMARY TAG (client-level sorting tag — admin only)
+// ======================================================
+router.put('/clients/:id/primary-tag', requireAdmin, asyncHandler(async (req, res) => {
+  assertObject(req.body);
+  const id = parseIntField(req.params.id, 'id', { min: 1 });
+  const primaryTagId = (req.body.primary_tag_id === null || req.body.primary_tag_id === '')
+    ? null
+    : parseIntField(req.body.primary_tag_id, 'primary_tag_id', { min: 1 });
+
+  await db.schemaReady;
+  if (primaryTagId !== null) {
+    const tag = await db.query("SELECT id FROM tags WHERE id = $1 AND kind = 'client'", [primaryTagId]);
+    if (!tag.rows[0]) return res.status(400).json({ error: 'Primary tag must be a client tag' });
+  }
+  const { rows } = await db.query(
+    'UPDATE clients SET primary_tag_id = $1 WHERE id = $2 RETURNING id, primary_tag_id',
+    [primaryTagId, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Client not found' });
+  return res.json({ success: true, client: rows[0] });
+}));
+
+// ======================================================
 // DELETE CLIENT
 // ======================================================
-router.post('/delete-client', asyncHandler(async (req, res) => {
+router.post('/delete-client', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.body.id, 'id', { min: 1 });
 
@@ -295,7 +349,7 @@ router.post('/delete-client', asyncHandler(async (req, res) => {
 // ======================================================
 // UPDATE TOTAL DUE
 // ======================================================
-router.put('/clients/:id/total', asyncHandler(async (req, res) => {
+router.put('/clients/:id/total', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total = parseNumberField(req.body.total_due, 'total_due', { required: false, defaultValue: 0 });
@@ -324,7 +378,7 @@ router.put('/clients/:id/total', asyncHandler(async (req, res) => {
 // ======================================================
 // RECORD PAYMENT
 // ======================================================
-router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
+router.put('/clients/:id/payment', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const amount = parseNumberField(req.body.payment ?? 0, 'payment', { required: false, defaultValue: 0 });
@@ -382,7 +436,7 @@ router.put('/clients/:id/payment', asyncHandler(async (req, res) => {
 // ======================================================
 // RESET BALANCE (FORCE RE-CALC)
 // ======================================================
-router.put('/clients/:id/reset-paid', asyncHandler(async (req, res) => {
+router.put('/clients/:id/reset-paid', requireClientAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
 
   await db.schemaReady;
@@ -431,7 +485,7 @@ router.put('/clients/:id/reset-paid', asyncHandler(async (req, res) => {
 // ======================================================
 // RESTORE FINANCE STATE (FOR UNDO)
 // ======================================================
-router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
+router.put('/clients/:id/finance-state', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const total_due = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0 });
@@ -490,7 +544,7 @@ router.put('/clients/:id/finance-state', asyncHandler(async (req, res) => {
 // ======================================================
 
 // Available Years
-router.get('/finance/years', asyncHandler(async (req, res) => {
+router.get('/finance/years', requireAdmin, asyncHandler(async (req, res) => {
   try {
     await db.schemaReady;
 
@@ -519,7 +573,7 @@ router.get('/finance/years', asyncHandler(async (req, res) => {
 }));
 
 // Save Year Data (Manual Override)
-router.post('/finance/save', asyncHandler(async (req, res) => {
+router.post('/finance/save', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const year = parseYear(req.body.year, 'year');
   const totalExpected = parseNumberField(req.body.totalExpected ?? 0, 'totalExpected', { required: false, defaultValue: 0 });
@@ -550,7 +604,7 @@ router.post('/finance/save', asyncHandler(async (req, res) => {
 // ======================================================
 // UPDATED FINANCE SUMMARY (CUMULATIVE BALANCES)
 // ======================================================
-router.get('/finance/summary', asyncHandler(async (req, res) => {
+router.get('/finance/summary', requireAdmin, asyncHandler(async (req, res) => {
   const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
 
   try {
@@ -606,7 +660,7 @@ router.get('/finance/summary', asyncHandler(async (req, res) => {
 // ======================================================
 // CASH SUMMARY
 // ======================================================
-router.get('/finance/cash-summary', asyncHandler(async (req, res) => {
+router.get('/finance/cash-summary', requireAdmin, asyncHandler(async (req, res) => {
   const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
   try {
     await db.schemaReady;
@@ -701,7 +755,7 @@ async function resolveClientName(clientId) {
   return client?.name || '';
 }
 
-router.get('/finance/margin/dashboard', asyncHandler(async (req, res) => {
+router.get('/finance/margin/dashboard', requireAdmin, asyncHandler(async (req, res) => {
   const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
   try {
     const baseData = await getMarginBaseData();
@@ -722,7 +776,7 @@ router.get('/finance/margin/dashboard', asyncHandler(async (req, res) => {
   }
 }));
 
-router.post('/finance/margin/entries', asyncHandler(async (req, res) => {
+router.post('/finance/margin/entries', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const clientId = req.body.client_id ?? req.body.clientId ?? null;
   const parsedClientId = clientId === null || clientId === undefined || clientId === '' ? null : parseIntField(clientId, 'client_id', { min: 1, required: false });
@@ -750,7 +804,7 @@ router.post('/finance/margin/entries', asyncHandler(async (req, res) => {
   return res.json({ success: true, marginUpdated: true });
 }));
 
-router.put('/finance/margin/entries/:id', asyncHandler(async (req, res) => {
+router.put('/finance/margin/entries/:id', requireAdmin, asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const clientId = req.body.client_id ?? req.body.clientId ?? null;
@@ -779,7 +833,7 @@ router.put('/finance/margin/entries/:id', asyncHandler(async (req, res) => {
   return res.json({ success: true, marginUpdated: true });
 }));
 
-router.delete('/finance/margin/entries/:id', asyncHandler(async (req, res) => {
+router.delete('/finance/margin/entries/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   await db.query('DELETE FROM finance_margin_entries WHERE id = $1', [id]);
@@ -789,7 +843,7 @@ router.delete('/finance/margin/entries/:id', asyncHandler(async (req, res) => {
 // ======================================================
 // NOTES ROUTES
 // ======================================================
-router.get('/clients/:id/notes', asyncHandler(async (req, res) => {
+router.get('/clients/:id/notes', requireClientAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   await db.schemaReady;
   const { rows } = await db.query(
@@ -799,7 +853,7 @@ router.get('/clients/:id/notes', asyncHandler(async (req, res) => {
   return res.json(rows);
 }));
 
-router.post('/clients/:id/notes', asyncHandler(async (req, res) => {
+router.post('/clients/:id/notes', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const content = parseStringField(req.body.content, 'content', { minLength: 1, maxLength: 10000 });
@@ -809,7 +863,7 @@ router.post('/clients/:id/notes', asyncHandler(async (req, res) => {
   return res.json({ success: true });
 }));
 
-router.put('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
+router.put('/clients/:id/notes/:noteId', requireClientAccess(), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
@@ -821,7 +875,7 @@ router.put('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
   return res.json({ success: true });
 }));
 
-router.delete('/clients/:id/notes/:noteId', asyncHandler(async (req, res) => {
+router.delete('/clients/:id/notes/:noteId', requireClientAccess(), asyncHandler(async (req, res) => {
   const id = parseIntField(req.params.id, 'id', { min: 1 });
   const noteId = parseIntField(req.params.noteId, 'noteId', { min: 1 });
 

@@ -73,7 +73,7 @@ async function mutateSessionRole(app, cookie, role) {
     app.locals.sessionStore.get(sid, (err, session) => {
       if (err) return reject(err);
       session.user = {
-        id: 999001,
+        id: role === 'admin' ? 999000 : 999001,
         email: `normal@${role}.test`,
         name: `Test ${role}`,
         role
@@ -112,6 +112,16 @@ async function main() {
 
   try {
     await waitForServer();
+
+    // Seed real app_users so targeted note notifications have actual recipients.
+    const db = require('../api/db');
+    await db.schemaReady;
+    await db.query(`
+      INSERT INTO app_users (id, email, name, role, is_active) VALUES
+        (999000, 'admin@test', 'Test Admin', 'admin', true),
+        (999001, 'normal@user.test', 'Test user', 'user', true)
+      ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id, role = EXCLUDED.role, is_active = true
+    `);
 
     // ================= REGRESSION: unauthenticated API =================
     const unauth = await req('/api/search?q=');
@@ -299,6 +309,43 @@ async function main() {
     const afterTagDelete = await req(`/api/jobs?tag_id=${tagId}`, { cookie });
     assert.strictEqual(afterTagDelete.json.jobs.length, 0, 'deleted tag should have no jobs');
 
+    // ================= Sales person assignment + admin filter =================
+    const assignSales = await req(`/api/jobs/${job1}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sales_user_id: 999001 }),
+      cookie
+    });
+    assert.strictEqual(assignSales.res.status, 200, 'admin can assign a sales person');
+    assert.strictEqual(Number(assignSales.json.job.sales_user_id), 999001, 'sales_user_id should be persisted');
+
+    const bySales = await req('/api/jobs?sales_user_id=999001', { cookie });
+    assert.strictEqual(bySales.res.status, 200, 'filter jobs by sales user should return 200');
+    assert.ok(bySales.json.jobs.some((j) => Number(j.id) === Number(job1)), 'assigned job should appear in the sales filter');
+    assert.ok(bySales.json.jobs.every((j) => Number(j.sales_user_id) === 999001), 'sales filter should only return matching jobs');
+
+    // ================= Primary (client) tag vs secondary (job) tag =================
+    const clientTag = await req('/api/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `ClientTag ${uniqueSuffix}`, kind: 'client' }),
+      cookie
+    });
+    assert.strictEqual(clientTag.res.status, 200, 'create client tag should return 200');
+    const clientTagId = clientTag.json.tag.id;
+
+    const setPrimary = await req(`/api/clients/${clientId}/primary-tag`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primary_tag_id: clientTagId }),
+      cookie
+    });
+    assert.strictEqual(setPrimary.res.status, 200, 'set primary client tag should return 200');
+
+    const clientFilter = await req(`/api/search?primary_tag_id=${clientTagId}`, { cookie });
+    assert.ok(Array.isArray(clientFilter.json), 'primary tag filter should return an array');
+    assert.ok(clientFilter.json.some((c) => Number(c.id) === Number(clientId)), 'client should appear in primary tag filter');
+
     // ================= Job photos (scoped to the job) =================
     const storageEnabled = isStorageAvailable();
     if (!storageEnabled) {
@@ -368,6 +415,50 @@ async function main() {
       'activity should record the acting admin'
     );
 
+    // ================= Job line items + duplicate + job-scoped documents =================
+    const saveItems = await req(`/api/jobs/${job1}/line-items`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [
+        { description: 'Shingles', quantity: 2, unit_price: 1000, amount: 2000 },
+        { description: 'Labor', quantity: 1, unit_price: 500, amount: 500 }
+      ] }),
+      cookie
+    });
+    assert.strictEqual(saveItems.res.status, 200, 'save line items should return 200');
+    assert.strictEqual(saveItems.json.total, 2500, 'line item total should be 2500');
+
+    const detailAfterItems = await req(`/api/jobs/${job1}`, { cookie });
+    assert.strictEqual(Number(detailAfterItems.json.job.total_due), 2500, 'total_due should sync to the line-item sum');
+    assert.strictEqual(detailAfterItems.json.job.line_items.length, 2, 'job should expose its line items');
+
+    // Creating a new job from an existing one must copy line items independently.
+    const dupJob = await req(`/api/clients/${clientId}/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Duplicated',
+        status: 'Pending Approval',
+        scope_of_work: 'roof replace',
+        total_due: 2500,
+        line_items: [{ description: 'Shingles', quantity: 2, unit_price: 1000, amount: 2000 }]
+      }),
+      cookie
+    });
+    assert.strictEqual(dupJob.res.status, 200, 'create job with copied line items should return 200');
+    const dupItems = await req(`/api/jobs/${dupJob.json.job.id}/line-items`, { cookie });
+    assert.strictEqual(dupItems.json.items.length, 1, 'line items should be copied to the new job');
+    const dupDetail = await req(`/api/jobs/${dupJob.json.job.id}`, { cookie });
+    assert.strictEqual(dupDetail.json.job.scope_of_work, 'roof replace', 'scope of work should copy into the new job');
+
+    // Job-scoped estimate and invoice documents.
+    const estimate = await req(`/api/jobs/${job1}/estimate`, { method: 'POST', cookie });
+    assert.strictEqual(estimate.res.status, 200, 'job estimate should return 200');
+    assert.match(estimate.res.headers.get('content-type') || '', /application\/pdf/, 'estimate should be a PDF');
+    const invoice = await req(`/api/jobs/${job1}/invoice`, { method: 'POST', cookie });
+    assert.strictEqual(invoice.res.status, 200, 'job invoice should return 200');
+    assert.match(invoice.res.headers.get('content-type') || '', /application\/pdf/, 'invoice should be a PDF');
+
     // ================= Roles: normal user cannot reach admin functions =================
     await mutateSessionRole(app, cookie, 'user');
     const normalMe = await req('/api/auth/me', { cookie });
@@ -391,6 +482,33 @@ async function main() {
     assert.strictEqual(blockedUsers.res.status, 403, 'normal user must get 403 on user list');
     const blockedActivity = await req('/api/admin/activity', { cookie });
     assert.strictEqual(blockedActivity.res.status, 403, 'normal user must get 403 on activity log');
+
+    // Finance dashboard is admin-only at the page level, not just the API.
+    const financePageUser = await fetch(`${baseUrl}/finance.html`, { redirect: 'manual', headers: { Cookie: cookie } });
+    assert.strictEqual(financePageUser.status, 302, 'non-admin must be redirected away from /finance.html');
+
+    // Restricted user: assigned job accessible, unassigned job denied, list scoped.
+    const assignedAccess = await req(`/api/jobs/${job1}`, { cookie });
+    assert.strictEqual(assignedAccess.res.status, 200, 'restricted user should access their assigned job');
+
+    // Job cost / margin is admin-only: a restricted user's payload must not
+    // expose cost, expenses, profit, or margin, and cost endpoints must 403.
+    assert.strictEqual(assignedAccess.json.job.finance.job_cost, null, 'restricted user must not see job cost');
+    assert.strictEqual(assignedAccess.json.job.finance.expenses, null, 'restricted user must not see expenses');
+    assert.strictEqual(assignedAccess.json.job.finance.profit, null, 'restricted user must not see profit');
+    assert.strictEqual(assignedAccess.json.job.finance.margin_pct, null, 'restricted user must not see margin');
+    const blockedExpenses = await req(`/api/jobs/${job1}/expenses`, { cookie });
+    assert.strictEqual(blockedExpenses.res.status, 403, 'normal user must get 403 on job expenses');
+
+    const deniedJob = await req(`/api/jobs/${jobIds[1]}`, { cookie });
+    assert.strictEqual(deniedJob.res.status, 403, 'restricted user must get 403 on an unassigned job');
+    const restrictedJobs = await req('/api/jobs', { cookie });
+    assert.ok(
+      restrictedJobs.json.jobs.every((j) => Number(j.sales_user_id) === 999001),
+      'restricted user job list must only include their assigned jobs'
+    );
+    const restrictedClientList = await req('/api/search?q=', { cookie });
+    assert.ok(Array.isArray(restrictedClientList.json), 'restricted user client list should be an array');
 
     // Restore admin for the remaining regression checks
     await mutateSessionRole(app, cookie, 'admin');
@@ -416,6 +534,11 @@ async function main() {
     assert.strictEqual(jobNote.res.status, 200, 'add job note should return 200');
     const jobNoteList = await req(`/api/notes/job/${job1}`, { cookie });
     assert.ok(jobNoteList.json.notes.some((n) => n.content === 'job one note'), 'job note should list');
+    assert.ok(jobNoteList.json.notes.every((n) => n.author_email), 'job note should record its author email');
+    assert.ok(jobNoteList.json.notes.every((n) => n.author_name), 'job note should record its author name');
+
+    const noteNotifs = await req('/api/notifications', { cookie });
+    assert.ok((noteNotifs.json.notifications || []).some((n) => n.type === 'note'), 'adding a note should create a note notification');
 
     // ================= REGRESSION: client-level PDF upload =================
     if (storageEnabled) {
@@ -452,6 +575,8 @@ async function main() {
     assert.strictEqual(logout.res.status, 200, 'logout should return 200');
     const afterLogout = await req('/api/search?q=', { cookie });
     assert.strictEqual(afterLogout.res.status, 401, 'after logout, API should be 401');
+    const financePageAnon = await fetch(`${baseUrl}/finance.html`, { redirect: 'manual' });
+    assert.strictEqual(financePageAnon.status, 302, 'unauthenticated /finance.html must redirect');
 
     console.log('Smoke test passed.');
   } finally {

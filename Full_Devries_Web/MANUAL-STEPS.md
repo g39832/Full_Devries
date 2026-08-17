@@ -25,6 +25,11 @@ account owner, and I never touch production infra without you.
      backfills every existing payment/note to its Job.
    - **Nothing is dropped or deleted.** If you ever need to undo it, the
      rollback SQL is commented at the bottom of that file.
+5. Also run `supabase-migration-v3-workspaces.sql` (additive): adds
+   `jobs.sales_user_id` (sales-person assignment), `tags.kind` + client primary
+   tag, `job_line_items` (job-scoped estimates/invoices), note authors, and
+   per-user notifications. The app applies the same schema automatically on
+   boot, so this is optional but recommended for an auditable record.
 
 Optional but recommended: run the *read-only* verification scripts against your
 **test** database:

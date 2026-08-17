@@ -10,11 +10,15 @@ const { requireRole } = require('./auth');
 router.get('/', asyncHandler(async (req, res) => {
   await db.schemaReady;
   const { rows } = await db.query(`
-    SELECT t.id, t.name, t.created_at, COUNT(jt.job_id)::int AS job_count
+    SELECT
+      t.id, t.name, t.kind, t.created_at,
+      COUNT(jt.job_id)::int AS job_count,
+      COUNT(ct.id)::int AS client_count
     FROM tags t
     LEFT JOIN job_tags jt ON jt.tag_id = t.id
-    GROUP BY t.id, t.name, t.created_at
-    ORDER BY lower(t.name) ASC
+    LEFT JOIN clients ct ON ct.primary_tag_id = t.id
+    GROUP BY t.id, t.name, t.kind, t.created_at
+    ORDER BY t.kind ASC, lower(t.name) ASC
   `);
   return res.json({ success: true, tags: rows });
 }));
@@ -25,17 +29,21 @@ router.get('/', asyncHandler(async (req, res) => {
 router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
   assertObject(req.body);
   const name = parseStringField(req.body.name ?? '', 'name', { minLength: 1, maxLength: 80 });
+  const kind = parseStringField(req.body.kind ?? 'job', 'kind', { required: false, maxLength: 20, defaultValue: 'job' });
+  if (!['client', 'job'].includes(kind)) {
+    throw new AppError(400, 'kind must be "client" or "job"');
+  }
   const normalized = name.trim();
 
   await db.schemaReady;
   const existing = await db.query('SELECT id FROM tags WHERE lower(name) = lower($1)', [normalized]);
   if (existing.rows[0]) {
-    return res.status(409).json({ error: `Tag "${existing.rows[0] && normalized}" already exists.` });
+    return res.status(409).json({ error: `Tag "${normalized}" already exists.` });
   }
 
   let rows;
   try {
-    rows = (await db.query('INSERT INTO tags (name) VALUES ($1) RETURNING *', [normalized])).rows;
+    rows = (await db.query('INSERT INTO tags (name, kind) VALUES ($1, $2) RETURNING *', [normalized, kind])).rows;
   } catch (err) {
     if (err && err.code === '23505') {
       return res.status(409).json({ error: 'Tag already exists (case-insensitive).' });

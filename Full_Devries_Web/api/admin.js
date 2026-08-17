@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('./db');
 const { asyncHandler, assertObject, parseIntField, parseNumberField, parseStringField, AppError } = require('./request-utils');
-const { requireRole, getSessionUser } = require('./auth');
+const { requireRole, getSessionUser, addAdminEmail, removeAdminEmail } = require('./auth');
 
 // All routes in this router are admin-only (enforced server-side).
 router.use(requireRole('admin'));
@@ -197,6 +197,12 @@ router.put('/users/:id/role', asyncHandler(async (req, res) => {
     [role, id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+
+  // Role on login is derived from the admin email list, so keep that list in
+  // sync whenever an admin promotes/demotes someone here.
+  if (role === 'admin') await addAdminEmail(rows[0].email);
+  else await removeAdminEmail(rows[0].email);
+
   return res.json({ success: true, user: rows[0] });
 }));
 

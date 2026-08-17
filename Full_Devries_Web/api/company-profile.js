@@ -5,6 +5,10 @@ const { normalizeCompanyProfile } = require('../services/company-profile');
 
 const router = express.Router();
 const SETTINGS_KEY = 'company_profile';
+const { requireAdmin } = require('./authz');
+
+// Company profile is an admin-only setting.
+router.use(requireAdmin);
 
 async function readStoredProfile() {
   await db.schemaReady;

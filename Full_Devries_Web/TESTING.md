@@ -7,7 +7,12 @@ production data**.
 > **Important:** since the Jobs/Tags/Roles rework, the test suite covers the
 > full required scenario (no duplicate clients, job photos, tag filtering,
 > idempotent approval, finance math, overpayments, admin roles, notifications).
-> It still refuses to run against `DATABASE_URL` (production).
+> It also now covers **real authorization** (a restricted user gets 403 on
+> unassigned jobs and sees only their own), **sales-person assignment +
+> admin filtering**, **primary (client) vs secondary (job) tags**, **job
+> line-item copy on new jobs**, **job-scoped estimate/invoice PDFs**, and
+> **note author + note notifications**. It still refuses to run against
+> `DATABASE_URL` (production).
 
 ---
 

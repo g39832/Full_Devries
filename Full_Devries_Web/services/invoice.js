@@ -112,6 +112,27 @@ function drawSummaryLine(doc, label, value, { gapAfter = 0 } = {}) {
   if (gapAfter) doc.moveDown(gapAfter);
 }
 
+function drawLineItemsTable(doc, items) {
+  const list = (items || []).filter((li) => li && (li.description || Number(li.amount) > 0));
+  if (!list.length) return;
+  const M = doc.page.margins.left;
+  const contentWidth = doc.page.width - M * 2;
+  drawHeading(doc, 'Line Items');
+  let subtotal = 0;
+  list.forEach((li, i) => {
+    const amount = Number(li.amount) || 0;
+    subtotal += amount;
+    const qty = Number(li.quantity) || 1;
+    const line = `${i + 1}. ${String(li.description || 'Item').trim()} — ${qty} × ${formatMoney(li.unit_price)} = ${formatMoney(amount)}`;
+    doc.font('Helvetica').fontSize(10.5).fillColor('#222222')
+      .text(line, M, doc.y, { width: contentWidth, lineGap: 2 });
+  });
+  doc.moveDown(0.3);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827')
+    .text(`Subtotal: ${formatMoney(subtotal)}`, M, doc.y, { width: contentWidth, align: 'right' });
+  doc.moveDown(0.5);
+}
+
 // ======================================================
 // GENERATE INVOICE OR ESTIMATE PDF
 // mode: 'invoice' | 'estimate'
@@ -235,6 +256,11 @@ function generateInvoicePDF(data, mode = 'invoice') {
     }
 
     // ================================================================
+    // LINE ITEMS (job-scoped estimate/invoice breakdown)
+    // ================================================================
+    drawLineItemsTable(doc, data.lineItems);
+
+    // ================================================================
     // SUMMARY — ESTIMATE vs INVOICE are different
     // ================================================================
     if (isEstimate) {
@@ -285,10 +311,13 @@ function generateInvoicePDF(data, mode = 'invoice') {
   });
 }
 
-function buildInvoiceData({ client, latestNote = null, companyProfile = {}, mode = 'invoice' }) {
+function buildInvoiceData({ job, lineItems = [], companyProfile = {}, mode = 'invoice' }) {
   const company = normalizeCompanyProfile(companyProfile, process.env);
-  const workDescription = String(client.scope_of_work || company.defaultScopeOfWork || '').trim() || 'No scope of work provided.';
+  const workDescription = String(job.scope_of_work || company.defaultScopeOfWork || '').trim() || 'No scope of work provided.';
   const prefix = mode === 'estimate' ? 'EST' : 'INV';
+  const total = Number(job.total_due || 0);
+  const paid = Number(job.amount_paid || 0);
+  const balance = job.balance != null ? Number(job.balance) : Math.max(0, total - paid);
 
   return {
     businessName: company.businessName,
@@ -297,16 +326,21 @@ function buildInvoiceData({ client, latestNote = null, companyProfile = {}, mode
     businessEmail: company.businessEmail,
     logoBase64: company.logoBase64 || null,
     date: formatDisplayDate(new Date()),
-    invoiceNumber: `${prefix}-${client.id}-${Date.now()}`,
-    clientName: client.name || '',
-    clientAddress: client.address || '',
-    clientPhone: client.phone || '',
-    clientEmail: client.email || '',
+    invoiceNumber: `${prefix}-${job.id}-${Date.now()}`,
+    clientName: job.client_name || '',
+    clientAddress: job.client_address || '',
+    clientPhone: job.client_phone || '',
+    clientEmail: job.client_email || '',
     workDescription,
-    total: client.total ?? client.total_due ?? 0,
-    paid: client.paid ?? client.amount_paid ?? 0,
-    balance: client.balance ?? 0,
-    latestNote
+    lineItems: (lineItems || []).map((li) => ({
+      description: String(li.description || ''),
+      quantity: Number(li.quantity) || 1,
+      unit_price: Number(li.unit_price) || 0,
+      amount: Number(li.amount) || 0
+    })),
+    total,
+    paid,
+    balance
   };
 }
 

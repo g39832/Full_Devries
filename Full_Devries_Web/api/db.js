@@ -336,6 +336,48 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_activity_log_actor ON activity_log(actor_email);`);
 
   // ==================================================================
+  // V3 — Sales assignment, two tag kinds, line items, note authors,
+  // per-user notifications (additive + idempotent)
+  // ==================================================================
+  await query(`ALTER TABLE tags ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'job';`);
+  await query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS primary_tag_id BIGINT;`);
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sales_user_id BIGINT;`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_jobs_sales_user ON jobs(sales_user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_clients_primary_tag ON clients(primary_tag_id);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS job_line_items (
+      id BIGSERIAL PRIMARY KEY,
+      job_id BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      description TEXT NOT NULL DEFAULT '',
+      quantity DOUBLE PRECISION DEFAULT 1,
+      unit_price DOUBLE PRECISION DEFAULT 0,
+      amount DOUBLE PRECISION DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_job_line_items_job ON job_line_items(job_id);`);
+
+  await query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS author_user_id BIGINT;`);
+  await query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS author_name TEXT DEFAULT '';`);
+  await query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS author_email TEXT DEFAULT '';`);
+
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS recipient_user_id BIGINT;`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_user_id);`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS notification_reads (
+      notification_id BIGINT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+      user_id BIGINT NOT NULL,
+      read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (notification_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(user_id);`);
+
+  // ==================================================================
   // TRIGGERS — keep legacy client finance cache + job balances consistent
   // ==================================================================
   await query(`

@@ -44,6 +44,43 @@ async function resolveAdminEmails() {
 }
 
 /**
+ * Add an email to the stored admin list. This is how "make someone admin"
+ * from the Users tab persists — role on login is derived from this list.
+ */
+async function addAdminEmail(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!normalized) return;
+  await db.schemaReady;
+  const current = await resolveAdminEmails();
+  if (current.includes(normalized)) return;
+  const next = [...current, normalized].join(',');
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES ('admin_emails', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [next]
+  );
+}
+
+/**
+ * Remove an email from the stored admin list. Env-configured admins
+ * (ADMIN_EMAILS) are fixed and cannot be removed from inside the app.
+ */
+async function removeAdminEmail(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!normalized) return;
+  const env = (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (env.includes(normalized)) return;
+  await db.schemaReady;
+  const current = await resolveAdminEmails();
+  const next = current.filter((e) => e !== normalized);
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES ('admin_emails', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [next.join(',')]
+  );
+}
+
+/**
  * Upsert an app user and resolve their role.
  * Only explicitly configured admin emails (ADMIN_EMAILS / admin_emails
  * setting) become admins on login. Users promoted by an admin via the
@@ -64,7 +101,7 @@ async function ensureAppUser({ email, name = '', googleId = null }) {
     ON CONFLICT (email) DO UPDATE SET
       name = CASE WHEN EXCLUDED.name <> '' THEN EXCLUDED.name ELSE app_users.name END,
       google_id = COALESCE(EXCLUDED.google_id, app_users.google_id),
-      role = CASE WHEN app_users.role = 'admin' THEN 'admin' ELSE EXCLUDED.role END,
+      role = EXCLUDED.role,
       last_login_at = CURRENT_TIMESTAMP
     RETURNING id, email, name, role, is_active, google_id
   `, [normalizedEmail, String(name || '').trim(), googleId, role]);
@@ -160,6 +197,9 @@ module.exports = {
   router,
   getSessionUser,
   requireRole,
+  resolveAdminEmails,
+  addAdminEmail,
+  removeAdminEmail,
   ROLE_ADMIN,
   ROLE_USER
 };

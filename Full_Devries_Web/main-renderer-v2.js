@@ -37,6 +37,27 @@ function pctOrDash(value) {
   return value === null || value === undefined || !Number.isFinite(Number(value)) ? "—" : `${Number(value)}%`;
 }
 
+// Re-render the clickable primary-tag chip (+ admin assign select) in place
+// after a tag change. Listener re-attachment is unnecessary: clicks and
+// changes are handled via delegation in setupClientActionButtons (v3).
+function updatePrimaryTagChip() {
+  const row = document.getElementById("clientPrimaryTagRow");
+  if (!row) return;
+  const admin = isAdmin();
+  const client = activeClient;
+  const chip = client && client.primary_tag_id
+    ? `<button type="button" id="clientPrimaryTagChip" class="tag-chip client-primary-tag-chip" data-client-tag-id="${client.primary_tag_id}" title="Click to see all clients with this tag">${escapeHtml(client.primary_tag_name)}</button>`
+    : `<span class="client-meta-value">None</span>`;
+  let selectHtml = "";
+  if (admin) {
+    const current = client ? Number(client.primary_tag_id) : null;
+    const clientTags = (allTagsCache || []).filter((t) => t.kind === 'client');
+    selectHtml = `<select id="clientPrimaryTag" class="client-tag-assign" aria-label="Assign primary tag"><option value="">None</option>` +
+      clientTags.map((t) => `<option value="${t.id}" ${current === Number(t.id) ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("") + `</select>`;
+  }
+  row.innerHTML = chip + selectHtml;
+}
+
 // ============================================================================
 // OPEN CLIENT (modern panel: customer record + jobs + aggregate finance)
 // ============================================================================
@@ -52,6 +73,8 @@ async function openClient(id) {
 
     const jobs = await window.api.listJobs(id);
     const fin = aggregateClientFinance(jobs);
+    const salesNames = [...new Set((jobs || []).map((j) => j.sales_person_name).filter(Boolean))];
+    const salesSummary = salesNames.length ? salesNames.join(", ") : "";
 
     const [fName, ...rest] = (client.name || "").split(" ");
     const lName = rest.join(" ");
@@ -76,19 +99,47 @@ async function openClient(id) {
         </header>
 
         <div class="roofing-grid panel-grid">
-          <label>First Name</label>
-          <input type="text" id="p-fname" value="${escapeHtml(fName || "")}">
-          <label>Last Name</label>
-          <input type="text" id="p-lname" value="${escapeHtml(lName || "")}">
-          <label>Phone Number</label>
-          <input type="tel" id="p-phone" value="${escapeHtml(client.phone || "")}">
-          <label>Email Address</label>
-          <input type="email" id="p-email" value="${escapeHtml(client.email || "")}">
-          <label>Primary Address</label>
-          <div class="field-stack">
-            <input type="text" id="p-address" value="${escapeHtml(client.address || "")}">
-            ${client.address ? `<a href="${mapsLink}" target="_blank" class="maps-link">📍 Open in Google Maps</a>` : ""}
+          <!-- Client meta strip: primary tag + address + sales summary -->
+          <div class="panel-section panel-full-span client-meta-strip">
+            <div class="client-meta-item">
+              <span class="client-meta-label">Primary Tag</span>
+              <div class="client-primary-tag-row" id="clientPrimaryTagRow">
+                ${client.primary_tag_id
+                  ? `<button type="button" id="clientPrimaryTagChip" class="tag-chip client-primary-tag-chip" data-client-tag-id="${client.primary_tag_id}" title="Click to see all clients with this tag">${escapeHtml(client.primary_tag_name)}</button>`
+                  : `<span class="client-meta-value">None</span>`}
+                ${isAdmin()
+                  ? `<select id="clientPrimaryTag" class="client-tag-assign" aria-label="Assign primary tag"><option value="">Assign…</option></select>`
+                  : ""}
+              </div>
+            </div>
+            <div class="client-meta-item">
+              <span class="client-meta-label">Address</span>
+              <span class="client-meta-value">${escapeHtml(client.address || "—")}</span>
+            </div>
+            <div class="client-meta-item">
+              <span class="client-meta-label">Sales</span>
+              <span class="client-meta-value">${escapeHtml(salesSummary || "Unassigned")}</span>
+            </div>
           </div>
+
+          <details class="panel-collapse panel-full-span" open>
+            <summary>Client Information</summary>
+            <div class="roofing-grid panel-grid panel-inner-grid">
+              <label>First Name</label>
+              <input type="text" id="p-fname" value="${escapeHtml(fName || "")}">
+              <label>Last Name</label>
+              <input type="text" id="p-lname" value="${escapeHtml(lName || "")}">
+              <label>Phone Number</label>
+              <input type="tel" id="p-phone" value="${escapeHtml(client.phone || "")}">
+              <label>Email Address</label>
+              <input type="email" id="p-email" value="${escapeHtml(client.email || "")}">
+              <label>Primary Address</label>
+              <div class="field-stack">
+                <input type="text" id="p-address" value="${escapeHtml(client.address || "")}">
+                ${client.address ? `<a href="${mapsLink}" target="_blank" class="maps-link">📍 Open in Google Maps</a>` : ""}
+              </div>
+            </div>
+          </details>
 
           <!-- ===== JOBS ===== -->
           <div class="panel-section panel-full-span">
@@ -107,16 +158,19 @@ async function openClient(id) {
             </div>
             <div id="newJobDetails" style="display:none; margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
               <input type="text" id="newJobAddress" placeholder="Job address" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
+              ${isAdmin() ? `<select id="newJobSales" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;"><option value="">Sales person: unassigned</option></select>` : ""}
               <input type="text" id="newJobTotal" placeholder="Total due ($)" inputmode="decimal" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
               <input type="text" id="newJobCost" placeholder="Job cost ($)" inputmode="decimal" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
               <input type="text" id="newJobScope" placeholder="Scope of work" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff; grid-column:1/-1;">
+              <select id="newJobCopyFrom" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff; grid-column:1/-1;"><option value="">Copy scope & pricing from… (optional)</option></select>
             </div>
           </div>
 
           <!-- ===== CLIENT FINANCE (aggregated across jobs) ===== -->
+          <details class="panel-collapse panel-full-span">
+          <summary>Financial Overview</summary>
           <div class="panel-section panel-full-span">
             <div class="panel-section-header">
-              <h3>Financial Overview</h3>
               <span class="panel-section-note">Aggregated across all ${jobs.length} job${jobs.length === 1 ? "" : "s"}. Open a job for payment/expense entry.</span>
             </div>
             <div class="panel-balance-row">
@@ -127,16 +181,20 @@ async function openClient(id) {
                 <span>Overpayment/Credit</span>
                 <strong style="${fin.overpayment > 0 ? "color:#16a34a;" : ""}">$${money(fin.overpayment)}</strong>
               </div>
+              ${isAdmin() ? `
               <div class="panel-metric"><span>Expenses</span><strong>$${money(fin.expenses)}</strong></div>
               <div class="panel-metric"><span>Profit</span><strong>$${money(fin.profit)}</strong></div>
               <div class="panel-metric"><span>Margin %</span><strong>${pctOrDash(fin.margin_pct)}</strong></div>
+              ` : ""}
             </div>
             ${fin.overpayment > 0 ? `<p style="color:#16a34a; font-size:0.85rem; margin:8px 0 0;">✔ Balance is paid in full; the excess is held as a credit (never shown as a negative balance).</p>` : ""}
           </div>
+          </details>
 
+          <details class="panel-collapse panel-full-span">
+          <summary>Client Notes</summary>
           <div id="notes-section" class="notes-section panel-full-span">
             <div class="panel-section-header">
-              <h3>Client Notes</h3>
               <span class="panel-section-note">Notes about the customer. Job-specific notes live inside each job.</span>
             </div>
             <div id="notes-list" class="notes-list"></div>
@@ -145,13 +203,12 @@ async function openClient(id) {
               <button id="add-note-btn" class="btn-primary add-note-btn" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Add Note</button>
             </div>
           </div>
+          </details>
 
           <div class="panel-actions panel-full-span">
-            <button id="estimateClientBtn" class="btn-primary" style="background:linear-gradient(135deg,#0f9b58,#27c97a); flex:2;">Download Estimate</button>
-            <button id="invoiceClientBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); flex:2;">Download Invoice</button>
             <button id="reviewClientBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; flex:2;">Send Google Review</button>
             <button id="saveClientBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); flex:2;">Save Changes</button>
-            <button id="deleteClientBtn" class="btn-primary" style="background:#4a5568; flex:1;">Delete Client</button>
+            ${isAdmin() ? `<button id="deleteClientBtn" class="btn-primary" style="background:#4a5568; flex:1;">Delete Client</button>` : ""}
             <button id="printClientBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; flex:1;">Print</button>
           </div>
         </div>
@@ -185,45 +242,107 @@ async function openClient(id) {
 // ============================================================================
 // RENDER JOBS INSIDE CLIENT PANEL
 // ============================================================================
+let salesUsersCache = null;
+async function getSalesUsers() {
+  if (salesUsersCache) return salesUsersCache;
+  try { salesUsersCache = await window.api.adminUsers(); } catch { salesUsersCache = []; }
+  return salesUsersCache;
+}
+
 function renderClientJobs(clientId, jobs) {
   const container = document.getElementById("clientJobsList");
   if (!container) return;
 
   if (!jobs || jobs.length === 0) {
-    container.innerHTML = `<div style="color:#888; font-size:13px;">No jobs yet. Add one above.</div>`;
+    container.innerHTML = `<div style="color:#888; font-size:13px;">No jobs yet. Add one below.</div>`;
     return;
   }
 
   container.innerHTML = jobs.map((job) => {
     const color = STATUS_COLORS[job.status] || "#007bff";
     const f = job.finance || {};
+    const noteCount = Number(job.note_count || 0);
+    const sales = job.sales_person_name || "";
+    const created = job.created_at ? new Date(job.created_at).toLocaleDateString("en-US") : "";
     const tagChips = (job.tags || []).map((t) =>
-      `<span class="job-tag" data-tag-id="${t.id}">${escapeHtml(t.name)}</span>`
+      `<button type="button" class="job-tag" data-tag-id="${t.id}">${escapeHtml(t.name)}</button>`
     ).join("");
+    const salesCell = isAdmin()
+      ? `<select class="sales-assign" data-sales-job="${job.id}" title="Assign sales person" style="padding:4px 6px; border-radius:6px; border:1px solid #d0d7de; font-size:0.8rem; color:#111827; background:#fff;"><option value="">Unassigned</option></select>`
+      : `<span class="sales-chip">${escapeHtml(sales || "Unassigned")}</span>`;
     return `
       <div class="job-row" data-job-id="${job.id}">
-        <div class="job-row-main" style="cursor:pointer;" data-open-job="${job.id}">
+        <div class="job-row-main" data-open-job="${job.id}" style="cursor:pointer;">
           <div class="job-row-title">
             <strong>${escapeHtml(job.name || "Untitled job")}</strong>
             <span class="job-status-dot" style="background:${color};"></span><span style="color:${color}; font-size:0.8rem;">${escapeHtml(job.status || "")}</span>
           </div>
           <div class="job-row-meta">
-            ${f.total_due ? `Total <strong>$${money(f.total_due)}</strong>` : ""}
-            ${f.balance_due > 0 ? ` · Balance <strong style="color:#c2410c;">$${money(f.balance_due)}</strong>` : (f.paid > 0 ? ` · <span style="color:#16a34a;">Paid in full</span>` : "")}
-            ${f.overpayment > 0 ? ` · <span style="color:#16a34a;">Credit $${money(f.overpayment)}</span>` : ""}
+            <span>👤 ${escapeHtml(sales || "Unassigned")}</span>
+            ${created ? `<span>📅 ${created}</span>` : ""}
+            ${f.total_due ? `<span>Total <strong>$${money(f.total_due)}</strong></span>` : ""}
+            ${f.balance_due > 0 ? `<span style="color:#c2410c;">Balance <strong>$${money(f.balance_due)}</strong></span>` : (f.paid > 0 ? `<span style="color:#16a34a;">Paid in full</span>` : "")}
+            ${f.overpayment > 0 ? `<span style="color:#16a34a;">Credit $${money(f.overpayment)}</span>` : ""}
+            ${noteCount > 0 ? `<span>📝 ${noteCount} note${noteCount === 1 ? "" : "s"}</span>` : ""}
           </div>
           ${tagChips ? `<div class="job-tags-row">${tagChips}</div>` : ""}
         </div>
-        <button type="button" class="job-open-btn" data-open-job="${job.id}">Open</button>
+        <div class="job-row-actions">
+          ${isAdmin() ? salesCell : ""}
+          <button type="button" class="job-open-btn" data-open-job="${job.id}">Open</button>
+          <button type="button" class="job-duplicate-btn" data-dup-job="${job.id}">Duplicate</button>
+        </div>
       </div>
     `;
   }).join("");
+
+  populateSalesAssigns(jobs);
+}
+
+async function populateSalesAssigns(jobs) {
+  if (!isAdmin()) return;
+  try {
+    const users = await getSalesUsers();
+    document.querySelectorAll(".sales-assign").forEach((sel) => {
+      const jobId = Number(sel.dataset.salesJob);
+      const job = jobs.find((j) => Number(j.id) === jobId);
+      const current = job ? Number(job.sales_user_id) : null;
+      sel.innerHTML = `<option value="">Unassigned</option>` + users.map((u) =>
+        `<option value="${u.id}" ${current === Number(u.id) ? "selected" : ""}>${escapeHtml(u.name || u.email)}</option>`
+      ).join("");
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 // ============================================================================
 // CLIENT PANEL ACTIONS
 // ============================================================================
-function setupClientPanelActions(clientId) {
+async function duplicateJob(sourceJob) {
+  try {
+    const items = await window.api.listLineItems(sourceJob.id);
+    const result = await window.api.addJob(sourceJob.client_id, {
+      name: `${sourceJob.name || "Job"} (copy)`,
+      status: "Pending Approval",
+      address: sourceJob.address || "",
+      scope_of_work: sourceJob.scope_of_work || "",
+      job_cost: sourceJob.job_cost || 0,
+      total_due: sourceJob.total_due || 0,
+      sales_user_id: sourceJob.sales_user_id,
+      line_items: (items || []).map((i) => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price, amount: i.amount }))
+    });
+    showToast("Job duplicated — scope and pricing copied", "success");
+    await openJob(result.job.id);
+    refreshNotificationBadge();
+    return result;
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || "Failed to duplicate job", "error");
+  }
+}
+
+async function setupClientPanelActions(clientId) {
   const jobsList = document.getElementById("clientJobsList");
   const addJobBtn = document.getElementById("addJobBtn");
   const newJobName = document.getElementById("newJobName");
@@ -234,16 +353,71 @@ function setupClientPanelActions(clientId) {
   const newJobAddress = document.getElementById("newJobAddress");
   const newJobScope = document.getElementById("newJobScope");
   const newJobStatus = document.getElementById("newJobStatus");
+  const newJobSales = document.getElementById("newJobSales");
+  const newJobCopyFrom = document.getElementById("newJobCopyFrom");
+  const clientPrimaryTag = document.getElementById("clientPrimaryTag");
+
+  const jobs = await window.api.listJobs(clientId);
+
+  // Admin-only: sales-person options + primary client tag.
+  if (isAdmin()) {
+    const users = await getSalesUsers();
+    if (newJobSales) {
+      newJobSales.innerHTML = `<option value="">Sales person: unassigned</option>` + users.map((u) => `<option value="${u.id}">${escapeHtml(u.name || u.email)}</option>`).join("");
+    }
+    if (clientPrimaryTag) {
+      const tags = await window.api.listTags();
+      allTagsCache = tags;
+      const clientTags = tags.filter((t) => t.kind === 'client');
+      const current = activeClient ? Number(activeClient.primary_tag_id) : null;
+      clientPrimaryTag.innerHTML = `<option value="">None</option>` + clientTags.map((t) => `<option value="${t.id}" ${current === Number(t.id) ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("");
+      // Change handled via delegation in setupClientActionButtons (v3).
+    }
+  }
+
+  // Copy-from prefill (scope + pricing).
+  if (newJobCopyFrom) {
+    newJobCopyFrom.innerHTML = `<option value="">Copy scope & pricing from… (optional)</option>` + jobs.map((j) => `<option value="${j.id}">${escapeHtml(j.name || "Job")}</option>`).join("");
+    newJobCopyFrom.addEventListener("change", () => {
+      const src = jobs.find((j) => Number(j.id) === Number(newJobCopyFrom.value));
+      if (!src) return;
+      if (newJobScope && !newJobScope.value.trim()) newJobScope.value = src.scope_of_work || "";
+      if (newJobAddress && !newJobAddress.value.trim()) newJobAddress.value = src.address || "";
+      if (newJobTotal && !parseMoney(newJobTotal.value)) newJobTotal.value = src.total_due ? formatMoney(src.total_due) : "";
+      if (newJobCost && !parseMoney(newJobCost.value)) newJobCost.value = src.job_cost ? formatMoney(src.job_cost) : "";
+    });
+  }
 
   if (jobsList) {
-    jobsList.addEventListener("click", (e) => {
+    jobsList.addEventListener("click", async (e) => {
       const tagChip = e.target.closest(".job-tag[data-tag-id]");
       if (tagChip) {
         toggleTagFilter(Number(tagChip.dataset.tagId));
         return;
       }
+      const dupBtn = e.target.closest("[data-dup-job]");
+      if (dupBtn) {
+        const src = jobs.find((j) => Number(j.id) === Number(dupBtn.dataset.dupJob));
+        if (src) await duplicateJob(src);
+        return;
+      }
       const openBtn = e.target.closest("[data-open-job]");
       if (openBtn) openJob(Number(openBtn.dataset.openJob));
+    });
+    jobsList.addEventListener("change", async (e) => {
+      const sel = e.target.closest(".sales-assign");
+      if (!sel) return;
+      const jobId = Number(sel.dataset.salesJob);
+      try {
+        await window.api.setJobSalesUser(jobId, sel.value || null);
+        showToast("Sales person assigned", "success");
+        const refreshed = await window.api.listJobs(clientId);
+        renderClientJobs(clientId, refreshed);
+        await refreshList();
+      } catch (err) {
+        console.error(err);
+        showToast(err.message || "Failed to assign sales person", "error");
+      }
     });
   }
 
@@ -263,14 +437,22 @@ function setupClientPanelActions(clientId) {
       addJobBtn.disabled = true;
       addJobBtn.textContent = "Adding...";
       try {
-        await window.api.addJob(clientId, {
+        const copyId = newJobCopyFrom ? Number(newJobCopyFrom.value) : 0;
+        let lineItems = [];
+        if (copyId) {
+          lineItems = (await window.api.listLineItems(copyId)).map((i) => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price, amount: i.amount }));
+        }
+        const payload = {
           name,
           status: newJobStatus ? newJobStatus.value : "Pending Approval",
           address: newJobAddress ? newJobAddress.value.trim() : "",
           total_due: newJobTotal ? parseMoney(newJobTotal.value) : 0,
           job_cost: newJobCost ? parseMoney(newJobCost.value) : 0,
-          scope_of_work: newJobScope ? newJobScope.value.trim() : ""
-        });
+          scope_of_work: newJobScope ? newJobScope.value.trim() : "",
+          line_items: lineItems
+        };
+        if (isAdmin() && newJobSales && newJobSales.value) payload.sales_user_id = Number(newJobSales.value);
+        await window.api.addJob(clientId, payload);
         showToast("Job added", "success");
         newJobName.value = "";
         if (newJobAddress) newJobAddress.value = "";
@@ -278,8 +460,8 @@ function setupClientPanelActions(clientId) {
         if (newJobCost) newJobCost.value = "";
         if (newJobScope) newJobScope.value = "";
         refreshNotificationBadge();
-        const jobs = await window.api.listJobs(clientId);
-        renderClientJobs(clientId, jobs);
+        const refreshed = await window.api.listJobs(clientId);
+        renderClientJobs(clientId, refreshed);
         await refreshList();
       } catch (err) {
         console.error(err);
@@ -327,6 +509,23 @@ async function openJob(jobId, opts = {}) {
         </header>
 
         <div class="roofing-grid panel-grid">
+          <div class="panel-section panel-full-span client-meta-strip">
+            <div class="client-meta-item">
+              <span class="client-meta-label">Client</span>
+              <span class="client-meta-value">${escapeHtml(job.client_name || "")}</span>
+            </div>
+            <div class="client-meta-item">
+              <span class="client-meta-label">Sales Person</span>
+              ${isAdmin()
+                ? `<select id="jobSalesSelect" style="padding:6px 8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;"><option value="">Unassigned</option></select>`
+                : `<span class="client-meta-value">${escapeHtml(job.sales_person_name || "Unassigned")}</span>`}
+            </div>
+            <div class="client-meta-item">
+              <span class="client-meta-label">Created</span>
+              <span class="client-meta-value">${job.created_at ? new Date(job.created_at).toLocaleDateString("en-US") : "—"}</span>
+            </div>
+          </div>
+
           <div class="panel-full-span">
             <label>Job Status</label>
             <select id="jobStatusSelect" style="width:100%; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
@@ -349,6 +548,26 @@ async function openJob(jobId, opts = {}) {
               <span class="panel-section-note">Pulled onto invoices and estimates. Independent from notes.</span>
             </div>
             <textarea id="jobScopeInput" rows="5" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid #d0d7de; font-size:0.95rem; resize:vertical; box-sizing:border-box; font-family:inherit; color:#111827; background:#fff;">${escapeHtml(job.scope_of_work || "")}</textarea>
+          </div>
+
+          <!-- ===== ESTIMATE / INVOICE (line items) ===== -->
+          <div class="panel-section panel-full-span">
+            <div class="panel-section-header">
+              <h3>Estimate / Invoice</h3>
+              <span class="panel-section-note">Line items and pricing for this job. Saved independently per job.</span>
+            </div>
+            <div id="jobLineItems" class="panel-list"></div>
+            <div class="panel-inline-row" style="margin-top:8px;">
+              <input id="liDesc" type="text" placeholder="Description" style="flex:2; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
+              <input id="liQty" type="text" inputmode="decimal" placeholder="Qty" style="width:64px; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
+              <input id="liPrice" type="text" inputmode="decimal" placeholder="Unit $" style="width:96px; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
+              <button id="addLineItemBtn" type="button" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; box-shadow:none;">Add</button>
+            </div>
+            <div class="panel-inline-row" style="margin-top:8px;">
+              <button id="saveLineItemsBtn" type="button" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Save Line Items</button>
+              <button id="jobEstimateBtn" type="button" class="btn-primary" style="background:linear-gradient(135deg,#0f9b58,#27c97a);">Download Estimate</button>
+              <button id="jobInvoiceBtn" type="button" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Download Invoice</button>
+            </div>
           </div>
 
           <!-- ===== TAGS ===== -->
@@ -385,7 +604,7 @@ async function openJob(jobId, opts = {}) {
           <div class="panel-section panel-full-span">
             <div class="panel-section-header">
               <h3>Job Finance</h3>
-              <span class="panel-section-note">Amount Due − Payments = Balance Due · Revenue − Expenses = Profit · Profit ÷ Revenue = Margin</span>
+              <span class="panel-section-note">${isAdmin() ? "Amount Due − Payments = Balance Due · Revenue − Expenses = Profit · Profit ÷ Revenue = Margin" : "Amount Due − Payments = Balance Due"}</span>
             </div>
             <div class="panel-inline-row">
               <input type="text" id="jobTotalInput" placeholder="Amount Due" inputmode="decimal" class="panel-money-input" value="${f.total_due ? formatMoney(f.total_due) : ""}">
@@ -399,9 +618,11 @@ async function openJob(jobId, opts = {}) {
                 <span>Overpayment/Credit</span>
                 <strong id="jobOverpaymentDisplay" style="${f.overpayment > 0 ? "color:#16a34a;" : ""}">$${money(f.overpayment)}</strong>
               </div>
+              ${isAdmin() ? `
               <div class="panel-metric"><span>Expenses</span><strong id="jobExpensesDisplay">$${money(f.expenses)}</strong></div>
               <div class="panel-metric"><span>Profit</span><strong id="jobProfitDisplay">$${money(f.profit)}</strong></div>
               <div class="panel-metric"><span>Margin %</span><strong id="jobMarginDisplay">${pctOrDash(f.margin_pct)}</strong></div>
+              ` : ""}
             </div>
 
             <div class="panel-inline-row" style="margin-top:10px;">
@@ -411,6 +632,7 @@ async function openJob(jobId, opts = {}) {
               ${isAdmin() ? `<button id="adminAdjustBtn" class="btn-primary" style="background:rgba(170,27,27,0.85); color:white;">Adjust (Admin)</button>` : ""}
             </div>
 
+            ${isAdmin() ? `
             <div class="panel-inline-row" style="margin-top:8px;">
               <select id="expCategorySelect" style="flex:1; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;" ${locked ? "disabled" : ""}>
                 ${["Labor", "Marketing", "Software", "Contractors", "Operations", "Taxes", "Misc"].map((c) => `<option value="${c}">${c}</option>`).join("")}
@@ -419,10 +641,11 @@ async function openJob(jobId, opts = {}) {
               <input type="text" id="expNotesInput" placeholder="Expense note" style="flex:2; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;" ${locked ? "disabled" : ""}>
               <button id="addExpenseJobBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; box-shadow:none;" ${locked ? "disabled" : ""}>Add Expense</button>
             </div>
+            ` : ""}
 
-            <div id="jobExpensesList" class="panel-list" style="margin-top:10px;"></div>
+            ${isAdmin() ? `<div id="jobExpensesList" class="panel-list" style="margin-top:10px;"></div>` : ""}
             <div id="jobPaymentsList" class="panel-list" style="margin-top:10px;"></div>
-            <div id="jobAdjustmentsList" class="panel-list" style="margin-top:10px;"></div>
+            ${isAdmin() ? `<div id="jobAdjustmentsList" class="panel-list" style="margin-top:10px;"></div>` : ""}
           </div>
 
           <!-- ===== JOB NOTES ===== -->
@@ -465,6 +688,8 @@ async function openJob(jobId, opts = {}) {
     applyMoneyInputBehavior(document.getElementById("jobPaymentInput"));
     applyMoneyInputBehavior(document.getElementById("expAmountInput"));
     setupJobTags(job);
+    setupJobLineItems(job);
+    setupJobSalesSelect(job);
     setupJobPhotos(job.id);
     setupJobNotesSection(job.id);
     setupJobFinance(job);
@@ -863,9 +1088,11 @@ async function setupJobFinance(job) {
     });
   }
 
-  loadJobExpenses(jobId);
   loadJobPayments(jobId);
-  if (isAdmin()) loadJobAdjustments(jobId);
+  if (isAdmin()) {
+    loadJobExpenses(jobId);
+    loadJobAdjustments(jobId);
+  }
 }
 
 // ============================================================================
@@ -1103,6 +1330,104 @@ function openAdjustmentModal(job) {
   });
 
   refreshType();
+}
+
+// ============================================================================
+// JOB LINE ITEMS (estimate/invoice) + SALES PERSON
+// ============================================================================
+async function setupJobLineItems(job) {
+  const container = document.getElementById("jobLineItems");
+  if (!container) return;
+  const addBtn = document.getElementById("addLineItemBtn");
+  const saveBtn = document.getElementById("saveLineItemsBtn");
+  const estBtn = document.getElementById("jobEstimateBtn");
+  const invBtn = document.getElementById("jobInvoiceBtn");
+
+  let items = Array.isArray(job.line_items) && job.line_items.length
+    ? job.line_items.slice()
+    : await window.api.listLineItems(job.id);
+
+  function render() {
+    if (!items.length) {
+      container.innerHTML = `<div style="color:#888; font-size:13px;">No line items yet. Add them below.</div>`;
+      return;
+    }
+    const total = items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    container.innerHTML = items.map((li, idx) => `
+      <div class="job-finance-row">
+        <span style="flex:2;">${escapeHtml(li.description || "Item")}</span>
+        <span>${Number(li.quantity) || 1} × $${money(li.unit_price)}</span>
+        <span style="font-weight:700;">$${money(li.amount)}</span>
+        <button data-del-line="${idx}" style="background:none; border:none; color:#e5484d; cursor:pointer; font-size:0.9rem;">×</button>
+      </div>
+    `).join("") + `<div class="job-finance-row" style="justify-content:flex-end; font-weight:700;">Total: $${money(total)}</div>`;
+    container.querySelectorAll("[data-del-line]").forEach((btn) => {
+      btn.addEventListener("click", () => { items.splice(Number(btn.dataset.delLine), 1); render(); });
+    });
+  }
+  render();
+
+  if (addBtn) {
+    const desc = document.getElementById("liDesc");
+    const qty = document.getElementById("liQty");
+    const price = document.getElementById("liPrice");
+    addBtn.addEventListener("click", () => {
+      const d = desc ? desc.value.trim() : "";
+      const q = qty ? parseMoney(qty.value) : 1;
+      const p = price ? parseMoney(price.value) : 0;
+      if (!d) { showToast("Description is required", "error"); return; }
+      items.push({ description: d, quantity: q || 1, unit_price: p, amount: (q || 1) * p });
+      if (desc) desc.value = "";
+      if (qty) qty.value = "";
+      if (price) price.value = "";
+      render();
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      try {
+        const result = await window.api.saveLineItems(job.id, items);
+        items = result.items || [];
+        showToast("Line items saved", "success");
+        render();
+        const updated = await window.api.getJob(job.id);
+        if (updated.job && updated.job.finance) {
+          const el = document.getElementById("jobDueDisplay"); if (el) el.textContent = "$" + money(updated.job.finance.total_due);
+          const bal = document.getElementById("jobBalanceDisplay"); if (bal) bal.textContent = "$" + money(updated.job.finance.balance_due);
+        }
+        refreshList();
+      } catch (err) {
+        console.error(err);
+        showToast(err.message || "Failed to save line items", "error");
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save Line Items";
+      }
+    });
+  }
+
+  if (estBtn) estBtn.addEventListener("click", async () => { try { await window.api.sendJobEstimate(job.id); showToast("Estimate downloaded", "success"); } catch (err) { showToast(err.message || "Failed to generate estimate", "error"); } });
+  if (invBtn) invBtn.addEventListener("click", async () => { try { await window.api.sendJobInvoice(job.id); showToast("Invoice downloaded", "success"); } catch (err) { showToast(err.message || "Failed to generate invoice", "error"); } });
+}
+
+async function setupJobSalesSelect(job) {
+  const sel = document.getElementById("jobSalesSelect");
+  if (!sel || !isAdmin()) return;
+  const users = await getSalesUsers();
+  sel.innerHTML = `<option value="">Unassigned</option>` + users.map((u) => `<option value="${u.id}" ${Number(job.sales_user_id) === Number(u.id) ? "selected" : ""}>${escapeHtml(u.name || u.email)}</option>`).join("");
+  sel.addEventListener("change", async () => {
+    try {
+      await window.api.setJobSalesUser(job.id, sel.value || null);
+      showToast("Sales person saved", "success");
+      refreshList();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Failed to assign sales person", "error");
+    }
+  });
 }
 
 // ============================================================================

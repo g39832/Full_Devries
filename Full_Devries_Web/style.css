@@ -221,9 +221,19 @@ button.btn-primary:hover {
 .search-bar input {
   width: 100%;
   padding: 10px;
-  border-radius: 6px;
-  border: none;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   outline: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f7ff;
+}
+.search-bar input::placeholder {
+  color: rgba(230, 235, 255, 0.72);
+}
+.search-bar input:focus {
+  border-color: #7fdbff;
+  box-shadow: 0 0 0 3px rgba(127, 219, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .search-bar {
@@ -239,6 +249,27 @@ button.btn-primary:hover {
   position: static;
   background: transparent;
   padding-bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.status-count-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.status-count-chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.status-count-chip.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #7fdbff;
+  box-shadow: 0 0 0 1px rgba(127, 219, 255, 0.6);
 }
 
 /* =========================
@@ -1575,6 +1606,176 @@ button.btn-primary:hover {
   border-color: #2f80ed;
 }
 
+/* View toggle (Jobs | Clients) */
+.view-toggle {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+.view-toggle-btn {
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.view-toggle-btn.active {
+  background: #2f80ed;
+  color: #fff;
+}
+
+/* Job status filter tabs (front page dashboard) */
+.status-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.job-status-tab {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cfd8ef;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.job-status-tab:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.job-status-tab.active {
+  background: #2f80ed;
+  color: #fff;
+  border-color: #2f80ed;
+}
+
+/* Job dashboard cards */
+.job-dash-card {
+  padding: 12px 14px;
+}
+.job-dash-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.job-dash-client {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #7fdbff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  min-height: 24px;
+}
+.job-dash-client:hover {
+  text-decoration: underline;
+}
+.job-dash-status {
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.job-dash-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.job-dash-sales {
+  font-size: 0.8rem;
+  color: #cfe4ff;
+}
+.job-dash-fin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #9ad0ff;
+}
+.job-dash-tag {
+  background: rgba(127, 217, 255, 0.12);
+  border: 1px solid rgba(127, 217, 255, 0.25);
+  color: #9ad0ff;
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.job-dash-tag:hover {
+  background: rgba(127, 217, 255, 0.25);
+}
+.job-dash-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Grouped front page: clients with their jobs nested inside */
+.grouped-client {
+  margin: 0 0 14px;
+  padding: 0;
+}
+.grouped-client-head {
+  cursor: pointer;
+  margin-bottom: 0;
+  padding-bottom: 12px;
+}
+.grouped-client-head::after {
+  display: none;
+}
+.grouped-client-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.grouped-client-head .client-meta {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.62);
+  margin-top: 4px;
+}
+.client-primary-tag-mini {
+  display: inline-block;
+  background: rgba(162, 155, 254, 0.22);
+  border: 1px solid rgba(162, 155, 254, 0.5);
+  color: #c4b5fd;
+  border-radius: 20px;
+  padding: 1px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.grouped-jobs {
+  margin: 0 0 8px 14px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(127, 219, 255, 0.2);
+}
+.grouped-jobs .client-card {
+  margin-bottom: 6px;
+}
+.grouped-jobs .client-card::after {
+  display: none;
+}
+.grouped-orphan {
+  margin-top: 12px;
+}
+
 /* Job tags (inside panels) */
 .job-tags-row {
   display: flex;
@@ -1813,5 +2014,165 @@ button.btn-primary:hover {
   .notifications-panel,
   .settings-modal {
     display: none !important;
+  }
+}
+
+/* ================================================================
+   V3 — Client/Job workspace, tags, sales, line items, disclosure
+   ================================================================ */
+.client-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.client-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+.client-meta-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.client-meta-value {
+  font-size: 0.9rem;
+  color: #e7edf7;
+  font-weight: 600;
+}
+.sales-chip {
+  display: inline-block;
+  background: rgba(47, 128, 237, 0.16);
+  border: 1px solid rgba(47, 128, 237, 0.3);
+  color: #9ad0ff;
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+}
+.client-primary-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.client-primary-tag-chip {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+}
+.client-tag-assign {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #e7edf7;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.85rem;
+  max-width: 180px;
+}
+.client-tag-assign option {
+  color: #111827;
+  background: #fff;
+}
+.client-filter-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 4px;
+  padding: 6px 10px;
+  background: rgba(47, 128, 237, 0.16);
+  border: 1px solid rgba(47, 128, 237, 0.3);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #cfe4ff;
+}
+.client-filter-notice-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.client-filter-clear {
+  background: transparent;
+  border: none;
+  color: #9ad0ff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+.client-filter-clear:hover { color: #fff; }
+.job-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.job-duplicate-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e7edf7;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.job-row-meta span { margin-right: 12px; white-space: nowrap; }
+.job-tag { font-family: inherit; }
+.tag-chip-clear {
+  background: rgba(232, 72, 77, 0.2);
+  border-color: rgba(232, 72, 77, 0.4);
+  color: #ffb4b6;
+}
+
+/* Collapsible sections (progressive disclosure) */
+.panel-collapse { margin-top: 6px; }
+.panel-collapse > summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 1rem;
+  color: #fff;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  list-style-position: inside;
+}
+.panel-collapse > summary:hover { color: #7fd9ff; }
+.panel-inner-grid { margin-top: 12px; }
+
+/* Comfortable tap targets + no horizontal overflow on phones */
+@media (max-width: 768px) {
+  html, body { overflow-x: hidden; }
+  .job-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .job-row-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .job-row-meta span {
+    display: inline-block;
+    margin: 2px 8px 2px 0;
+    white-space: normal;
+  }
+  .job-open-btn, .job-duplicate-btn, .sales-assign, .tag-chip, .job-tag, .client-filter-clear, .job-status-tab, .job-dash-tag, .job-dash-client {
+    min-height: 40px;
+  }
+  .client-meta-item { min-width: 100%; }
+  .panel-inline-row { flex-wrap: wrap; }
+  #projectPanel input, #projectPanel select, #projectPanel textarea {
+    max-width: 100%;
   }
 }

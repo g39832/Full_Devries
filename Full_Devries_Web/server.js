@@ -74,6 +74,13 @@ function requireApiAuth(req, res, next) {
   return res.status(401).json({ success: false, error: 'Unauthorized' });
 }
 
+function requireAdminPage(req, res, next) {
+  if (!isAuthenticated(req)) return res.redirect('/');
+  const user = getSessionUser(req);
+  if (!user || user.role !== 'admin') return res.redirect('/main');
+  return next();
+}
+
 // ===== API REQUEST TIMING =====
 app.use('/api', (req, res, next) => {
   const start = Date.now();
@@ -213,6 +220,28 @@ app.use('/api/notes', notesRoutes);
 // Expose role helper for other modules
 app.locals.requireRole = requireRole;
 
+// ===== PAGE ROUTES (registered before static so auth gates win) =====
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+app.get('/main', (req, res) => {
+  if (!isAuthenticated(req)) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'main.html'));
+});
+
+app.get('/finance', requireAdminPage, (req, res) => {
+  res.sendFile(path.join(__dirname, 'finance.html'));
+});
+
+app.get('/main.html', requirePageAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'main.html'));
+});
+
+app.get('/finance.html', requireAdminPage, (req, res) => {
+  res.sendFile(path.join(__dirname, 'finance.html'));
+});
+
 // ===== BLOCK SENSITIVE FILES FROM STATIC ACCESS =====
 const blockedStaticPaths = [
   /^\/api\//i,
@@ -248,29 +277,6 @@ app.use(express.static(path.join(__dirname), {
     res.setHeader('Cache-Control', 'public, max-age=3600');
   }
 }));
-
-// ===== PAGE ROUTES =====
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'login.html'));
-});
-
-app.get('/main', (req, res) => {
-  if (!isAuthenticated(req)) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'main.html'));
-});
-
-app.get('/finance', (req, res) => {
-  if (!isAuthenticated(req)) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'finance.html'));
-});
-
-app.get('/main.html', requirePageAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'main.html'));
-});
-
-app.get('/finance.html', requirePageAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'finance.html'));
-});
 
 // ===== API ERROR HANDLER =====
 app.use((err, req, res, next) => {

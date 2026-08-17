@@ -1,8 +1,9 @@
 const express = require('express');
 const db = require('./db');
-const { asyncHandler } = require('./request-utils');
+const { asyncHandler, parseIntField } = require('./request-utils');
 const { buildInvoiceData, generateInvoicePDF } = require('../services/invoice');
 const { normalizeCompanyProfile } = require('../services/company-profile');
+const { requireJobAccess, requireClientAccess } = require('./authz');
 
 const router = express.Router();
 
@@ -20,54 +21,46 @@ async function readStoredCompanyProfile() {
   }
 }
 
-async function fetchLatestNote(clientId) {
-  await db.schemaReady;
-  const { rows } = await db.query(
-    'SELECT id, content, created_at FROM notes WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1',
-    [clientId]
-  );
-  return rows[0] || null;
-}
-
-async function handleDocumentGeneration(req, res, mode) {
+async function handleJobDocumentGeneration(req, res, mode) {
   try {
-    const clientId = req.params.clientId;
+    const jobId = req.params.jobId;
 
     await db.schemaReady;
-    const { rows } = await db.query('SELECT * FROM clients WHERE id = $1', [clientId]);
-    const client = rows[0];
+    const { rows } = await db.query(`
+      SELECT j.*, c.name AS client_name, c.phone AS client_phone, c.email AS client_email, c.address AS client_address
+      FROM jobs j JOIN clients c ON c.id = j.client_id
+      WHERE j.id = $1
+    `, [jobId]);
+    const job = rows[0];
+    if (!job) return res.status(404).json({ error: 'Job not found' });
 
-    if (!client) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
+    const lineItems = (await db.query(
+      'SELECT id, description, quantity, unit_price, amount, sort_order FROM job_line_items WHERE job_id = $1 ORDER BY sort_order ASC, id ASC',
+      [jobId]
+    )).rows;
 
-    const latestNote = await fetchLatestNote(clientId);
     const storedCompanyProfile = await readStoredCompanyProfile();
-
-    // Extract base64 logo from the stored data URL before normalizing
     if (storedCompanyProfile?.logoUrl) {
       const match = storedCompanyProfile.logoUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
       if (match) storedCompanyProfile.logoBase64 = match[1];
     }
-
     const normalizedProfile = normalizeCompanyProfile(storedCompanyProfile || {});
 
-    const invoiceData = buildInvoiceData({ client, latestNote, companyProfile: normalizedProfile, mode });
+    const invoiceData = buildInvoiceData({ job, lineItems, companyProfile: normalizedProfile, mode });
     const pdfBuffer = await generateInvoicePDF(invoiceData, mode);
 
-    const safeClientName = String(client.name || 'client')
+    const safeClientName = String(job.client_name || 'client')
       .trim()
       .replace(/[^a-z0-9]+/gi, '-')
       .replace(/^-+|-+$/g, '')
       .toLowerCase() || 'client';
 
-    const filename = `${safeClientName}-${invoiceData.invoiceNumber}.pdf`;
+    const filename = `${safeClientName}-${jobId}-${invoiceData.invoiceNumber}.pdf`;
 
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`
     });
-
     return res.send(pdfBuffer);
   } catch (err) {
     console.error(`${mode} generation failed:`, err);
@@ -75,12 +68,35 @@ async function handleDocumentGeneration(req, res, mode) {
   }
 }
 
-router.post('/send-invoice/:clientId', asyncHandler((req, res) =>
-  handleDocumentGeneration(req, res, 'invoice')
+// Job-scoped documents (authoritative).
+router.post('/jobs/:jobId/invoice', requireJobAccess(), asyncHandler((req, res) =>
+  handleJobDocumentGeneration(req, res, 'invoice')
 ));
 
-router.post('/send-estimate/:clientId', asyncHandler((req, res) =>
-  handleDocumentGeneration(req, res, 'estimate')
+router.post('/jobs/:jobId/estimate', requireJobAccess(), asyncHandler((req, res) =>
+  handleJobDocumentGeneration(req, res, 'estimate')
+));
+
+// Legacy client-scoped routes (kept for the older renderer): generate from the
+// client's default (oldest) job, including its line items.
+async function legacyClientDocument(req, res, mode) {
+  const clientId = parseIntField(req.params.clientId, 'clientId', { min: 1 });
+  await db.schemaReady;
+  const job = (await db.query(
+    'SELECT id FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1',
+    [clientId]
+  )).rows[0];
+  if (!job) return res.status(404).json({ error: 'Client has no jobs' });
+  req.params.jobId = job.id;
+  return handleJobDocumentGeneration(req, res, mode);
+}
+
+router.post('/send-invoice/:clientId', requireClientAccess(), asyncHandler((req, res) =>
+  legacyClientDocument(req, res, 'invoice')
+));
+
+router.post('/send-estimate/:clientId', requireClientAccess(), asyncHandler((req, res) =>
+  legacyClientDocument(req, res, 'estimate')
 ));
 
 module.exports = router;

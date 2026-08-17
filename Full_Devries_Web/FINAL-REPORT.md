@@ -11,6 +11,31 @@
 >    expenses, tags, notes, files, and admin actions. Admins view it under
 >    Settings → Activity (normal users get 403 at the API level).
 
+> **Latest changes (Aug 17) — Client/Job workspace + real authorization:**
+> 1. **Sales-person assignment** (`jobs.sales_user_id` → `app_users.id`, never
+>    free text). Admins assign a sales person per job in the Client/Job
+>    Workspace and can filter all jobs by sales person in the header.
+> 2. **Two tag systems:** primary **client tag** (one per client, sorts the
+>    client list) vs secondary **job tags** (many per job). Both are clickable,
+>    database-filtered, and clearable; tag creation in Settings picks a kind.
+> 3. **Real backend authorization.** Restricted/sales users can only see and
+>    modify jobs assigned to them (`sales_user_id`); admins see everything.
+>    Every jobs/clients/notes route enforces this server-side (RLS does not
+>    apply — the app talks to Postgres directly as the DB owner).
+> 4. **Job-scoped estimates/invoices with line items** (`job_line_items`),
+>    editable per job, and **copied into a new job** (scope + line items +
+>    pricing) via "Duplicate" or "Copy scope & pricing from…". The original job
+>    is never touched.
+> 5. **Notes now record their author** and fire a **targeted** in-app
+>    notification + email (author, client, job, preview, timestamp, link) to the
+>    assigned sales person and admins — per-user unread state and
+>    click-to-navigate.
+> 6. **Progressive disclosure + mobile pass** — collapsible sections, a client
+>    meta strip, and iPhone tap-target/overflow fixes.
+>
+> New migration: `supabase-migration-v3-workspaces.sql` (additive; the app also
+> applies it automatically on boot). New env var: `APP_URL` (links in emails).
+
 ## What was built
 
 The CRM now treats **Clients** and **Jobs** as separate records (1 Client ── many
