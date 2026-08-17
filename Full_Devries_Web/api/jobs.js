@@ -147,9 +147,12 @@ router.post('/clients/:clientId/jobs', requireClientAccess(), asyncHandler(async
   const name = parseStringField(req.body.name ?? '', 'name', { minLength: 1, maxLength: 260 });
   const status = parseStringField(req.body.status ?? 'Pending Approval', 'status', { required: false, maxLength: 30, defaultValue: 'Pending Approval' });
   const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500, defaultValue: '' });
-  const scopeOfWork = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
-  const totalDue = parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 });
-  // Job cost feeds margin, which is admin-only. Restricted users cannot set it.
+  const scope = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
+  // Total due and job cost are financial records — admin-only. Restricted
+  // users always get 0 (admins fill in amounts later).
+  const totalDue = isAdminUser(user)
+    ? parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0, min: 0 })
+    : 0;
   const jobCost = isAdminUser(user)
     ? parseNumberField(req.body.job_cost ?? 0, 'job_cost', { required: false, defaultValue: 0, min: 0 })
     : 0;
@@ -171,7 +174,7 @@ router.post('/clients/:clientId/jobs', requireClientAccess(), asyncHandler(async
       INSERT INTO jobs (client_id, name, status, address, scope_of_work, job_cost, total_due, amount_paid, balance, sales_user_id, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
-    `, [clientId, name, status, address, scopeOfWork, jobCost, totalDue, salesUserId]);
+    `, [clientId, name, status, address, scope, jobCost, totalDue, salesUserId]);
     job = rows[0];
     for (const [idx, li] of lineItems.entries()) {
       const description = String(li.description || '').slice(0, 500);

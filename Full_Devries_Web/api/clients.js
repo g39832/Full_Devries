@@ -151,15 +151,20 @@ router.post('/save-client', asyncHandler(async (req, res) => {
   const email = parseStringField(req.body.email ?? '', 'email', { required: false, maxLength: 254, defaultValue: '' });
   const address = parseStringField(req.body.address ?? '', 'address', { required: false, maxLength: 500, defaultValue: '' });
   const status = parseStringField(req.body.status ?? 'Prospect', 'status', { required: false, maxLength: 30, defaultValue: 'Prospect' });
-  const totalDueInput = req.body.total_due;
   const scopeOfWork = parseStringField(req.body.scope_of_work ?? '', 'scope_of_work', { required: false, maxLength: 5000, defaultValue: '' });
-  const jobCost = parseNumberField(req.body.job_cost ?? 0, 'job_cost', { required: false, defaultValue: 0 });
   const finalName = name || `${fName} ${lName}`.trim();
   if (!finalName) return res.status(400).json({ error: 'Name required' });
 
-  const total = parseNumberField(totalDueInput ?? 0, 'total_due', { required: false, defaultValue: 0 });
-  const createdAt = new Date().toISOString();
   const user = getSessionUser(req);
+  // Total due and job cost are financial records — admin-only. Restricted
+  // users always get 0 (admins fill in amounts later).
+  const total = isAdminUser(user)
+    ? parseNumberField(req.body.total_due ?? 0, 'total_due', { required: false, defaultValue: 0 })
+    : 0;
+  const jobCost = isAdminUser(user)
+    ? parseNumberField(req.body.job_cost ?? 0, 'job_cost', { required: false, defaultValue: 0 })
+    : 0;
+  const createdAt = new Date().toISOString();
   const salesUserId = isAdminUser(user)
     ? (req.body.sales_user_id != null ? parseIntField(req.body.sales_user_id, 'sales_user_id', { min: 1, required: false }) : null)
     : Number(user.id);

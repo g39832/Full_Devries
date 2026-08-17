@@ -159,14 +159,15 @@ async function openClient(id) {
             <div id="newJobDetails" style="display:none; margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
               <input type="text" id="newJobAddress" placeholder="Job address" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
               ${isAdmin() ? `<select id="newJobSales" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;"><option value="">Sales person: unassigned</option></select>` : ""}
-              <input type="text" id="newJobTotal" placeholder="Total due ($)" inputmode="decimal" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
-              <input type="text" id="newJobCost" placeholder="Job cost ($)" inputmode="decimal" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">
+              ${isAdmin() ? `<input type="text" id="newJobTotal" placeholder="Total due ($)" inputmode="decimal" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">` : ""}
+              ${isAdmin() ? `<input type="text" id="newJobCost" placeholder="Job cost ($)" inputmode="decimal" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;">` : ""}
               <input type="text" id="newJobScope" placeholder="Scope of work" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff; grid-column:1/-1;">
               <select id="newJobCopyFrom" style="padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff; grid-column:1/-1;"><option value="">Copy scope & pricing from… (optional)</option></select>
             </div>
           </div>
 
-          <!-- ===== CLIENT FINANCE (aggregated across jobs) ===== -->
+          <!-- ===== CLIENT FINANCE (aggregated across jobs) — ADMIN ONLY ===== -->
+          ${isAdmin() ? `
           <details class="panel-collapse panel-full-span">
           <summary>Financial Overview</summary>
           <div class="panel-section panel-full-span">
@@ -190,6 +191,7 @@ async function openClient(id) {
             ${fin.overpayment > 0 ? `<p style="color:#16a34a; font-size:0.85rem; margin:8px 0 0;">✔ Balance is paid in full; the excess is held as a credit (never shown as a negative balance).</p>` : ""}
           </div>
           </details>
+          ` : ""}
 
           <details class="panel-collapse panel-full-span">
           <summary>Client Notes</summary>
@@ -280,9 +282,11 @@ function renderClientJobs(clientId, jobs) {
           <div class="job-row-meta">
             <span>👤 ${escapeHtml(sales || "Unassigned")}</span>
             ${created ? `<span>📅 ${created}</span>` : ""}
-            ${f.total_due ? `<span>Total <strong>$${money(f.total_due)}</strong></span>` : ""}
-            ${f.balance_due > 0 ? `<span style="color:#c2410c;">Balance <strong>$${money(f.balance_due)}</strong></span>` : (f.paid > 0 ? `<span style="color:#16a34a;">Paid in full</span>` : "")}
-            ${f.overpayment > 0 ? `<span style="color:#16a34a;">Credit $${money(f.overpayment)}</span>` : ""}
+            ${isAdmin() ? `
+              ${f.total_due ? `<span>Total <strong>$${money(f.total_due)}</strong></span>` : ""}
+              ${f.balance_due > 0 ? `<span style="color:#c2410c;">Balance <strong>$${money(f.balance_due)}</strong></span>` : (f.paid > 0 ? `<span style="color:#16a34a;">Paid in full</span>` : "")}
+              ${f.overpayment > 0 ? `<span style="color:#16a34a;">Credit $${money(f.overpayment)}</span>` : ""}
+            ` : ""}
             ${noteCount > 0 ? `<span>📝 ${noteCount} note${noteCount === 1 ? "" : "s"}</span>` : ""}
           </div>
           ${tagChips ? `<div class="job-tags-row">${tagChips}</div>` : ""}
@@ -600,11 +604,12 @@ async function openJob(jobId, opts = {}) {
             <div id="jobPhotosList" class="job-photos-grid"></div>
           </div>
 
-          <!-- ===== FINANCE ===== -->
+          <!-- ===== FINANCE — ADMIN ONLY ===== -->
+          ${isAdmin() ? `
           <div class="panel-section panel-full-span">
             <div class="panel-section-header">
               <h3>Job Finance</h3>
-              <span class="panel-section-note">${isAdmin() ? "Amount Due − Payments = Balance Due · Revenue − Expenses = Profit · Profit ÷ Revenue = Margin" : "Amount Due − Payments = Balance Due"}</span>
+              <span class="panel-section-note">Amount Due − Payments = Balance Due · Revenue − Expenses = Profit · Profit ÷ Revenue = Margin</span>
             </div>
             <div class="panel-inline-row">
               <input type="text" id="jobTotalInput" placeholder="Amount Due" inputmode="decimal" class="panel-money-input" value="${f.total_due ? formatMoney(f.total_due) : ""}">
@@ -618,21 +623,18 @@ async function openJob(jobId, opts = {}) {
                 <span>Overpayment/Credit</span>
                 <strong id="jobOverpaymentDisplay" style="${f.overpayment > 0 ? "color:#16a34a;" : ""}">$${money(f.overpayment)}</strong>
               </div>
-              ${isAdmin() ? `
               <div class="panel-metric"><span>Expenses</span><strong id="jobExpensesDisplay">$${money(f.expenses)}</strong></div>
               <div class="panel-metric"><span>Profit</span><strong id="jobProfitDisplay">$${money(f.profit)}</strong></div>
               <div class="panel-metric"><span>Margin %</span><strong id="jobMarginDisplay">${pctOrDash(f.margin_pct)}</strong></div>
-              ` : ""}
             </div>
 
             <div class="panel-inline-row" style="margin-top:10px;">
               <input type="text" id="jobPaymentInput" placeholder="Add Payment" inputmode="decimal" class="panel-money-input" ${locked ? "disabled style='opacity:0.5;'" : ""}>
               <button id="addPaymentJobBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);" ${locked ? "disabled" : ""}>Add Payment</button>
               <button id="undoFinanceJobBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white;">Undo</button>
-              ${isAdmin() ? `<button id="adminAdjustBtn" class="btn-primary" style="background:rgba(170,27,27,0.85); color:white;">Adjust (Admin)</button>` : ""}
+              <button id="adminAdjustBtn" class="btn-primary" style="background:rgba(170,27,27,0.85); color:white;">Adjust (Admin)</button>
             </div>
 
-            ${isAdmin() ? `
             <div class="panel-inline-row" style="margin-top:8px;">
               <select id="expCategorySelect" style="flex:1; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;" ${locked ? "disabled" : ""}>
                 ${["Labor", "Marketing", "Software", "Contractors", "Operations", "Taxes", "Misc"].map((c) => `<option value="${c}">${c}</option>`).join("")}
@@ -641,12 +643,12 @@ async function openJob(jobId, opts = {}) {
               <input type="text" id="expNotesInput" placeholder="Expense note" style="flex:2; padding:8px; border-radius:6px; border:1px solid #d0d7de; color:#111827; background:#fff;" ${locked ? "disabled" : ""}>
               <button id="addExpenseJobBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white; box-shadow:none;" ${locked ? "disabled" : ""}>Add Expense</button>
             </div>
-            ` : ""}
 
-            ${isAdmin() ? `<div id="jobExpensesList" class="panel-list" style="margin-top:10px;"></div>` : ""}
+            <div id="jobExpensesList" class="panel-list" style="margin-top:10px;"></div>
             <div id="jobPaymentsList" class="panel-list" style="margin-top:10px;"></div>
-            ${isAdmin() ? `<div id="jobAdjustmentsList" class="panel-list" style="margin-top:10px;"></div>` : ""}
+            <div id="jobAdjustmentsList" class="panel-list" style="margin-top:10px;"></div>
           </div>
+          ` : ""}
 
           <!-- ===== JOB NOTES ===== -->
           <div id="job-notes-section" class="notes-section panel-full-span">

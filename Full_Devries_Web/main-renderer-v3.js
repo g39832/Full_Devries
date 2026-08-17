@@ -297,7 +297,7 @@ function renderJobDashboardCard(j) {
   const balance = Number(fin.balance_due || 0);
   const margin = fin.margin_pct != null && fin.margin_pct !== "" ? `${fin.margin_pct}%` : "";
   const pieces = [];
-  if (balance) pieces.push(`<span>Balance: ${formatMoney(balance)}</span>`);
+  if (isAdmin() && balance) pieces.push(`<span>Balance: ${formatMoney(balance)}</span>`);
   if (isAdmin() && margin) pieces.push(`<span>Margin: ${margin}</span>`);
   if (j.note_count) pieces.push(`<span title="Notes">📝 ${j.note_count}</span>`);
   return `
