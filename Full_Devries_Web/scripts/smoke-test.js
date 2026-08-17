@@ -537,6 +537,16 @@ async function main() {
       'restricted user client list must include all clients (even unassigned ones)'
     );
 
+    // Restricted user can edit client contact info via the legacy
+    // update-project route (id in body, not URL) — 403 regression check.
+    const contactEdit = await req('/api/update-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: clientId, fName: 'John', lName: `Smith ${uniqueSuffix}` }),
+      cookie
+    });
+    assert.strictEqual(contactEdit.res.status, 200, 'restricted user must be able to save client contact info');
+
     // Restore admin for the remaining regression checks
     await mutateSessionRole(app, cookie, 'admin');
 

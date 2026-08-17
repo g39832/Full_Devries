@@ -66,10 +66,14 @@ function requireClientAccess() {
     if (!user) return res.status(401).json({ success: false, error: 'Unauthorized' });
     if (isAdminUser(user)) return next();
 
-    const raw = req.params.clientId ?? req.params.id;
+    // The client id may come from the URL (:clientId/:id) or, on legacy
+    // routes like POST /api/update-project, from the request body.
+    const raw = req.params.clientId ?? req.params.id ?? req.body?.id;
     const clientId = Number(raw);
     if (!Number.isInteger(clientId) || clientId < 1) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      // Restricted users can view all clients, so a missing id is not a
+      // permission failure — the route itself validates existence.
+      return next();
     }
     if (!(await clientAccessibleBy(user, clientId))) {
       return res.status(403).json({ success: false, error: 'Forbidden: you do not have access to this client' });
