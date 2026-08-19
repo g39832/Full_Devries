@@ -141,8 +141,11 @@ async function toggleClientTagFilter(tagId) {
 async function refreshClientTagSidebar() {
   if (!clientList) return;
   try {
-    const clients = await window.api.searchClientsByPrimaryTag(activeClientTagFilter);
-    renderSidebar(clients);
+    const [filteredClients, allClients] = await Promise.all([
+      window.api.searchClientsByPrimaryTag(activeClientTagFilter),
+      window.api.searchClients("")
+    ]);
+    renderSidebar(filteredClients || [], "", allClients || []);
   } catch (err) {
     console.error(err);
     clientList.innerHTML = `<li class="empty-state">Unable to load clients.</li>`;

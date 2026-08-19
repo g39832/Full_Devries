@@ -1574,19 +1574,19 @@ async function refreshList() {
 async function toggleStatusFilter(status) {
   activeStatusFilter = activeStatusFilter === status ? null : status;
   await refreshList();
-}
-
-function renderSidebar(list = [], term = "") {
+}function renderSidebar(list = [], term = "", countSourceList = null) {
   if (!clientList) return;
 
   list.sort((a, b) =>
-    STATUS_ORDER.indexOf(a.status || "Lead") -
-    STATUS_ORDER.indexOf(b.status || "Lead")
+    STATUS_ORDER.indexOf(a.status || "Lead") - STATUS_ORDER.indexOf(b.status || "Lead")
   );
 
+  // Status counts always reflect ALL clients (not the filtered subset)
+  // so the chips never misleadingly show zero.
+  const countList = countSourceList || list;
   const counts = {};
   STATUS_ORDER.forEach(s => counts[s] = 0);
-  list.forEach(c => counts[c.status || "Lead"]++);
+  countList.forEach(c => counts[c.status || "Lead"]++);
 
   const countsHTML = `
     <li class="status-counts" style="list-style:none; padding:0; margin:0 0 8px 0;">
