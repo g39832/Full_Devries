@@ -1441,7 +1441,8 @@ if (searchInput) {
             allClients.filter(c =>
               (c.status || "Lead").toLowerCase() === term
             ),
-            term
+            term,
+            allClients
           );
           return;
         }
@@ -1561,7 +1562,7 @@ async function refreshList() {
     const shown = activeStatusFilter
       ? (clients || []).filter((c) => (c.status || "Lead") === activeStatusFilter)
       : clients;
-    renderSidebar(shown || []);
+    renderSidebar(shown || [], "", clients || []);
   } catch (err) {
     console.error(err);
     if (clientList) {
