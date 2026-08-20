@@ -578,19 +578,21 @@ router.post('/finance/save', requireAdmin, asyncHandler(async (req, res) => {
   const totalReceived = parseNumberField(req.body.totalReceived ?? 0, 'totalReceived', { required: false, defaultValue: 0 });
   const totalRemaining = parseNumberField(req.body.totalRemaining ?? 0, 'totalRemaining', { required: false, defaultValue: 0 });
   const totalClients = parseIntField(req.body.totalClients ?? 0, 'totalClients', { required: false, min: 0 });
+  const overhead = parseNumberField(req.body.overhead ?? 0, 'overhead', { required: false, defaultValue: 0, min: 0 });
 
   try {
     await db.schemaReady;
     await db.query(`
-      INSERT INTO finance_overrides (year, total_expected, total_received, total_remaining, total_clients)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO finance_overrides (year, total_expected, total_received, total_remaining, total_clients, overhead)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT(year) DO UPDATE SET
         total_expected = EXCLUDED.total_expected,
         total_received = EXCLUDED.total_received,
         total_remaining = EXCLUDED.total_remaining,
         total_clients = EXCLUDED.total_clients,
+        overhead = EXCLUDED.overhead,
         updated_at = CURRENT_TIMESTAMP
-    `, [year, totalExpected, totalReceived, totalRemaining, totalClients]);
+    `, [year, totalExpected, totalReceived, totalRemaining, totalClients, overhead]);
 
     return res.json({ success: true });
   } catch (err) {
@@ -620,6 +622,15 @@ router.get('/finance/summary', requireAdmin, asyncHandler(async (req, res) => {
       total_remaining: yearSummary.total_remaining
     };
 
+    // Total job cost for the year
+    const jobCostResult = await db.query(`
+      SELECT COALESCE(SUM(j.job_cost), 0)::double precision AS total_job_cost
+      FROM jobs j
+      WHERE EXTRACT(YEAR FROM j.created_at)::int = $1
+    `, [year]);
+    const totalJobCost = Number(jobCostResult.rows[0]?.total_job_cost || 0);
+    const overhead = Number(override?.overhead || 0);
+
     return res.json({
       mode: 'project',
       year,
@@ -627,6 +638,8 @@ router.get('/finance/summary', requireAdmin, asyncHandler(async (req, res) => {
       totalExpected: Number(finalSummary.total_expected || finalSummary.totalExpected || 0),
       totalReceived: Number(finalSummary.total_received || finalSummary.totalReceived || 0),
       totalRemaining: Number(finalSummary.total_remaining || finalSummary.totalRemaining || 0),
+      totalJobCost,
+      overhead,
       avgMarginPct: await (async () => {
         try {
           const r = await db.query(`
@@ -681,6 +694,84 @@ router.get('/finance/cash-summary', requireAdmin, asyncHandler(async (req, res) 
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to fetch cash summary' });
+  }
+}));
+
+// ======================================================
+// SALES REVENUE BY SALESPERSON
+// ======================================================
+router.get('/finance/sales-revenue', requireAdmin, asyncHandler(async (req, res) => {
+  const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
+  try {
+    await db.schemaReady;
+    const { rows } = await db.query(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        COALESCE(SUM(j.total_due), 0)::double precision AS total_revenue,
+        COALESCE((
+          SELECT SUM(p.amount) FROM payments p
+          WHERE p.job_id IN (SELECT id FROM jobs WHERE sales_user_id = u.id AND EXTRACT(YEAR FROM created_at)::int = $1)
+        ), 0)::double precision AS total_received,
+        COUNT(j.id)::int AS job_count
+      FROM app_users u
+      INNER JOIN jobs j ON j.sales_user_id = u.id AND EXTRACT(YEAR FROM j.created_at)::int = $1
+      GROUP BY u.id, u.name, u.email
+      ORDER BY total_revenue DESC
+    `, [year]);
+    return res.json({ year, sales: rows });
+  } catch (err) {
+    console.error('Sales revenue error:', err);
+    return res.status(500).json({ error: 'Failed to fetch sales revenue' });
+  }
+}));
+
+// ======================================================
+// COST BREAKDOWN BY CATEGORY
+// ======================================================
+router.get('/finance/cost-breakdown', requireAdmin, asyncHandler(async (req, res) => {
+  const year = req.query.year ? parseYear(req.query.year, 'year') : getValidYear(req.query.year);
+  try {
+    await db.schemaReady;
+
+    // 1. Total job cost from jobs table
+    const jobCostResult = await db.query(`
+      SELECT COALESCE(SUM(j.job_cost), 0)::double precision AS total_job_cost
+      FROM jobs j
+      WHERE EXTRACT(YEAR FROM j.created_at)::int = $1
+    `, [year]);
+
+    // 2. Expense categories from finance_margin_entries
+    const categoryResult = await db.query(`
+      SELECT
+        category,
+        COALESCE(SUM(amount), 0)::double precision AS total
+      FROM finance_margin_entries
+      WHERE EXTRACT(YEAR FROM expense_date)::int = $1
+      GROUP BY category
+      ORDER BY total DESC
+    `, [year]);
+
+    // 3. Overhead from finance_overrides
+    const overheadResult = await db.query(`
+      SELECT COALESCE(overhead, 0)::double precision AS overhead
+      FROM finance_overrides WHERE year = $1
+    `, [year]);
+
+    const totalJobCost = Number(jobCostResult.rows[0]?.total_job_cost || 0);
+    const overhead = Number(overheadResult.rows[0]?.overhead || 0);
+    const categories = categoryResult.rows || [];
+
+    return res.json({
+      year,
+      totalJobCost,
+      overhead,
+      categories
+    });
+  } catch (err) {
+    console.error('Cost breakdown error:', err);
+    return res.status(500).json({ error: 'Failed to fetch cost breakdown' });
   }
 }));
 

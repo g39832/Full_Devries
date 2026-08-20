@@ -378,6 +378,11 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(user_id);`);
 
   // ==================================================================
+  // FINANCE OVERHEAD — yearly overhead cost for the dashboard
+  // ==================================================================
+  await query(`ALTER TABLE finance_overrides ADD COLUMN IF NOT EXISTS overhead DOUBLE PRECISION DEFAULT 0;`);
+
+  // ==================================================================
   // TRIGGERS — keep legacy client finance cache + job balances consistent
   // ==================================================================
   await query(`

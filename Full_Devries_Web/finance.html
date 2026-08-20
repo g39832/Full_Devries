@@ -7,49 +7,12 @@
   <link rel="stylesheet" href="style.css">
 
   <style>
-    .page-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      padding: 18px 32px;
-      background: linear-gradient(135deg, rgba(20, 20, 40, 0.94), rgba(52, 58, 64, 0.97));
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      color: white;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-    }
-
-    .page-header-copy {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .page-kicker {
-      font-size: 0.78rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: rgba(127, 219, 255, 0.95);
-      font-weight: 700;
-    }
-
-    .page-title {
-      font-size: 1.6rem;
-      font-weight: 800;
-      line-height: 1.1;
-    }
-
-    .page-subtitle {
-      margin: 0;
-      font-size: 0.92rem;
-      color: rgba(255, 255, 255, 0.8);
-      max-width: 72ch;
-    }
-
-    .page-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    :root {
+      --text-main: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.55);
+      --bg-main: #162447;
+      --bg-card: rgba(255, 255, 255, 0.06);
+      --border: rgba(255, 255, 255, 0.1);
     }
 
     body.dashboard-body {
@@ -62,238 +25,353 @@
     }
 
     /* ================= HEADER ================= */
-    header#Main_header {
+    .page-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 20px;
       padding: 18px 32px;
-      background: linear-gradient(90deg, #343a40, #343a40);
+      background: linear-gradient(135deg, rgba(20, 20, 40, 0.94), rgba(52, 58, 64, 0.97));
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       color: white;
-      font-size: 1.6rem;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
     }
+
+    .page-header-copy { display: flex; flex-direction: column; gap: 4px; }
+    .page-kicker {
+      font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase;
+      color: rgba(127, 219, 255, 0.95); font-weight: 700;
+    }
+    .page-title { font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
+    .page-subtitle { margin: 0; font-size: 0.92rem; color: rgba(255, 255, 255, 0.8); max-width: 72ch; }
+    .page-header-actions { display: flex; align-items: center; gap: 10px; }
 
     #toggleClientsBtn {
       background: linear-gradient(135deg, #2f80ed, #4f8dfd);
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      font-weight: 600;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      color: white; border: none; padding: 10px 16px; font-weight: 600;
+      border-radius: 10px; cursor: pointer; transition: transform 0.2s ease;
       box-shadow: 0 8px 18px rgba(47, 128, 237, 0.25);
     }
+    #toggleClientsBtn:hover { background: #2569c7; transform: translateY(-2px); }
 
-    #toggleClientsBtn:hover {
-      background: #2569c7;
-      transform: translateY(-2px);
-    }
-
-    /* ================= LAYOUT ================= */
+    /* ================= CONTAINER ================= */
     .finance-container {
-      padding: 35px;
+      padding: 28px 32px;
       display: flex;
       flex-direction: column;
-      gap: 40px;
-    }
-
-    .section {
-      background: white;
-      padding: 28px;
-      border-radius: 16px;
-      box-shadow: 0 12px 35px rgba(0,0,0,0.06);
-    }
-
-    .section-header {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 18px;
-    }
-
-    .section h3 {
-      margin-bottom: 20px;
-      font-size: 1.3rem;
-      font-weight: 600;
-      color: #1e3c72;
-    }
-
-    /* ================= YEAR INPUT ================= */
-    #finance-year {
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid #d0d7de;
-      margin-bottom: 15px;
-      font-weight: 600;
-      width: 120px;
-    }
-
-    #finance-year:focus {
-      outline: none;
-      border-color: #2a5298;
-      box-shadow: 0 0 0 2px rgba(42,82,152,0.15);
-    }
-
-    /* ================= METRICS TABLE ================= */
-    .metrics-table {
-      width: 100%;
-      border-collapse: collapse;
-      border-radius: 14px;
-      overflow: hidden;
-    }
-
-    .metrics-table th {
-      background: #1e3c72;
-      color: white;
-      padding: 16px;
-      font-weight: 600;
-      text-align: left;
-    }
-
-    .metrics-table td {
-      padding: 16px;
-      background: #f9fbfd;
-      font-weight: 600;
-      border-bottom: 1px solid #e3e8ee;
-    }
-
-    .metrics-table input {
-      width: 100%;
-      padding: 12px 10px;
-      min-height: 48px;
-      border-radius: 8px;
-      border: 1px solid #d0d7de;
-      font-weight: 600;
-      font-size: 1rem;
-      line-height: 1.4;
-    }
-
-    #input-clients {
-      -moz-appearance: textfield;
-      appearance: textfield;
-    }
-
-    #input-clients::-webkit-outer-spin-button,
-    #input-clients::-webkit-inner-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-
-    #input-clients:focus {
-      outline: none;
-      border-color: #2a5298;
-      box-shadow: 0 0 0 3px rgba(42,82,152,0.18);
-    }
-
-    .metrics-table input:focus {
-      outline: none;
-      border-color: #2a5298;
-      box-shadow: 0 0 0 2px rgba(42,82,152,0.15);
-    }
-
-    button {
-      transition: all 0.2s ease;
-    }
-
-    button:hover {
-      transform: translateY(-2px);
-    }
-
-    /* ================= TAX GROUPS ================= */
-    .tax-groups {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 28px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
     }
 
-    .tax-group {
-      background: #fdfefe;
-      padding: 20px;
-      border-radius: 14px;
-      box-shadow: 0 8px 22px rgba(0,0,0,0.06);
-      transition: transform 0.2s ease;
-    }
-
-    .tax-group:hover {
-      transform: translateY(-4px);
-    }
-
-    .tax-group h4 {
-      margin-bottom: 14px;
-      font-weight: 600;
-      color: #2a5298;
-    }
-
-    .section-copy {
-      color: #53657d;
-      font-size: 0.95rem;
-      line-height: 1.5;
-      max-width: 60ch;
-      margin-top: 6px;
-    }
-
-    .drop-zone {
-      border: 2px dashed #b6c2cf;
-      border-radius: 12px;
-      padding: 30px;
-      text-align: center;
-      color: #6c7a89;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .drop-zone.dragover {
-      background: #eef4ff;
-      border-color: #2a5298;
-      color: #2a5298;
-    }
-
-    .pdf-list {
-      margin-top: 15px;
+    /* ================= PERIOD CONTROLS ================= */
+    .period-bar {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
-    .pdf-item {
-      background: #f1f5fa;
-      padding: 8px 12px;
+    .period-bar label {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .period-bar select, .period-bar input {
+      padding: 8px 14px;
       border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-weight: 600;
       font-size: 0.9rem;
     }
 
-    /* ================= MARGIN TRACKER ================= */
-    .margin-tracker-section {
+    .period-bar select option { color: #1e3c72; background: white; }
+
+    /* ================= SECTION HEADER ================= */
+    .section-header {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(127, 219, 255, 0.9);
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid rgba(47, 128, 237, 0.3);
+    }
+
+    /* ================= CARDS ================= */
+    .card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 20px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.55);
+      margin-bottom: 6px;
+    }
+
+    .card-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: white;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .card-value.green { color: #4ade80; }
+    .card-value.red { color: #f87171; }
+    .card-value.blue { color: #60a5fa; }
+    .card-value.yellow { color: #fbbf24; }
+
+    .card-meta {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 6px;
+    }
+
+    /* ================= GRID LAYOUTS ================= */
+    .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-sales { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+
+    /* ================= SALES CARDS ================= */
+    .sales-card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .sales-card:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(47, 128, 237, 0.5);
+      transform: translateY(-2px);
+    }
+
+    .sales-card-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 8px;
+    }
+
+    .sales-card-amount {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #4ade80;
+      margin-bottom: 4px;
+    }
+
+    .sales-card-meta {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .sales-card-pct {
+      display: inline-block;
+      background: rgba(47, 128, 237, 0.2);
+      color: #60a5fa;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-top: 8px;
+    }
+
+    /* ================= COST CATEGORY PILLS ================= */
+    .cost-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      padding: 10px 16px;
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .cost-pill strong {
+      color: #fbbf24;
+    }
+
+    .cost-pills-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* ================= PDF SECTION ================= */
+    .pdf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .pdf-card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .pdf-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .pdf-name {
+      font-size: 0.85rem;
+      color: white;
+      font-weight: 600;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+
+    .pdf-btn {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.2s;
+    }
+
+    .pdf-btn.view { background: linear-gradient(135deg, #2f80ed, #4f8dfd); color: white; }
+    .pdf-btn.delete { background: rgba(220, 38, 38, 0.2); color: #f87171; margin-left: 4px; }
+    .pdf-btn:hover { transform: translateY(-1px); }
+
+    /* ================= DROP ZONE ================= */
+    .drop-zone {
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      background: rgba(47, 128, 237, 0.1);
+      border-color: rgba(47, 128, 237, 0.5);
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* ================= OVERHEAD INPUT ================= */
+    .overhead-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .overhead-row label {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .overhead-row input {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+      width: 180px;
+    }
+
+    .overhead-row input:focus {
+      outline: none;
+      border-color: #2f80ed;
+      box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.3);
+    }
+
+    .overhead-row button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #2f80ed, #4f8dfd);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .overhead-row button:hover { transform: translateY(-1px); }
+
+    /* ================= EMPTY STATE ================= */
+    .empty-state {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 30px;
+    }
+
+    /* ================= SKELETON ================= */
+    .skeleton {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      min-height: 100px;
       position: relative;
       overflow: hidden;
     }
 
-    .margin-tracker-root {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
+    .skeleton::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+      animation: shimmer 1.4s infinite;
     }
 
+    @keyframes shimmer { 100% { transform: translateX(100%); } }
+
+    /* ================= MARGIN TRACKER ================= */
+    .margin-tracker-section { margin-top: 8px; }
+    .margin-tracker-root { display: flex; flex-direction: column; gap: 18px; }
     .mt-shell { display: flex; flex-direction: column; gap: 18px; }
 
     .mt-toolbar {
       display: flex; flex-wrap: wrap; justify-content: space-between;
       align-items: center; gap: 14px; padding: 18px; border-radius: 16px;
-      border: 1px solid #d0d7de; background: #f9fbfd;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04);
     }
 
     .mt-toolbar-copy { display: flex; flex-direction: column; gap: 4px; }
-    .mt-title { font-size: 1.2rem; font-weight: 800; color: #1e3c72; letter-spacing: -0.02em; }
-    .mt-subtitle { margin: 0; font-size: 0.9rem; color: #53657d; max-width: 70ch; }
+    .mt-title { font-size: 1.2rem; font-weight: 800; color: white; letter-spacing: -0.02em; }
+    .mt-subtitle { margin: 0; font-size: 0.9rem; color: rgba(255, 255, 255, 0.5); max-width: 70ch; }
     .mt-toolbar-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
     .mt-view-toggle {
       display: inline-flex; gap: 4px; padding: 4px;
-      border-radius: 999px; background: #eef2f7; border: 1px solid #d0d7de;
+      border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .mt-view-btn, .mt-action-btn, .mt-icon-btn {
@@ -301,7 +379,7 @@
       transition: transform 0.2s ease, background 0.2s ease;
     }
 
-    .mt-view-btn { padding: 7px 14px; background: transparent; color: #53657d; cursor: pointer; }
+    .mt-view-btn { padding: 7px 14px; background: transparent; color: rgba(255, 255, 255, 0.5); cursor: pointer; }
     .mt-view-btn[aria-pressed="true"] {
       background: linear-gradient(135deg, #2f80ed, #4f8dfd); color: #fff;
       box-shadow: 0 4px 12px rgba(47,128,237,0.25);
@@ -315,14 +393,14 @@
 
     .mt-icon-btn { display: inline-flex; align-items: center; gap: 8px; }
     .mt-action-btn.secondary {
-      background: #f1f5fa; border: 1px solid #d0d7de; color: #53657d; box-shadow: none;
+      background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); box-shadow: none;
     }
 
     .mt-action-btn:hover, .mt-icon-btn:hover, .mt-view-btn:hover { transform: translateY(-1px); }
 
     .mt-panel {
-      border-radius: 16px; border: 1px solid #d0d7de;
-      background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.06); overflow: hidden;
+      border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04); box-shadow: 0 4px 16px rgba(0,0,0,0.15); overflow: hidden;
     }
 
     .mt-panel-header {
@@ -330,59 +408,59 @@
       gap: 12px; padding: 18px 18px 0; margin-bottom: 8px;
     }
 
-    .mt-panel-title { margin: 0; font-size: 1rem; font-weight: 800; color: #1e3c72; }
-    .mt-panel-copy { margin: 6px 0 0; color: #53657d; font-size: 0.88rem; max-width: 60ch; }
+    .mt-panel-title { margin: 0; font-size: 1rem; font-weight: 800; color: white; }
+    .mt-panel-copy { margin: 6px 0 0; color: rgba(255, 255, 255, 0.5); font-size: 0.88rem; max-width: 60ch; }
     .mt-panel-body { padding: 18px; }
 
     .mt-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 
     .mt-kpi-card {
       position: relative; overflow: hidden; min-height: 140px; padding: 16px;
-      border-radius: 14px; border: 1px solid #d0d7de; background: #f9fbfd;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       transition: transform 0.22s ease, box-shadow 0.22s ease;
     }
 
-    .mt-kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+    .mt-kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
     .mt-kpi-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-    .mt-kpi-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #53657d; margin-bottom: 8px; }
-    .mt-kpi-value { font-size: 1.45rem; font-weight: 800; color: #1e3c72; letter-spacing: -0.02em; line-height: 1.1; }
-    .mt-kpi-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.84rem; color: #53657d; }
+    .mt-kpi-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); margin-bottom: 8px; }
+    .mt-kpi-value { font-size: 1.45rem; font-weight: 800; color: white; letter-spacing: -0.02em; line-height: 1.1; }
+    .mt-kpi-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.84rem; color: rgba(255, 255, 255, 0.5); }
 
     .mt-trend {
       display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
       border-radius: 999px; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
     }
 
-    .mt-trend.up { color: #16a34a; background: rgba(22,163,74,0.1); }
-    .mt-trend.down { color: #dc2626; background: rgba(220,38,38,0.08); }
-    .mt-trend.flat { color: #6b7280; background: rgba(107,114,128,0.08); }
+    .mt-trend.up { color: #4ade80; background: rgba(74, 222, 128, 0.15); }
+    .mt-trend.down { color: #f87171; background: rgba(248, 113, 113, 0.12); }
+    .mt-trend.flat { color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.06); }
 
     .mt-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 
     .mt-pill-row, .mt-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .mt-chip {
       display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px;
-      border-radius: 999px; border: 1px solid #d0d7de; background: #f9fbfd;
-      color: #53657d; font-size: 0.82rem; font-weight: 700;
+      border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.6); font-size: 0.82rem; font-weight: 700;
     }
-    .mt-chip strong { color: #1e3c72; }
+    .mt-chip strong { color: white; }
 
     .mt-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
     .mt-field { display: flex; flex-direction: column; gap: 6px; }
-    .mt-field label { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: #53657d; }
+    .mt-field label { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: rgba(255, 255, 255, 0.5); }
     .mt-field input, .mt-field select, .mt-field textarea {
-      width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid #d0d7de;
-      background: #fff; color: #1e3c72; font: inherit; outline: none;
+      width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.06); color: white; font: inherit; outline: none;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
     .mt-field textarea { min-height: 88px; resize: vertical; }
     .mt-field input:focus, .mt-field select:focus, .mt-field textarea:focus {
-      border-color: #2f80ed; box-shadow: 0 0 0 3px rgba(47,128,237,0.15);
+      border-color: #2f80ed; box-shadow: 0 0 0 3px rgba(47,128,237,0.2);
     }
 
     .mt-table-wrap {
-      overflow: auto; border-radius: 14px; border: 1px solid #d0d7de; background: #fff;
+      overflow: auto; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04);
     }
 
     .mt-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1060px; }
@@ -393,287 +471,101 @@
       cursor: pointer; user-select: none;
     }
     .mt-table tbody td {
-      padding: 13px 16px; border-bottom: 1px solid #e3e8ee; color: #1e3c72;
-      background: #fff; vertical-align: top;
+      padding: 13px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); color: white;
+      background: rgba(255, 255, 255, 0.02); vertical-align: top;
     }
-    .mt-table tbody tr:hover td { background: #f0f5ff; }
+    .mt-table tbody tr:hover td { background: rgba(47, 128, 237, 0.08); }
 
     .mt-row-toggle {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 26px; height: 26px; border-radius: 999px; background: #eef2f7;
-      color: #1e3c72; font-weight: 800;
+      width: 26px; height: 26px; border-radius: 999px; background: rgba(255, 255, 255, 0.08);
+      color: white; font-weight: 800;
     }
 
     .mt-status {
       display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px;
       border-radius: 999px; font-size: 0.78rem; font-weight: 800;
     }
-    .mt-status.healthy { background: rgba(22,163,74,0.1); color: #16a34a; }
-    .mt-status.watch { background: rgba(217,119,6,0.1); color: #d97706; }
-    .mt-status.risk { background: rgba(220,38,38,0.08); color: #dc2626; }
+    .mt-status.healthy { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .mt-status.watch { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .mt-status.risk { background: rgba(248, 113, 113, 0.12); color: #f87171; }
 
-    .mt-expand-row td { background: #f9fbfd; padding: 0 16px 16px; }
+    .mt-expand-row td { background: rgba(255, 255, 255, 0.02); padding: 0 16px 16px; }
     .mt-expand-panel {
       display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px;
-      border-radius: 12px; background: #fff; border: 1px solid #d0d7de;
+      border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .mt-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow: auto; padding-right: 4px; }
     .mt-list-item {
       display: flex; justify-content: space-between; gap: 10px; align-items: flex-start;
-      padding: 9px 12px; border-radius: 10px; background: #f1f5fa; color: #1e3c72;
+      padding: 9px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); color: white;
     }
-    .mt-list-item small { color: #53657d; display: block; margin-top: 4px; }
+    .mt-list-item small { color: rgba(255, 255, 255, 0.5); display: block; margin-top: 4px; }
 
     .mt-alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .mt-alert-card {
-      border-radius: 12px; padding: 14px; border: 1px solid #d0d7de;
-      background: #f9fbfd; color: #1e3c72;
+      border-radius: 12px; padding: 14px; border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04); color: white;
     }
-    .mt-alert-card.critical { border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.05); }
-    .mt-alert-card.good { border-color: rgba(22,163,74,0.3); background: rgba(22,163,74,0.05); }
+    .mt-alert-card.critical { border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.08); }
+    .mt-alert-card.good { border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.08); }
 
     .mt-empty {
       display: grid; place-items: center; min-height: 160px; border-radius: 14px;
-      border: 1px dashed #b6c2cf; color: #53657d; background: #f9fbfd;
+      border: 1px dashed rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.02);
       text-align: center; padding: 24px;
     }
 
     .mt-skeleton-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
     .mt-skeleton {
       position: relative; overflow: hidden; min-height: 140px; border-radius: 14px;
-      background: #eef2f7; border: 1px solid #d0d7de;
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
     }
     .mt-skeleton::after {
       content: ""; position: absolute; inset: 0; transform: translateX(-100%);
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
-      animation: mt-shimmer 1.4s infinite;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+      animation: shimmer 1.4s infinite;
     }
-    @keyframes mt-shimmer { 100% { transform: translateX(100%); } }
 
+    /* ================= PDF MODAL ================= */
+    #pdfModal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 9999;
+    }
+
+    #pdfModalContent {
+      position: relative; width: 90%; max-width: 1000px; height: 90%;
+      background: white; padding: 20px; border-radius: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.3); overflow: auto;
+    }
+
+    #pdfModalClose {
+      position: absolute; top: 15px; right: 20px; font-size: 1.5rem;
+      font-weight: bold; cursor: pointer; color: #333;
+    }
+
+    /* ================= RESPONSIVE ================= */
     @media (max-width: 1180px) {
-      .mt-kpi-grid, .mt-skeleton-grid, .mt-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-5 { grid-template-columns: repeat(3, 1fr); }
+      .mt-kpi-grid, .mt-skeleton-grid, .mt-form-grid { grid-template-columns: repeat(2, 1fr); }
       .mt-grid-2, .mt-expand-panel { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 768px) {
-      .mt-toolbar, .mt-panel-header { align-items: stretch; }
+      .page-header { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 14px; }
+      .page-title { font-size: 1.25rem; }
+      .page-subtitle { max-width: none; font-size: 0.88rem; }
+      .page-header-actions { width: 100%; }
+      .page-header-actions button { width: 100%; }
+
+      .finance-container { padding: 14px; gap: 20px; }
+      .grid-5 { grid-template-columns: repeat(2, 1fr); }
+      .grid-3 { grid-template-columns: 1fr; }
       .mt-kpi-grid, .mt-skeleton-grid, .mt-form-grid { grid-template-columns: 1fr; }
       .mt-toolbar-actions { width: 100%; }
       .mt-view-toggle { width: 100%; justify-content: space-between; }
       .mt-view-btn, .mt-action-btn, .mt-icon-btn { flex: 1; }
-    }
-
-    /* ================= MODAL ================= */
-    #pdfModal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.8);
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
-
-    #pdfModalContent {
-      position: relative;
-      width: 90%;
-      max-width: 1000px;
-      height: 90%;
-      background: white;
-      padding: 20px;
-      border-radius: 16px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-      overflow: auto;
-    }
-
-    #pdfModalClose {
-      position: absolute;
-      top: 15px;
-      right: 20px;
-      font-size: 1.5rem;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    @media (max-width: 768px) {
-      .page-header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-        padding: 12px 14px;
-      }
-
-      .page-title {
-        font-size: 1.25rem;
-      }
-
-      .page-subtitle {
-        max-width: none;
-        font-size: 0.88rem;
-        line-height: 1.4;
-      }
-
-      .page-header-actions {
-        width: 100%;
-      }
-
-      .page-header-actions button {
-        width: 100%;
-      }
-
-      header#Main_header {
-        padding: 12px 14px;
-      }
-
-      .finance-container {
-        padding: 12px;
-        gap: 14px;
-      }
-
-      .section {
-        padding: 14px;
-        border-radius: 14px;
-      }
-
-      .section-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-        margin-bottom: 14px;
-      }
-
-      #finance-year {
-        width: 100%;
-        min-height: 46px;
-      }
-
-      .metrics-table,
-      .metrics-table tbody,
-      .metrics-table tr {
-        display: block;
-        width: 100%;
-      }
-
-      .metrics-table thead {
-        display: none;
-      }
-
-      .metrics-table tbody {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .metrics-table tr {
-        border: none;
-      }
-
-      .metrics-table tr:first-child {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-
-      .metrics-table tr:first-child td {
-        display: grid;
-        gap: 6px;
-        padding: 12px;
-        border-radius: 12px;
-        background: #f9fbfd;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.05);
-        border-bottom: none;
-      }
-
-      .metrics-table tr:first-child td::before {
-        content: attr(data-label);
-        color: #5e6f85;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-      }
-
-      .metrics-table input {
-        min-height: 44px;
-        font-size: 16px;
-      }
-
-      .metrics-table tr:first-child td:first-child {
-        grid-column: 1 / -1;
-      }
-
-      .metrics-table tr:last-child td {
-        padding: 0;
-        background: transparent;
-        border-bottom: none;
-      }
-
-      .metrics-actions-cell {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .metrics-table tr:last-child td button {
-        width: 100%;
-        min-height: 44px;
-        margin-left: 0 !important;
-      }
-
-      .tax-groups {
-        grid-template-columns: 1fr;
-        gap: 14px;
-      }
-
-      .drop-zone {
-        min-height: 72px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 18px;
-      }
-    }
-
-    @media (max-width: 768px) and (orientation: landscape) {
-      .page-header {
-        flex-direction: row;
-        align-items: center;
-        padding: 10px 14px;
-      }
-
-      .page-title {
-        font-size: 1.1rem;
-      }
-
-      .page-subtitle {
-        display: none;
-      }
-
-      .page-header-actions {
-        width: auto;
-      }
-
-      .page-header-actions button {
-        width: auto;
-      }
-
-      .finance-container {
-        padding: 10px 12px 12px;
-        gap: 12px;
-      }
-
-      .metrics-table tr:first-child {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .metrics-table tr:first-child td:first-child {
-        grid-column: 1 / -1;
-      }
-
-      .metrics-actions-cell {
-        flex-direction: row;
-      }
     }
   </style>
 
@@ -683,11 +575,11 @@
 
 <body class="dashboard-body">
 
-  <header id="Main_header" class="page-header">
+  <header class="page-header">
     <div class="page-header-copy">
       <span class="page-kicker">Roofing CRM</span>
       <span class="page-title">Finance Dashboard</span>
-      <p class="page-subtitle">Review annual totals, payments, and tax files from the same live database.</p>
+      <p class="page-subtitle">Financial command center — revenue, costs, margins, and documents.</p>
     </div>
     <div class="page-header-actions">
       <button id="toggleClientsBtn">Back to Clients</button>
@@ -696,91 +588,73 @@
 
   <div class="finance-container">
 
-    <!-- ================= SECTION A ================= -->
-    <div class="section" id="sectionA">
-      <div class="section-header">
-        <div>
-          <h3>Yearly Metrics</h3>
-          <p class="section-copy">Totals update from your live client and payment records, with manual overrides if you need them.</p>
-        </div>
-      </div>
-
-      <label for="finance-year" style="display:block; margin-bottom:6px; font-weight:600;">
-        Select Year:
-      </label>
+    <!-- ================= PERIOD CONTROLS ================= -->
+    <div class="period-bar">
+      <label>Period:</label>
       <select id="finance-year">
         <option value="">Loading years...</option>
       </select>
-
-      <table class="metrics-table">
-        <thead>
-          <tr>
-            <th>Year</th>
-            <th>Expected Earnings</th>
-            <th>Received</th>
-            <th>Remaining</th>
-            <th>Clients</th>
-            <th>Avg Margin</th>
-          </tr>
-        </thead>
-        <tbody id="metricsBody">
-          <!-- Populated dynamically -->
-        </tbody>
-      </table>
     </div>
 
-    <!-- ================= SECTION B ================= -->
-    <div class="section margin-tracker-section" id="sectionMarginTracker">
-      <div class="section-header">
-        <div>
-          <h3>Margin Tracker</h3>
-          <p class="section-copy">Profit analytics, expense tracking, forecasts, and client margin intelligence.</p>
-        </div>
+    <!-- ================= SALES / REVENUE ================= -->
+    <div>
+      <div class="section-header">Sales / Total Revenue</div>
+      <div id="salesRevenueGrid" class="grid-sales">
+        <div class="skeleton"></div>
       </div>
+    </div>
+
+    <!-- ================= YEARLY METRICS ================= -->
+    <div>
+      <div class="section-header">Yearly Metrics</div>
+      <div id="yearlyMetrics" class="grid-5">
+        <div class="skeleton"></div>
+      </div>
+    </div>
+
+    <!-- ================= FINANCIAL BREAKDOWN ================= -->
+    <div>
+      <div class="section-header">Financial Breakdown</div>
+      <div id="financialBreakdown" class="grid-3">
+        <div class="skeleton"></div>
+      </div>
+      <div class="overhead-row" id="overheadRow" style="display:none;">
+        <label>Yearly Overhead ($):</label>
+        <input type="text" id="overheadInput" placeholder="e.g. 50000" inputmode="decimal">
+        <button id="saveOverheadBtn">Save Overhead</button>
+      </div>
+    </div>
+
+    <!-- ================= COST BREAKDOWN ================= -->
+    <div>
+      <div class="section-header">Cost Breakdown</div>
+      <div id="costBreakdown" class="cost-pills-row">
+        <div class="skeleton" style="width:200px;height:44px;border-radius:999px;"></div>
+      </div>
+    </div>
+
+    <!-- ================= FINANCIAL DOCUMENTS ================= -->
+    <div>
+      <div class="section-header">Financial Documents</div>
+      <div class="drop-zone" id="financeDropZone">📄 Drop PDFs here or click to upload</div>
+      <div id="financePDFs" class="pdf-grid" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- ================= MARGIN TRACKER ================= -->
+    <div class="margin-tracker-section">
+      <div class="section-header">Margin Tracker</div>
       <div id="marginTrackerRoot" class="margin-tracker-root" aria-live="polite"></div>
     </div>
 
-    <!-- ================= SECTION C ================= -->
-    <div class="section" id="sectionB">
-      <div class="section-header">
-        <div>
-          <h3>Tax Documents</h3>
-          <p class="section-copy">Keep W-9s, P&Ls, 1099s, and insurance documents grouped by year.</p>
-        </div>
-      </div>
-
-      <div class="tax-groups">
-
-        <div class="tax-group" id="w9-group">
-          <h4>W-9</h4>
-          <div class="drop-zone" data-group="w9">📄 Drop PDFs Here</div>
-          <div class="pdf-list" id="w9-list"></div>
-        </div>
-
-        <div class="tax-group" id="pnl-group">
-          <h4>P&L</h4>
-          <div class="drop-zone" data-group="pnl">📄 Drop PDFs Here</div>
-          <div class="pdf-list" id="pnl-list"></div>
-        </div>
-
-        <div class="tax-group" id="1099-group">
-          <h4>1099</h4>
-          <div class="drop-zone" data-group="1099">📄 Drop PDFs Here</div>
-          <div class="pdf-list" id="1099-list"></div>
-        </div>
-
-        <div class="tax-group" id="insurance-group">
-          <h4>Insurance Docs</h4>
-          <div class="drop-zone" data-group="insurance">📄 Drop PDFs Here</div>
-          <div class="pdf-list" id="insurance-list"></div>
-        </div>
-
-      </div>
+    <!-- ================= TAX DOCUMENTS ================= -->
+    <div>
+      <div class="section-header">Tax Documents</div>
+      <div class="pdf-grid" id="taxDocsGrid"></div>
     </div>
 
   </div>
 
-  <!-- ================= MODAL ================= -->
+  <!-- ================= PDF MODAL ================= -->
   <div id="pdfModal">
     <div id="pdfModalContent">
       <span id="pdfModalClose">&times;</span>
@@ -798,9 +672,7 @@
     }
 
     document.getElementById('toggleClientsBtn')
-      .addEventListener('click', () => {
-        window.location.href = 'main.html';
-      });
+      .addEventListener('click', () => { window.location.href = 'main.html'; });
   </script>
 
 </body>

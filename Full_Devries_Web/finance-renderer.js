@@ -1,661 +1,463 @@
-// ====================================================== 
-// FINANCE PAGE RENDERER (Stable + Live Updates from Payments & Clients)
+// ======================================================
+// FINANCE DASHBOARD RENDERER
 // ======================================================
 
-const taxGroups = ["w9", "pnl", "1099", "insurance"];
-
-// The insurance group was historically stored under the key "inference".
-// Keep reading the legacy key so previously uploaded files stay visible
-// and deletable; new uploads use the correct "insurance" key.
-const legacyTaxGroupKeys = { insurance: ["inference"] };
-const financeTableBody = document.getElementById("metricsBody");
-const yearSelector = document.getElementById("finance-year");
-
+const taxGroups = ['w9', 'pnl', '1099', 'insurance'];
+const legacyTaxGroupKeys = { insurance: ['inference'] };
+const yearSelector = document.getElementById('finance-year');
 let activeYear = new Date().getFullYear();
-let financeUndoStack = [];
 
-function formatCurrencyValue(value) {
+function formatCurrency(value) {
   const num = Number(value);
-  if (!Number.isFinite(num)) return "0.00";
-  return num.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+  if (!Number.isFinite(num)) return '$0';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatCurrencyFull(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '$0.00';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatPercent(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '—';
+  return `${Math.round(num * 10) / 10}%`;
 }
 
 function parseCurrencyValue(value) {
   if (value === null || value === undefined) return 0;
-  const cleaned = String(value).replace(/[^0-9.-]/g, "");
+  const cleaned = String(value).replace(/[^0-9.-]/g, '');
   const num = Number(cleaned);
   return Number.isFinite(num) ? num : 0;
-}
-
-function applyCurrencyInputBehavior(input) {
-  if (!input) return;
-
-  function formatTypingValue(raw) {
-    if (!raw) return "";
-    const cleaned = String(raw).replace(/[^0-9.]/g, "");
-    if (!cleaned) return "";
-
-    const firstDot = cleaned.indexOf(".");
-    let integerPart = cleaned;
-    let decimalPart = "";
-    let hasDot = false;
-
-    if (firstDot >= 0) {
-      hasDot = true;
-      integerPart = cleaned.slice(0, firstDot);
-      decimalPart = cleaned.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
-    }
-
-    const normalizedInteger = integerPart.replace(/^0+(?=\d)/, "");
-    const displayInteger = normalizedInteger || (hasDot ? "0" : "");
-    const formattedInteger = displayInteger
-      ? Number(displayInteger).toLocaleString("en-US", { maximumFractionDigits: 0 })
-      : "";
-
-    if (hasDot) return `${formattedInteger}.${decimalPart}`;
-    return formattedInteger;
-  }
-
-  function caretPosFromDigitCount(value, digitCount) {
-    if (digitCount <= 0) return 0;
-    let count = 0;
-    for (let i = 0; i < value.length; i++) {
-      if (/\d/.test(value[i])) count++;
-      if (count === digitCount) return i + 1;
-    }
-    return value.length;
-  }
-
-  input.addEventListener("input", () => {
-    const selectionStart = input.selectionStart ?? input.value.length;
-    const beforeCursor = input.value.slice(0, selectionStart);
-    const digitsBefore = (beforeCursor.match(/\d/g) || []).length;
-
-    const formatted = formatTypingValue(input.value);
-    input.value = formatted;
-
-    const nextPos = caretPosFromDigitCount(formatted, digitsBefore);
-    input.setSelectionRange(nextPos, nextPos);
-  });
-
-  input.addEventListener("blur", () => {
-    const raw = input.value.trim();
-    if (!raw) return;
-    input.value = formatCurrencyValue(parseCurrencyValue(raw));
-  });
-}
-
-// ======================================================
-// LOAD AVAILABLE YEARS (AUTO DROPDOWN)
-// ======================================================
-async function loadAvailableYears() {
-  if (!yearSelector) return;
-
-  try {
-    const res = await fetch("/api/finance/years");
-    if (!res.ok) throw new Error("Failed to fetch years");
-
-    const years = await res.json();
-
-    yearSelector.innerHTML = "";
-
-    years.forEach((year) => {
-      const option = document.createElement("option");
-      option.value = year;
-      option.textContent = year;
-      yearSelector.appendChild(option);
-    });
-
-    const newestYear = years[0] || new Date().getFullYear();
-    activeYear = parseInt(newestYear);
-    yearSelector.value = activeYear;
-
-  } catch (err) {
-    console.error("Year dropdown error:", err);
-    yearSelector.innerHTML = `<option value="${activeYear}">${activeYear}</option>`;
-  }
-}
-
-// ======================================================
-// SAFE ELEMENT FINDER
-// ======================================================
-function findGroupContainer(group) {
-  return document.querySelector(
-    `[id*="${group}"][id*="group"], [data-group="${group}"]`
-  );
-}
-
-function findListContainer(group) {
-  return document.querySelector(
-    `[id*="${group}"][id*="list"], [data-list="${group}"]`
-  );
-}
-
-// ======================================================
-// FETCH SUMMARY
-// ======================================================
-async function fetchFinanceSummary(year) {
-  try {
-    const res = await fetch(`/api/finance/summary?year=${year}`);
-    if (!res.ok) throw new Error("Failed to fetch summary");
-    return await res.json();
-  } catch (err) {
-    console.error("Finance summary error:", err);
-    return null;
-  }
-}
-
-// ======================================================
-// UPDATE METRICS (Editable Version)
-// ======================================================
-async function updateFinanceMetrics() {
-  if (!financeTableBody) return;
-
-  try {
-    const summary = await fetchFinanceSummary(activeYear);
-
-    const expected = summary?.totalExpected || 0;
-    const received = summary?.totalReceived || 0;
-    const remaining = summary?.totalRemaining || 0;
-    const clients = summary?.totalClients || 0;
-    const avgMargin = summary?.avgMarginPct;
-    const avgMarginDisplay = avgMargin !== null && avgMargin !== undefined ? `${avgMargin}%` : '—';
-    const avgMarginColor = avgMargin !== null && avgMargin !== undefined
-      ? (avgMargin >= 30 ? '#16a34a' : avgMargin >= 15 ? '#d97706' : '#dc2626')
-      : '#6c7a89';
-
-    financeTableBody.innerHTML = `
-      <tr class="metrics-values-row">
-        <td data-label="Year">${activeYear}</td>
-        <td data-label="Expected Earnings"><input type="text" id="input-expected" inputmode="decimal" value="${formatCurrencyValue(expected)}" /></td>
-        <td data-label="Received"><input type="text" id="input-received" inputmode="decimal" value="${formatCurrencyValue(received)}" /></td>
-        <td data-label="Remaining"><input type="text" id="input-remaining" inputmode="decimal" value="${formatCurrencyValue(remaining)}" /></td>
-        <td data-label="Clients"><input type="number" id="input-clients" inputmode="numeric" enterkeyhint="done" pattern="[0-9]*" step="1" value="${clients}" /></td>
-        <td data-label="Avg Margin" style="font-weight:700; color:${avgMarginColor};">${avgMarginDisplay}</td>
-      </tr>
-      <tr class="metrics-actions-row">
-        <td colspan="6" class="metrics-actions-cell" style="text-align:right;">
-          <button id="saveFinanceBtn" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd); color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer; font-weight:600;">Save Year Data</button>
-          <button id="undoFinanceYearBtn" style="margin-left:10px; background:#4a5568; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer;">Undo</button>
-        </td>
-      </tr>
-    `;
-
-    document.getElementById("saveFinanceBtn").addEventListener("click", saveFinanceYear);
-    document.getElementById("undoFinanceYearBtn").addEventListener("click", undoFinanceYear);
-
-    ["input-expected", "input-received", "input-remaining"].forEach((id) => {
-      const input = document.getElementById(id);
-      applyCurrencyInputBehavior(input);
-    });
-
-  } catch (err) {
-    console.error("Metrics error:", err);
-  }
-}
-
-// ======================================================
-// SAVE MANUAL YEAR DATA
-// ======================================================
-async function saveFinanceYear() {
-
-  // 🔥 Store previous saved state before overwriting
-  const previousSummary = await fetchFinanceSummary(activeYear);
-
-  financeUndoStack.push({
-    year: activeYear,
-    totalExpected: previousSummary?.totalExpected || 0,
-    totalReceived: previousSummary?.totalReceived || 0,
-    totalRemaining: previousSummary?.totalRemaining || 0,
-    totalClients: previousSummary?.totalClients || 0
-  });
-
-  const data = {
-    year: activeYear,
-    totalExpected: parseCurrencyValue(document.getElementById("input-expected").value),
-    totalReceived: parseCurrencyValue(document.getElementById("input-received").value),
-    totalRemaining: parseCurrencyValue(document.getElementById("input-remaining").value),
-    totalClients: Number(document.getElementById("input-clients").value),
-  };
-
-  try {
-    const res = await fetch("/api/finance/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (!res.ok) throw new Error("Save failed");
-
-    alert("Finance data saved successfully.");
-    document.dispatchEvent(new Event("financeUpdated"));
-
-  } catch (err) {
-    console.error("Save error:", err);
-    alert("Error saving finance data.");
-  }
-}
-
-
-async function undoFinanceYear() {
-  if (financeUndoStack.length === 0) {
-    alert("Nothing to undo.");
-    return;
-  }
-
-  const lastState = financeUndoStack.pop();
-
-  try {
-    const res = await fetch("/api/finance/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(lastState),
-    });
-
-    if (!res.ok) throw new Error("Undo failed");
-
-    alert("Finance year restored.");
-    document.dispatchEvent(new Event("financeUpdated"));
-
-  } catch (err) {
-    console.error("Undo error:", err);
-    alert("Error restoring finance data.");
-  }
 }
 
 // ======================================================
 // YEAR SELECTOR
 // ======================================================
-if (yearSelector) {
-  yearSelector.addEventListener("change", (e) => {
-    activeYear = parseInt(e.target.value) || new Date().getFullYear();
-    updateFinanceMetrics();
-    taxGroups.forEach((group) => loadPDFs(group));
-  });
-}
-
-// ======================================================
-// DRAG & DROP ON FINANCE DROP ZONES
-// ======================================================
-function setupFinanceDropZones() {
-  document.querySelectorAll('.drop-zone[data-group]').forEach((dz) => {
-    ['dragover', 'dragleave', 'drop'].forEach((evt) =>
-      dz.addEventListener(evt, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      })
-    );
-
-    dz.addEventListener('drop', async (e) => {
-      const files = Array.from(e.dataTransfer.files || []);
-      const group = dz.dataset.group;
-      if (!files.length || !group) return;
-
-      const original = dz.textContent;
-      dz.textContent = 'Uploading...';
-      try {
-        await uploadPDFsWithFallback(files, `${group}-${activeYear}`);
-        loadPDFs(group);
-        document.dispatchEvent(new Event('financeUpdated'));
-      } catch (err) {
-        console.error(err);
-        alert('Upload failed. Check that storage is configured.');
-      } finally {
-        dz.textContent = original;
-      }
-    });
-  });
-}
-
-// ======================================================
-// ADD UPLOAD BUTTONS (Styled)
-// ======================================================
-function addUploadButtons() {
-  taxGroups.forEach((group) => {
-    const container = findGroupContainer(group);
-    if (!container) return;
-
-    if (container.querySelector(`[data-upload="${group}"]`)) return;
-
-    const btn = document.createElement("button");
-    btn.innerText = "Upload PDF";
-    btn.type = "button";
-    btn.setAttribute("data-upload", group);
-
-    btn.style.marginTop = "10px";
-    btn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
-    btn.style.color = "#fff";
-    btn.style.border = "none";
-    btn.style.padding = "8px 14px";
-    btn.style.borderRadius = "6px";
-    btn.style.cursor = "pointer";
-    btn.style.fontWeight = "600";
-    btn.style.boxShadow = "0 2px 6px rgba(0,0,0,0.15)";
-
-    btn.onclick = () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".pdf,application/pdf";
-      input.multiple = true;
-      input.style.position = "fixed";
-      input.style.left = "-9999px";
-      input.style.top = "0";
-      input.setAttribute("aria-hidden", "true");
-      let cleanedUp = false;
-
-      const cleanup = () => {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        input.remove();
-        window.removeEventListener("focus", handleWindowFocus);
-      };
-
-      const handleWindowFocus = () => {
-        // If the dialog was dismissed without choosing a file, remove the temp input.
-        if (!input.files || input.files.length === 0) cleanup();
-      };
-
-      input.addEventListener("change", async (e) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length) return;
-
-        const originalText = btn.textContent;
-        btn.textContent = "Uploading...";
-        btn.disabled = true;
-
-        try {
-          await uploadPDFsWithFallback(files, `${group}-${activeYear}`);
-          loadPDFs(group);
-
-          // Update metrics after PDF upload
-          document.dispatchEvent(new Event("financeUpdated"));
-        } finally {
-          cleanup();
-          btn.textContent = originalText;
-          btn.disabled = false;
-        }
-      });
-
-      document.body.appendChild(input);
-      window.addEventListener("focus", handleWindowFocus, { once: true });
-      if (typeof input.showPicker === "function") {
-        try {
-          input.showPicker();
-          return;
-        } catch (err) {
-          // Fall through to click for browsers that disallow showPicker on hidden inputs.
-        }
-      }
-
-      input.click();
-    };
-
-    container.appendChild(btn);
-  });
-}
-
-// ======================================================
-// UPLOAD
-// ======================================================
-async function getSupabaseConfig() {
-  if (window._supabaseConfig) return window._supabaseConfig;
-  const res = await fetch('/api/supabase-config');
-  if (!res.ok) {
-    throw new Error('Failed to load Supabase config');
-  }
-  window._supabaseConfig = await res.json();
-  return window._supabaseConfig;
-}
-
-async function getSupabaseClient() {
-  if (window._supabaseClient) return window._supabaseClient;
-  const config = await getSupabaseConfig();
-  if (!config.supabaseUrl || !config.supabaseAnonKey) {
-    throw new Error('Supabase direct upload is not configured');
-  }
-  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-    throw new Error('Supabase client library is not available');
-  }
-  window._supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-  return window._supabaseClient;
-}
-
-async function uploadPDFToSupabaseDirect(files, groupKey) {
-  const supabaseClient = await getSupabaseClient();
-  const uploaded = [];
-
-  for (const file of files) {
-    const cleanName = String(file.name || 'file').split('/').pop().split('\\').pop();
-    const objectPath = `${groupKey}/${Date.now()}-${cleanName}`;
-    const { error } = await supabaseClient.storage
-      .from('client-files')
-      .upload(objectPath, file, {
-        upsert: true,
-        contentType: file.type || 'application/pdf'
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    uploaded.push({
-      name: cleanName,
-      path: objectPath,
-      url: '',
-      ext: `.${cleanName.split('.').pop()}`
-    });
-  }
-
-  return { success: true, files: uploaded };
-}
-
-async function uploadPDFsWithFallback(files, groupKey) {
+async function loadAvailableYears() {
+  if (!yearSelector) return;
   try {
-    return await uploadPDFToSupabaseDirect(files, groupKey);
+    const res = await fetch('/api/finance/years');
+    if (!res.ok) throw new Error('Failed to fetch years');
+    const years = await res.json();
+    yearSelector.innerHTML = '';
+    years.forEach((year) => {
+      const option = document.createElement('option');
+      option.value = year;
+      option.textContent = year;
+      yearSelector.appendChild(option);
+    });
+    activeYear = parseInt(years[0]) || new Date().getFullYear();
+    yearSelector.value = activeYear;
   } catch (err) {
-    console.warn('Direct supabase upload failed, falling back to backend upload:', err);
-    return await uploadPDFs(files, groupKey);
+    console.error('Year dropdown error:', err);
+    yearSelector.innerHTML = `<option value="${activeYear}">${activeYear}</option>`;
   }
 }
 
-async function uploadPDFs(files, groupKey) {
-  const formData = new FormData();
-  files.forEach(file => formData.append("files", file));
-
-  const res = await fetch(`/api/pdf/upload/${groupKey}`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Upload failed${detail ? `: ${detail}` : ""}`);
-  }
-
-  return await res.json();
-}
-
 // ======================================================
-// LOAD PDFs
+// SALES REVENUE BY SALESPERSON
 // ======================================================
-async function loadPDFs(group) {
-  const container = findListContainer(group);
-  if (!container) return;
-
-  container.innerHTML = "";
-
+async function loadSalesRevenue() {
+  const grid = document.getElementById('salesRevenueGrid');
+  if (!grid) return;
   try {
-    // Load from the canonical group plus any legacy keys (the insurance
-    // group used to be stored under "inference"), so older uploads stay
-    // visible. Each file remembers which key it lives in so deleting it
-    // targets the right bucket.
-    const keysToLoad = [group, ...(legacyTaxGroupKeys[group] || [])];
-    let files = [];
-
-    for (const key of keysToLoad) {
-      const res = await fetch(`/api/pdf/list/${key}-${activeYear}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (Array.isArray(data.files)) {
-        files = files.concat(data.files.map((f) => ({ ...f, _group: key })));
-      }
+    const res = await fetch(`/api/finance/sales-revenue?year=${activeYear}`);
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    const sales = data.sales || [];
+    if (!sales.length) {
+      grid.innerHTML = '<div class="empty-state">No sales recorded for this period.</div>';
+      return;
     }
+    const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total_revenue || 0), 0);
+    grid.innerHTML = sales.map((s) => {
+      const rev = Number(s.total_revenue || 0);
+      const pct = totalRevenue > 0 ? Math.round((rev / totalRevenue) * 1000) / 10 : 0;
+      const received = Number(s.total_received || 0);
+      return `
+        <div class="sales-card" data-sales-user="${s.id}" title="Click to filter by ${escapeHtml(s.name || s.email)}">
+          <div class="sales-card-name">👤 ${escapeHtml(s.name || s.email || 'Unknown')}</div>
+          <div class="sales-card-amount">${formatCurrency(rev)}</div>
+          <div class="sales-card-meta">${s.job_count || 0} job${s.job_count === 1 ? '' : 's'} · ${formatCurrency(received)} received</div>
+          <div class="sales-card-pct">${pct}% of total</div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Sales revenue error:', err);
+    grid.innerHTML = '<div class="empty-state">Unable to load sales data.</div>';
+  }
+}
 
-    // Dedupe by name — the canonical group wins over legacy.
-    const seen = new Set();
-    files = files.filter((f) => (seen.has(f.name) ? false : (seen.add(f.name), true)));
+// ======================================================
+// YEARLY METRICS
+// ======================================================
+async function loadYearlyMetrics() {
+  const container = document.getElementById('yearlyMetrics');
+  if (!container) return;
+  try {
+    const res = await fetch(`/api/finance/summary?year=${activeYear}`);
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    const expected = Number(data.totalExpected || 0);
+    const received = Number(data.totalReceived || 0);
+    const remaining = Number(data.totalRemaining || 0);
+    const clients = Number(data.totalClients || 0);
+    const margin = data.avgMarginPct;
+    const marginDisplay = margin != null ? formatPercent(margin) : '—';
+    const marginColor = margin != null ? (margin >= 30 ? 'green' : margin >= 15 ? 'yellow' : 'red') : '';
 
-    if (files.length === 0) {
-      container.innerHTML =
-        `<div style="color:#888;font-size:13px;">No PDFs uploaded.</div>`;
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-label">Expected Earnings</div>
+        <div class="card-value">${formatCurrency(expected)}</div>
+        <div class="card-meta">Total invoiced for ${activeYear}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Received</div>
+        <div class="card-value green">${formatCurrency(received)}</div>
+        <div class="card-meta">Payments collected</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Remaining</div>
+        <div class="card-value ${remaining > 0 ? 'red' : 'green'}">${formatCurrency(remaining)}</div>
+        <div class="card-meta">Outstanding balance</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Clients</div>
+        <div class="card-value blue">${clients}</div>
+        <div class="card-meta">Jobs created in ${activeYear}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Avg Margin</div>
+        <div class="card-value ${marginColor}">${marginDisplay}</div>
+        <div class="card-meta">Across all jobs with revenue</div>
+      </div>
+    `;
+  } catch (err) {
+    console.error('Yearly metrics error:', err);
+    container.innerHTML = '<div class="empty-state">Unable to load metrics.</div>';
+  }
+}
+
+// ======================================================
+// FINANCIAL BREAKDOWN
+// ======================================================
+async function loadFinancialBreakdown() {
+  const container = document.getElementById('financialBreakdown');
+  const overheadRow = document.getElementById('overheadRow');
+  if (!container) return;
+  try {
+    const summaryRes = await fetch(`/api/finance/summary?year=${activeYear}`);
+    const costRes = await fetch(`/api/finance/cost-breakdown?year=${activeYear}`);
+    if (!summaryRes.ok || !costRes.ok) throw new Error('Failed');
+    const summary = await summaryRes.json();
+    const costData = await costRes.json();
+
+    const totalJobCost = Number(costData.totalJobCost || 0);
+    const overhead = Number(costData.overhead || 0);
+    const received = Number(summary.totalReceived || 0);
+    const finalMargin = received > 0
+      ? Math.round(((received - totalJobCost - overhead) / received) * 1000) / 10
+      : null;
+
+    const finalMarginDisplay = finalMargin != null ? formatPercent(finalMargin) : '—';
+    const finalMarginColor = finalMargin != null ? (finalMargin >= 20 ? 'green' : finalMargin >= 0 ? 'yellow' : 'red') : '';
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-label">Total Job Cost</div>
+        <div class="card-value yellow">${formatCurrency(totalJobCost)}</div>
+        <div class="card-meta">Sum of all job costs for ${activeYear}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Total Yearly Overhead</div>
+        <div class="card-value">${formatCurrency(overhead)}</div>
+        <div class="card-meta">Set via input below</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Final Margin</div>
+        <div class="card-value ${finalMarginColor}">${finalMarginDisplay}</div>
+        <div class="card-meta">Revenue − Costs − Overhead</div>
+      </div>
+    `;
+
+    // Show overhead input
+    if (overheadRow) {
+      overheadRow.style.display = 'flex';
+      const overheadInput = document.getElementById('overheadInput');
+      if (overheadInput) overheadInput.value = overhead > 0 ? String(overhead) : '';
+    }
+  } catch (err) {
+    console.error('Financial breakdown error:', err);
+    container.innerHTML = '<div class="empty-state">Unable to load breakdown.</div>';
+  }
+}
+
+// ======================================================
+// COST BREAKDOWN BY CATEGORY
+// ======================================================
+async function loadCostBreakdown() {
+  const container = document.getElementById('costBreakdown');
+  if (!container) return;
+  try {
+    const res = await fetch(`/api/finance/cost-breakdown?year=${activeYear}`);
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    const categories = data.categories || [];
+
+    if (!categories.length) {
+      container.innerHTML = '<div class="empty-state">No expense categories recorded for this period.</div>';
       return;
     }
 
-    const isMobile = window.innerWidth <= 768;
+    const categoryIcons = {
+      'Labor': '🔨', 'Contractors': '👷', 'Marketing': '📣',
+      'Software': '💻', 'Operations': '⚙️', 'Taxes': '🏛️', 'Misc': '📦',
+      'Material': '🪨', 'Commission': '💰'
+    };
 
-    files.forEach((file) => {
-      const card = document.createElement("div");
-      card.style.display = "inline-flex";
-      card.style.flexDirection = "column";
-      card.style.alignItems = "center";
-      card.style.margin = "12px";
-      card.style.padding = "10px";
-      card.style.background = "#f8f9fa";
-      card.style.borderRadius = "8px";
-      card.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
-
-      if (!isMobile) {
-        const thumb = document.createElement("embed");
-        thumb.src = file.url;
-        thumb.type = "application/pdf";
-        thumb.width = "100";
-        thumb.height = "120";
-        thumb.style.borderRadius = "6px";
-        card.appendChild(thumb);
-      }
-
-      const name = document.createElement("div");
-      name.innerText = file.name;
-      name.style.fontSize = "12px";
-      name.style.marginTop = isMobile ? "2px" : "6px";
-      name.style.textAlign = "center";
-      name.style.color = "#1a202c";
-      card.appendChild(name);
-
-      const viewBtn = document.createElement("button");
-      viewBtn.innerText = "View";
-      viewBtn.style.marginTop = "8px";
-      viewBtn.style.background = "linear-gradient(135deg,#2f80ed,#4f8dfd)";
-      viewBtn.style.color = "#fff";
-      viewBtn.style.border = "none";
-      viewBtn.style.padding = "6px 12px";
-      viewBtn.style.borderRadius = "5px";
-      viewBtn.style.cursor = "pointer";
-      viewBtn.style.fontWeight = "600";
-      viewBtn.onclick = () => openPDFModal(file.url);
-      card.appendChild(viewBtn);
-
-      const delBtn = document.createElement("button");
-      delBtn.innerText = "Delete";
-      delBtn.style.marginTop = "6px";
-      delBtn.style.background = "#4a5568";
-      delBtn.style.color = "#fff";
-      delBtn.style.border = "none";
-      delBtn.style.padding = "6px 12px";
-      delBtn.style.borderRadius = "5px";
-      delBtn.style.cursor = "pointer";
-      delBtn.style.fontWeight = "600";
-
-      delBtn.onclick = async () => {
-        if (!confirm(`Delete ${file.name}?`)) return;
-
-        await fetch(
-          `/api/pdf/delete/${file._group || group}-${activeYear}?file=${encodeURIComponent(file.name)}`,
-          { method: "DELETE" }
-        );
-
-        loadPDFs(group);
-        document.dispatchEvent(new Event("financeUpdated"));
-      };
-
-      card.appendChild(delBtn);
-      container.appendChild(card);
-    });
+    container.innerHTML = categories.map((c) => {
+      const icon = categoryIcons[c.category] || '📦';
+      return `<div class="cost-pill">${icon} ${escapeHtml(c.category)}: <strong>${formatCurrency(c.total)}</strong></div>`;
+    }).join('');
   } catch (err) {
-    console.error("Load PDFs error:", err);
+    console.error('Cost breakdown error:', err);
+    container.innerHTML = '<div class="empty-state">Unable to load cost breakdown.</div>';
   }
 }
 
 // ======================================================
-// RESPONSIVE MODAL VIEWER
+// SAVE OVERHEAD
 // ======================================================
-function openPDFModal(url) {
-  const modal = document.getElementById("pdfModal");
-  const viewer = document.getElementById("pdfViewer");
-  if (!modal || !viewer) return;
-
-  viewer.innerHTML = "";
-
-  const embed = document.createElement("embed");
-  embed.src = url;
-  embed.type = "application/pdf";
-  embed.style.width = "100%";
-  embed.style.height = "90vh";
-  embed.style.border = "none";
-
-  viewer.appendChild(embed);
-  modal.style.display = "flex";
-}
-
-// ======================================================
-// MODAL CLOSE
-// ======================================================
-{
-  const modal = document.getElementById("pdfModal");
-  const closeBtn = document.getElementById("pdfModalClose");
-
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
-      modal.style.display = "none";
-      document.getElementById("pdfViewer").innerHTML = "";
-    });
-  }
-
-  document.addEventListener("click", (e) => {
-    if (e.target === modal) {
-      modal.style.display = "none";
-      document.getElementById("pdfViewer").innerHTML = "";
+function setupOverheadSave() {
+  const btn = document.getElementById('saveOverheadBtn');
+  const input = document.getElementById('overheadInput');
+  if (!btn || !input) return;
+  btn.addEventListener('click', async () => {
+    const value = parseCurrencyValue(input.value);
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/finance/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year: activeYear, overhead: value })
+      });
+      if (!res.ok) throw new Error('Save failed');
+      btn.textContent = 'Saved!';
+      setTimeout(() => { btn.textContent = 'Save Overhead'; btn.disabled = false; }, 1500);
+      await loadFinancialBreakdown();
+    } catch (err) {
+      console.error('Overhead save error:', err);
+      btn.textContent = 'Error';
+      setTimeout(() => { btn.textContent = 'Save Overhead'; btn.disabled = false; }, 2000);
     }
   });
 }
 
 // ======================================================
-// LISTEN FOR FINANCE UPDATES (Live from Payments, PDFs, Manual Saves, Client Updates)
+// FINANCIAL DOCUMENTS (shared bucket)
 // ======================================================
-document.addEventListener("financeUpdated", () => {
-  updateFinanceMetrics();
-  taxGroups.forEach((group) => loadPDFs(group));
-});
-
-window.addEventListener("focus", () => {
-  updateFinanceMetrics();
-  taxGroups.forEach((group) => loadPDFs(group));
-});
-
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return;
-  updateFinanceMetrics();
-  taxGroups.forEach((group) => loadPDFs(group));
-});
+async function loadFinancePDFs() {
+  const container = document.getElementById('financePDFs');
+  if (!container) return;
+  container.innerHTML = '';
+  try {
+    const res = await fetch(`/api/pdf/list/finance-${activeYear}`);
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    const files = data.files || [];
+    if (!files.length) {
+      container.innerHTML = '<div class="empty-state">No financial documents uploaded yet.</div>';
+      return;
+    }
+    files.forEach((file) => {
+      const card = document.createElement('div');
+      card.className = 'pdf-card';
+      card.innerHTML = `
+        <div class="pdf-icon">📄</div>
+        <div class="pdf-name">${escapeHtml(file.name)}</div>
+        <div>
+          <button class="pdf-btn view">View</button>
+          <button class="pdf-btn delete">Delete</button>
+        </div>
+      `;
+      card.querySelector('.view').onclick = () => openPDFModal(file.url);
+      card.querySelector('.delete').onclick = async () => {
+        if (!confirm(`Delete ${file.name}?`)) return;
+        await fetch(`/api/pdf/delete/finance-${activeYear}?file=${encodeURIComponent(file.name)}`, { method: 'DELETE' });
+        loadFinancePDFs();
+      };
+      container.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Finance PDFs error:', err);
+    container.innerHTML = '<div class="empty-state">Unable to load documents.</div>';
+  }
+}
 
 // ======================================================
-// AUTO REFRESH METRICS WHEN CLIENT DATA CHANGES
+// TAX DOCUMENTS
 // ======================================================
-function refreshFinanceMetrics() {
-  document.dispatchEvent(new Event("financeUpdated"));
+async function loadTaxDocs() {
+  const container = document.getElementById('taxDocsGrid');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const groupLabels = { w9: 'W-9', pnl: 'P&L', '1099': '1099', insurance: 'Insurance' };
+  const groupIcons = { w9: '📋', pnl: '📊', '1099': '📑', insurance: '🛡️' };
+
+  for (const group of taxGroups) {
+    const keysToLoad = [group, ...(legacyTaxGroupKeys[group] || [])];
+    let files = [];
+    for (const key of keysToLoad) {
+      try {
+        const res = await fetch(`/api/pdf/list/${key}-${activeYear}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (Array.isArray(data.files)) files = files.concat(data.files.map((f) => ({ ...f, _group: key })));
+      } catch {}
+    }
+    const seen = new Set();
+    files = files.filter((f) => (seen.has(f.name) ? false : (seen.add(f.name), true)));
+
+    const card = document.createElement('div');
+    card.className = 'pdf-card';
+    card.innerHTML = `
+      <div class="pdf-icon">${groupIcons[group] || '📄'}</div>
+      <div class="pdf-name">${groupLabels[group] || group}</div>
+      <div style="margin-bottom:8px;color:rgba(255,255,255,0.4);font-size:0.8rem;">${files.length} file${files.length === 1 ? '' : 's'}</div>
+      <button class="pdf-btn view" style="margin-bottom:6px;">Upload</button>
+      ${files.map((f) => `<div style="margin-top:4px;font-size:0.78rem;color:rgba(255,255,255,0.6);">${escapeHtml(f.name)} <button class="pdf-btn delete" style="font-size:0.7rem;padding:2px 6px;">×</button></div>`).join('')}
+    `;
+    const uploadBtn = card.querySelector('.view');
+    uploadBtn.textContent = 'Upload PDF';
+    uploadBtn.onclick = () => triggerUpload(group);
+
+    card.querySelectorAll('.pdf-btn.delete').forEach((delBtn, idx) => {
+      delBtn.onclick = async () => {
+        if (!confirm(`Delete ${files[idx].name}?`)) return;
+        await fetch(`/api/pdf/delete/${files[idx]._group || group}-${activeYear}?file=${encodeURIComponent(files[idx].name)}`, { method: 'DELETE' });
+        loadTaxDocs();
+      };
+    });
+
+    container.appendChild(card);
+  }
+}
+
+function triggerUpload(group) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,application/pdf';
+  input.multiple = true;
+  input.style.position = 'fixed';
+  input.style.left = '-9999px';
+  document.body.appendChild(input);
+  input.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) { input.remove(); return; }
+    try {
+      const formData = new FormData();
+      files.forEach((f) => formData.append('files', f));
+      await fetch(`/api/pdf/upload/${group}-${activeYear}`, { method: 'POST', body: formData });
+      loadTaxDocs();
+      loadFinancePDFs();
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Upload failed.');
+    }
+    input.remove();
+  });
+  input.click();
+}
+
+// ======================================================
+// DROP ZONE
+// ======================================================
+function setupDropZone() {
+  const dz = document.getElementById('financeDropZone');
+  if (!dz) return;
+  ['dragover', 'dragleave', 'drop'].forEach((evt) =>
+    dz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); })
+  );
+  dz.addEventListener('drop', async (e) => {
+    const files = Array.from(e.dataTransfer.files || []);
+    if (!files.length) return;
+    const original = dz.textContent;
+    dz.textContent = 'Uploading...';
+    try {
+      const formData = new FormData();
+      files.forEach((f) => formData.append('files', f));
+      await fetch(`/api/pdf/upload/finance-${activeYear}`, { method: 'POST', body: formData });
+      loadFinancePDFs();
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed.');
+    } finally { dz.textContent = original; }
+  });
+  dz.addEventListener('click', () => triggerUpload('finance'));
+}
+
+// ======================================================
+// PDF MODAL
+// ======================================================
+function openPDFModal(url) {
+  const modal = document.getElementById('pdfModal');
+  const viewer = document.getElementById('pdfViewer');
+  if (!modal || !viewer) return;
+  viewer.innerHTML = '';
+  const embed = document.createElement('embed');
+  embed.src = url;
+  embed.type = 'application/pdf';
+  embed.style.width = '100%';
+  embed.style.height = '90vh';
+  embed.style.border = 'none';
+  viewer.appendChild(embed);
+  modal.style.display = 'flex';
+}
+
+{
+  const modal = document.getElementById('pdfModal');
+  const closeBtn = document.getElementById('pdfModalClose');
+  if (closeBtn) closeBtn.addEventListener('click', () => { modal.style.display = 'none'; document.getElementById('pdfViewer').innerHTML = ''; });
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) { modal.style.display = 'none'; document.getElementById('pdfViewer').innerHTML = ''; } });
+}
+
+// ======================================================
+// UTILITY
+// ======================================================
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ======================================================
+// YEAR CHANGER
+// ======================================================
+if (yearSelector) {
+  yearSelector.addEventListener('change', (e) => {
+    activeYear = parseInt(e.target.value) || new Date().getFullYear();
+    refreshAll();
+  });
+}
+
+// ======================================================
+// REFRESH ALL
+// ======================================================
+async function refreshAll() {
+  await Promise.all([
+    loadSalesRevenue(),
+    loadYearlyMetrics(),
+    loadFinancialBreakdown(),
+    loadCostBreakdown(),
+    loadFinancePDFs(),
+    loadTaxDocs()
+  ]);
 }
 
 // ======================================================
@@ -663,8 +465,7 @@ function refreshFinanceMetrics() {
 // ======================================================
 (async function initFinancePage() {
   await loadAvailableYears();
-  await updateFinanceMetrics();
-  taxGroups.forEach((group) => loadPDFs(group));
-  addUploadButtons();
-  setupFinanceDropZones();
+  setupOverheadSave();
+  setupDropZone();
+  await refreshAll();
 })();
