@@ -264,6 +264,209 @@
     .pdf-btn.delete { background: rgba(220, 38, 38, 0.2); color: #f87171; margin-left: 4px; }
     .pdf-btn:hover { transform: translateY(-1px); }
 
+    /* ================= TAX GROUP CARDS ================= */
+    .tax-docs-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .tax-group-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .tax-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .tax-group-icon {
+      font-size: 1.4rem;
+    }
+
+    .tax-group-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
+    }
+
+    .tax-group-count {
+      margin-left: auto;
+      background: rgba(47, 128, 237, 0.2);
+      color: #60a5fa;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .tax-group-body {
+      flex: 1;
+      padding: 8px 14px;
+      min-height: 60px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .tax-group-empty {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 0.82rem;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .tax-file-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+
+    .tax-file-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .tax-file-icon {
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .tax-file-name {
+      flex: 1;
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.75);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tax-file-view, .tax-file-del {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    .tax-file-view {
+      background: rgba(47, 128, 237, 0.15);
+      color: #60a5fa;
+    }
+
+    .tax-file-view:hover {
+      background: rgba(47, 128, 237, 0.3);
+    }
+
+    .tax-file-del {
+      background: rgba(248, 113, 113, 0.12);
+      color: #f87171;
+    }
+
+    .tax-file-del:hover {
+      background: rgba(248, 113, 113, 0.25);
+    }
+
+    .tax-group-upload {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 8px 14px 14px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      background: transparent;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tax-group-upload:hover {
+      border-color: rgba(47, 128, 237, 0.5);
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(47, 128, 237, 0.08);
+    }
+
+    @media (max-width: 1180px) {
+      .tax-docs-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 768px) {
+      .tax-docs-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ================= OVERRIDE PANEL ================= */
+    .override-panel {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .override-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.55);
+      margin-bottom: 14px;
+    }
+
+    .override-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      align-items: end;
+    }
+
+    .override-field { display: flex; flex-direction: column; gap: 4px; }
+    .override-field label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.45);
+    }
+    .override-field input {
+      padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06); color: white; font-weight: 600;
+      font-size: 0.9rem; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .override-field input:focus {
+      border-color: #2f80ed; box-shadow: 0 0 0 3px rgba(47,128,237,0.2);
+    }
+
+    .override-save {
+      padding: 8px 18px; border-radius: 8px; border: none;
+      background: linear-gradient(135deg, #2f80ed, #4f8dfd);
+      color: white; font-weight: 700; cursor: pointer;
+      transition: transform 0.2s; white-space: nowrap;
+    }
+    .override-save:hover { transform: translateY(-1px); }
+    .override-save:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+    @media (max-width: 1180px) {
+      .override-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .override-grid { grid-template-columns: 1fr; }
+    }
+
     /* ================= DROP ZONE ================= */
     .drop-zone {
       border: 2px dashed rgba(255, 255, 255, 0.2);
@@ -649,7 +852,38 @@
     <!-- ================= TAX DOCUMENTS ================= -->
     <div>
       <div class="section-header">Tax Documents</div>
-      <div class="pdf-grid" id="taxDocsGrid"></div>
+      <div class="tax-docs-grid" id="taxDocsGrid"></div>
+    </div>
+
+    <!-- ================= ADMIN OVERRIDE ================= -->
+    <div class="override-panel" id="overridePanel" style="display:none;">
+      <div class="override-title">Admin Override — Manual Metrics</div>
+      <div class="override-grid">
+        <div class="override-field">
+          <label>Expected Earnings ($)</label>
+          <input type="text" id="overrideExpected" placeholder="Auto-calculated" inputmode="decimal">
+        </div>
+        <div class="override-field">
+          <label>Received ($)</label>
+          <input type="text" id="overrideReceived" placeholder="Auto-calculated" inputmode="decimal">
+        </div>
+        <div class="override-field">
+          <label>Remaining ($)</label>
+          <input type="text" id="overrideRemaining" placeholder="Auto-calculated" inputmode="decimal">
+        </div>
+        <div class="override-field">
+          <label>Clients</label>
+          <input type="text" id="overrideClients" placeholder="Auto-calculated" inputmode="numeric">
+        </div>
+        <div class="override-field">
+          <label>Overhead ($)</label>
+          <input type="text" id="overrideOverhead" placeholder="0" inputmode="decimal">
+        </div>
+        <div class="override-field" style="display:flex;flex-direction:row;gap:8px;align-items:flex-end;">
+          <button class="override-save" id="overrideSaveBtn">Save Overrides</button>
+          <button class="override-save" id="overrideResetBtn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);">Reset</button>
+        </div>
+      </div>
     </div>
 
   </div>

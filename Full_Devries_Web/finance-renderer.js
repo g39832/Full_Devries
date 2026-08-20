@@ -325,20 +325,39 @@ async function loadTaxDocs() {
     files = files.filter((f) => (seen.has(f.name) ? false : (seen.add(f.name), true)));
 
     const card = document.createElement('div');
-    card.className = 'pdf-card';
-    card.innerHTML = `
-      <div class="pdf-icon">${groupIcons[group] || '📄'}</div>
-      <div class="pdf-name">${groupLabels[group] || group}</div>
-      <div style="margin-bottom:8px;color:rgba(255,255,255,0.4);font-size:0.8rem;">${files.length} file${files.length === 1 ? '' : 's'}</div>
-      <button class="pdf-btn view" style="margin-bottom:6px;">Upload</button>
-      ${files.map((f) => `<div style="margin-top:4px;font-size:0.78rem;color:rgba(255,255,255,0.6);">${escapeHtml(f.name)} <button class="pdf-btn delete" style="font-size:0.7rem;padding:2px 6px;">×</button></div>`).join('')}
-    `;
-    const uploadBtn = card.querySelector('.view');
-    uploadBtn.textContent = 'Upload PDF';
-    uploadBtn.onclick = () => triggerUpload(group);
+    card.className = 'tax-group-card';
 
-    card.querySelectorAll('.pdf-btn.delete').forEach((delBtn, idx) => {
+    const fileRows = files.map((f, idx) => {
+      const displayName = f.name.replace(/^\d+-/, '').replace(/\.pdf$/i, '');
+      return `
+        <div class="tax-file-row">
+          <span class="tax-file-icon">📄</span>
+          <span class="tax-file-name" title="${escapeHtml(f.name)}">${escapeHtml(displayName)}</span>
+          <button class="tax-file-view" data-url="${escapeHtml(f.url || '')}" title="Open">↗</button>
+          <button class="tax-file-del" data-idx="${idx}" title="Delete">×</button>
+        </div>
+      `;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="tax-group-header">
+        <span class="tax-group-icon">${groupIcons[group] || '📄'}</span>
+        <span class="tax-group-title">${groupLabels[group] || group}</span>
+        <span class="tax-group-count">${files.length}</span>
+      </div>
+      <div class="tax-group-body">
+        ${files.length ? fileRows : '<div class="tax-group-empty">No files uploaded</div>'}
+      </div>
+      <button class="tax-group-upload">+ Upload PDF</button>
+    `;
+
+    card.querySelector('.tax-group-upload').onclick = () => triggerUpload(group);
+    card.querySelectorAll('.tax-file-view').forEach((btn) => {
+      btn.onclick = () => openPDFModal(btn.dataset.url);
+    });
+    card.querySelectorAll('.tax-file-del').forEach((delBtn) => {
       delBtn.onclick = async () => {
+        const idx = Number(delBtn.dataset.idx);
         if (!confirm(`Delete ${files[idx].name}?`)) return;
         await fetch(`/api/pdf/delete/${files[idx]._group || group}-${activeYear}?file=${encodeURIComponent(files[idx].name)}`, { method: 'DELETE' });
         loadTaxDocs();
@@ -447,6 +466,112 @@ if (yearSelector) {
 }
 
 // ======================================================
+// ADMIN OVERRIDE PANEL
+// ======================================================
+function setupOverridePanel() {
+  const panel = document.getElementById('overridePanel');
+  if (!panel) return;
+  panel.style.display = 'block';
+
+  const expectedInput = document.getElementById('overrideExpected');
+  const receivedInput = document.getElementById('overrideReceived');
+  const remainingInput = document.getElementById('overrideRemaining');
+  const clientsInput = document.getElementById('overrideClients');
+  const overheadInput2 = document.getElementById('overrideOverhead');
+  const saveBtn = document.getElementById('overrideSaveBtn');
+  const resetBtn = document.getElementById('overrideResetBtn');
+
+  // Load current values from summary
+  loadOverrideValues();
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.textContent = 'Saving...';
+      saveBtn.disabled = true;
+      try {
+        const data = {
+          year: activeYear,
+          totalExpected: parseCurrencyValue(expectedInput.value),
+          totalReceived: parseCurrencyValue(receivedInput.value),
+          totalRemaining: parseCurrencyValue(remainingInput.value),
+          totalClients: parseInt(clientsInput.value) || 0,
+          overhead: parseCurrencyValue(overheadInput2.value)
+        };
+        const res = await fetch('/api/finance/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error('Save failed');
+        saveBtn.textContent = 'Saved!';
+        setTimeout(() => { saveBtn.textContent = 'Save Overrides'; saveBtn.disabled = false; }, 1500);
+        await refreshAll();
+        await loadOverrideValues();
+      } catch (err) {
+        console.error('Override save error:', err);
+        saveBtn.textContent = 'Error';
+        setTimeout(() => { saveBtn.textContent = 'Save Overrides'; saveBtn.disabled = false; }, 2000);
+      }
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      if (!confirm('Reset overrides to auto-calculated values?')) return;
+      resetBtn.textContent = 'Resetting...';
+      resetBtn.disabled = true;
+      try {
+        // Fetch auto-calculated values from the database
+        const res = await fetch(`/api/finance/summary?year=${activeYear}`);
+        if (!res.ok) throw new Error('Failed to fetch');
+        const summary = await res.json();
+        const saveRes = await fetch('/api/finance/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            year: activeYear,
+            totalExpected: summary.totalExpected || 0,
+            totalReceived: summary.totalReceived || 0,
+            totalRemaining: summary.totalRemaining || 0,
+            totalClients: summary.totalClients || 0,
+            overhead: 0
+          })
+        });
+        if (!saveRes.ok) throw new Error('Save failed');
+        resetBtn.textContent = 'Reset!';
+        setTimeout(() => { resetBtn.textContent = 'Reset'; resetBtn.disabled = false; }, 1500);
+        await refreshAll();
+        await loadOverrideValues();
+      } catch (err) {
+        console.error('Override reset error:', err);
+        resetBtn.textContent = 'Error';
+        setTimeout(() => { resetBtn.textContent = 'Reset'; resetBtn.disabled = false; }, 2000);
+      }
+    });
+  }
+}
+
+async function loadOverrideValues() {
+  try {
+    const res = await fetch(`/api/finance/summary?year=${activeYear}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const expectedInput = document.getElementById('overrideExpected');
+    const receivedInput = document.getElementById('overrideReceived');
+    const remainingInput = document.getElementById('overrideRemaining');
+    const clientsInput = document.getElementById('overrideClients');
+    const overheadInput2 = document.getElementById('overrideOverhead');
+    if (expectedInput) expectedInput.value = data.totalExpected || '';
+    if (receivedInput) receivedInput.value = data.totalReceived || '';
+    if (remainingInput) remainingInput.value = data.totalRemaining || '';
+    if (clientsInput) clientsInput.value = data.totalClients || '';
+    if (overheadInput2) overheadInput2.value = data.overhead || '';
+  } catch (err) {
+    console.error('Load override values error:', err);
+  }
+}
+
+// ======================================================
 // REFRESH ALL
 // ======================================================
 async function refreshAll() {
@@ -467,5 +592,6 @@ async function refreshAll() {
   await loadAvailableYears();
   setupOverheadSave();
   setupDropZone();
+  setupOverridePanel();
   await refreshAll();
 })();
