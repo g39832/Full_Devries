@@ -189,14 +189,14 @@ async function main() {
 
     // ================= Approval → Finance (idempotent) =================
     const job1 = jobIds[0];
-    // Payments must be blocked before approval
+    // Admins can record payments even before approval
     const earlyPayment = await req(`/api/jobs/${job1}/payment`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ payment: 100 }),
       cookie
     });
-    assert.strictEqual(earlyPayment.res.status, 400, 'payment on unapproved job should be rejected');
+    assert.strictEqual(earlyPayment.res.status, 200, 'admin should be able to record payment on any job');
 
     const approve = await req(`/api/jobs/${job1}`, {
       method: 'PUT',
@@ -223,7 +223,7 @@ async function main() {
       cookie
     });
     assert.strictEqual(payment.res.status, 200, 'payment should return 200');
-    assert.strictEqual(payment.json.job.finance.paid, 1000, 'paid should be 1000');
+    assert.strictEqual(payment.json.job.finance.paid, 1100, 'paid should be 1100 (100 early + 1000)');
 
     const expense = await req(`/api/jobs/${job1}/expenses`, {
       method: 'POST',
@@ -235,14 +235,14 @@ async function main() {
 
     const jobDetail = await req(`/api/jobs/${job1}`, { cookie });
     const f = jobDetail.json.job.finance;
-    // total_due=5000, paid=1000, expenses = 200 (entry) + 3000 (job_cost) = 3200
+    // total_due=5000, paid=1100 (100 early + 1000), expenses = 200 (entry) + 3000 (job_cost) = 3200
     assert.strictEqual(f.total_due, 5000, 'total due should be 5000');
-    assert.strictEqual(f.paid, 1000, 'paid should be 1000');
-    assert.strictEqual(f.balance_due, 4000, 'balance due = 5000 - 1000');
+    assert.strictEqual(f.paid, 1100, 'paid should be 1100 (100 early + 1000)');
+    assert.strictEqual(f.balance_due, 3900, 'balance due = 5000 - 1100');
     assert.strictEqual(f.overpayment, 0, 'no overpayment yet');
     assert.strictEqual(f.expenses, 3200, 'expenses = entry 200 + job cost 3000');
-    assert.strictEqual(f.profit, -2200, 'profit = paid - expenses = 1000 - 3200');
-    const expectedMargin = Math.round(((1000 - 3200) / 1000) * 1000) / 10;
+    assert.strictEqual(f.profit, -2100, 'profit = paid - expenses = 1100 - 3200');
+    const expectedMargin = Math.round(((1100 - 3200) / 1100) * 1000) / 10;
     assert.strictEqual(f.margin_pct, expectedMargin, 'margin % = profit / paid * 100');
 
     // ================= Overpayment (never a negative balance) =================
@@ -253,9 +253,9 @@ async function main() {
       cookie
     });
     assert.strictEqual(overpay.res.status, 200, 'overpayment should return 200');
-    assert.strictEqual(overpay.json.job.finance.paid, 7000, 'paid should be 7000');
+    assert.strictEqual(overpay.json.job.finance.paid, 7100, 'paid should be 7100 (100+1000+6000)');
     assert.strictEqual(overpay.json.job.finance.balance_due, 0, 'balance due must be 0 (never negative)');
-    assert.strictEqual(overpay.json.job.finance.overpayment, 2000, 'overpayment/credit should be 2000');
+    assert.strictEqual(overpay.json.job.finance.overpayment, 2100, 'overpayment/credit should be 2100');
 
     // ================= Tags =================
     const createTag = await req('/api/tags', {

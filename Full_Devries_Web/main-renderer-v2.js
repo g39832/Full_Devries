@@ -536,7 +536,7 @@ async function openJob(jobId, opts = {}) {
               ${STATUS_ORDER.map((s) => `<option value="${s}" ${job.status === s ? "selected" : ""}>${s}</option>`).join("")}
             </select>
             ${locked
-              ? `<p style="color:#e9c46a; font-size:0.85rem; margin:6px 0 0;">🔒 Finance tracking is locked. Set the status to <strong>Approved</strong> to record payments and expenses.</p>`
+              ? `<p style="color:#e9c46a; font-size:0.85rem; margin:6px 0 0;">⚠️ Job is not yet approved. Payments can be recorded now — set status to <strong>Approved</strong> to enable expense tracking.</p>`
               : `<p style="color:#16a34a; font-size:0.85rem; margin:6px 0 0;">✔ Approved — finance tracking enabled.</p>`}
           </div>
 
@@ -629,8 +629,8 @@ async function openJob(jobId, opts = {}) {
             </div>
 
             <div class="panel-inline-row" style="margin-top:10px;">
-              <input type="text" id="jobPaymentInput" placeholder="Add Payment" inputmode="decimal" class="panel-money-input" ${locked ? "disabled style='opacity:0.5;'" : ""}>
-              <button id="addPaymentJobBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);" ${locked ? "disabled" : ""}>Add Payment</button>
+              <input type="text" id="jobPaymentInput" placeholder="Add Payment" inputmode="decimal" class="panel-money-input">
+              <button id="addPaymentJobBtn" class="btn-primary" style="background:linear-gradient(135deg,#2f80ed,#4f8dfd);">Add Payment</button>
               <button id="undoFinanceJobBtn" class="btn-primary" style="background:rgba(255,255,255,0.14); color:white;">Undo</button>
               <button id="adminAdjustBtn" class="btn-primary" style="background:rgba(170,27,27,0.85); color:white;">Adjust (Admin)</button>
             </div>

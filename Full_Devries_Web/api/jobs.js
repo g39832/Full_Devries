@@ -393,12 +393,6 @@ router.put('/jobs/:id/payment', requireAdmin, asyncHandler(async (req, res) => {
   const { rows } = await db.query('SELECT * FROM jobs WHERE id = $1', [id]);
   const job = rows[0];
   if (!job) return res.status(404).json({ error: 'Job not found' });
-  if (!isFinanceEnabled(job.status)) {
-    return res.status(400).json({
-      error: 'Finance tracking is locked until this job is APPROVED. Set the job status to Approved first.'
-    });
-  }
-
   const conn = await db.pool.connect();
   try {
     await conn.query('BEGIN');

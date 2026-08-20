@@ -392,9 +392,6 @@ router.put('/clients/:id/payment', requireAdmin, asyncHandler(async (req, res) =
   const jobResult = await db.query('SELECT id, status, total_due, amount_paid FROM jobs WHERE client_id = $1 ORDER BY created_at ASC, id ASC LIMIT 1', [id]);
   const defaultJob = jobResult.rows[0];
   if (!defaultJob) return res.status(400).json({ error: 'Client has no jobs' });
-  if (!isFinanceEnabled(defaultJob.status)) {
-    return res.status(400).json({ error: 'Finance tracking is locked until this client/job is APPROVED. Set the status to Approved first.' });
-  }
 
   const newPaid = Number(defaultJob.amount_paid || 0) + amount;
   const newBalance = Math.max(0, Number(defaultJob.total_due || 0) - newPaid);
